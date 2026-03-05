@@ -41,41 +41,39 @@ export default function WelcomeScreen() {
   };
 
   return (
-    <View className="flex-1 bg-background" style={{ paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }}>
-      <View className="flex-1 px-6 pt-4 pb-4">
+    <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }}>
+      <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 }}>
         {/* Skip Button */}
-        <View className="items-end mb-2">
+        <View style={{ alignItems: "flex-end", marginBottom: 8 }}>
           <Pressable
             onPress={handleSkip}
-            className="px-4 py-2 active:opacity-60"
+            style={({ pressed }) => [{ paddingHorizontal: 16, paddingVertical: 8 }, pressed && { opacity: 0.6 }]}
             accessibilityRole="button"
             accessibilityLabel="Skip onboarding"
           >
-            <Text className="text-muted-foreground text-sm font-medium">Skip</Text>
+            <Text style={{ color: colors.mutedForeground, fontSize: 14, fontWeight: "500" }}>Skip</Text>
           </Pressable>
         </View>
 
         {/* Header */}
-        <View className="items-center mb-4">
+        <View style={{ alignItems: "center", marginBottom: 16 }}>
           <Text
-            className="text-xs text-muted-foreground uppercase tracking-widest mb-2"
-            style={{ letterSpacing: 4 }}
+            style={{ fontSize: 12, color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 4, marginBottom: 8 }}
           >
             Welcome to
           </Text>
           <Text
-            className="text-5xl font-bold text-foreground text-center"
-            style={{ letterSpacing: -1 }}
+            style={{ fontSize: 48, fontWeight: "bold", color: colors.foreground, textAlign: "center", letterSpacing: -1 }}
           >
             MyApp
           </Text>
-          <Text className="text-sm text-muted-foreground mt-2 text-center">
+          <Text style={{ fontSize: 14, color: colors.mutedForeground, marginTop: 8, textAlign: "center" }}>
             Your app tagline goes here
           </Text>
         </View>
 
         {/* Carousel */}
-        <View className="flex-1 justify-center items-center">
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
           <PagerView
             style={{ width: screenWidth - 48, flex: 1 }}
             initialPage={0}
@@ -100,15 +98,14 @@ export default function WelcomeScreen() {
                     marginBottom: 24,
                   }}
                 >
-                  <Text className="text-muted-foreground text-sm">Media here</Text>
+                  <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>Media here</Text>
                 </View>
                 <Text
-                  className="text-2xl font-semibold text-foreground text-center mb-3"
-                  style={{ letterSpacing: -0.5 }}
+                  style={{ fontSize: 24, fontWeight: "600", color: colors.foreground, textAlign: "center", marginBottom: 12, letterSpacing: -0.5 }}
                 >
                   {feature.title}
                 </Text>
-                <Text className="text-base text-center text-muted-foreground leading-6">
+                <Text style={{ fontSize: 16, textAlign: "center", color: colors.mutedForeground, lineHeight: 24 }}>
                   {feature.description}
                 </Text>
               </View>
@@ -116,7 +113,7 @@ export default function WelcomeScreen() {
           </PagerView>
 
           {/* Page indicators */}
-          <View className="flex-row justify-center mt-4">
+          <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 16 }}>
             {features.map((_, index) => (
               <View
                 key={index}
@@ -133,7 +130,7 @@ export default function WelcomeScreen() {
         </View>
 
         {/* CTA */}
-        <View className="items-center pt-4">
+        <View style={{ alignItems: "center", paddingTop: 16 }}>
           <AnimatedButton
             title="Get Started"
             backgroundColor={colors.primary}

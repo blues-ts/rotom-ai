@@ -33,8 +33,8 @@ const Index = () => {
   };
 
   return (
-    <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }} className="bg-background">
-      <View className="flex-1 px-6 justify-center items-center">
+    <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right, backgroundColor: colors.background }}>
+      <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: "center", alignItems: "center" }}>
         {/* Logo placeholder */}
         <View
           style={{
@@ -51,28 +51,26 @@ const Index = () => {
         />
 
         {/* Header */}
-        <View className="items-center mb-12">
+        <View style={{ alignItems: "center", marginBottom: 48 }}>
           <Text
-            className="text-xs text-muted-foreground uppercase tracking-widest mb-2"
-            style={{ letterSpacing: 4 }}
+            style={{ fontSize: 12, color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 4, marginBottom: 8 }}
           >
             Sign in to
           </Text>
           <Text
-            className="text-5xl font-bold text-foreground text-center"
-            style={{ letterSpacing: -1 }}
+            style={{ fontSize: 48, fontWeight: "bold", color: colors.foreground, textAlign: "center", letterSpacing: -1 }}
             accessibilityRole="header"
           >
             MyApp
           </Text>
-          <Text className="text-sm text-muted-foreground mt-2 text-center">
+          <Text style={{ fontSize: 14, color: colors.mutedForeground, marginTop: 8, textAlign: "center" }}>
             Your app tagline goes here
           </Text>
         </View>
 
         {/* Sign In Buttons */}
-        <View className="w-full items-center">
-          <View className="mb-3">
+        <View style={{ width: "100%", alignItems: "center" }}>
+          <View style={{ marginBottom: 12 }}>
             <AnimatedButton
               title={isLoadingGoogle ? "Signing in..." : "Continue with Google"}
               backgroundColor={colors.primary}
@@ -104,18 +102,18 @@ const Index = () => {
         </View>
 
         {/* Footer */}
-        <View className="absolute bottom-8 px-6">
-          <Text className="text-xs text-muted-foreground text-center leading-5">
+        <View style={{ position: "absolute", bottom: 32, paddingHorizontal: 24 }}>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground, textAlign: "center", lineHeight: 20 }}>
             By continuing, you agree to our{" "}
             <Text
-              className="text-foreground underline"
+              style={{ color: colors.foreground, textDecorationLine: "underline" }}
               onPress={() => Linking.openURL("https://yourapp.com/terms")}
             >
               Terms of Service
             </Text>
             {" "}and{" "}
             <Text
-              className="text-foreground underline"
+              style={{ color: colors.foreground, textDecorationLine: "underline" }}
               onPress={() => Linking.openURL("https://yourapp.com/privacy")}
             >
               Privacy Policy

@@ -23,7 +23,6 @@ import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import "react-native-reanimated";
-import "../global.css";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -38,7 +37,7 @@ function AppContent() {
 	}
 
 	return (
-		<View className={isDark ? "dark flex-1" : "flex-1"}>
+		<View style={{ flex: 1 }}>
 			<AuthSync />
 			<StatusBar style={isDark ? "light" : "dark"} />
 			<Stack

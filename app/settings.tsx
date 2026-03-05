@@ -24,8 +24,8 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View className="flex-1 bg-background" style={{ paddingBottom: insets.bottom }}>
-      <View className="flex-1 px-6 pt-6" style={{ gap: 32 }}>
+    <View style={{ flex: 1, backgroundColor: colors.background, paddingBottom: insets.bottom }}>
+      <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 24, gap: 32 }}>
 
         {/* Account */}
         <View style={{ gap: 4 }}>

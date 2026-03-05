@@ -1,22 +1,23 @@
 import Text from "@/components/Text";
+import { useTheme } from "@/context/ThemeContext";
 import { useUser } from "@clerk/clerk-expo";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function HomeScreen() {
 	const { user } = useUser();
+	const { colors } = useTheme();
 	const insets = useSafeAreaInsets();
 
 	return (
 		<View
-			className="flex-1 bg-background"
-			style={{ paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }}
+			style={{ flex: 1, backgroundColor: colors.background, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }}
 		>
-			<View className="flex-1 items-center justify-center px-6">
-				<Text className="text-2xl font-bold text-white mb-2">
+			<View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
+				<Text style={{ fontSize: 24, fontWeight: "bold", color: "#ffffff", marginBottom: 8 }}>
 					Welcome{user?.firstName ? `, ${user.firstName}` : ""}!
 				</Text>
-				<Text className="text-muted-foreground text-center">
+				<Text style={{ color: colors.mutedForeground, textAlign: "center" }}>
 					Your app content goes here.
 				</Text>
 			</View>
