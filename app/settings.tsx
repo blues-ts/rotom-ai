@@ -4,7 +4,7 @@ import { useAuth, useUser } from "@clerk/clerk-expo";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { Pressable, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const THEME_OPTIONS: { label: string; value: ThemePreference }[] = [
   { label: "Light", value: "light" },
@@ -16,6 +16,7 @@ export default function SettingsScreen() {
   const { signOut } = useAuth();
   const { user } = useUser();
   const { colors, preference, setPreference } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const handleSignOut = async () => {
     await signOut();
@@ -23,7 +24,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={["bottom"]}>
+    <View className="flex-1 bg-background" style={{ paddingBottom: insets.bottom }}>
       <View className="flex-1 px-6 pt-6" style={{ gap: 32 }}>
 
         {/* Account */}
@@ -159,6 +160,6 @@ export default function SettingsScreen() {
         </Pressable>
 
       </View>
-    </SafeAreaView>
+    </View>
   );
 }

@@ -6,7 +6,7 @@ import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import { Dimensions, Linking, View } from "react-native";
 import { AnimatedButton } from "react-native-3d-animated-buttons";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -16,6 +16,7 @@ const Index = () => {
   useWarmUpBrowser();
   const { loadingStrategy, handleSocialAuth } = useSocialAuth();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const isLoadingGoogle = loadingStrategy === "oauth_google";
   const isLoadingApple = loadingStrategy === "oauth_apple";
@@ -32,7 +33,7 @@ const Index = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
+    <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }} className="bg-background">
       <View className="flex-1 px-6 justify-center items-center">
         {/* Logo placeholder */}
         <View
@@ -122,7 +123,7 @@ const Index = () => {
           </Text>
         </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 

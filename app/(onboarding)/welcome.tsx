@@ -7,7 +7,7 @@ import React, { useState } from "react";
 import { Dimensions, Pressable, View } from "react-native";
 import { AnimatedButton } from "react-native-3d-animated-buttons";
 import PagerView from "react-native-pager-view";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -21,6 +21,7 @@ const features = [
 export default function WelcomeScreen() {
   const { completeOnboarding } = useOnboarding();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const [currentPage, setCurrentPage] = useState(0);
 
   const handleGetStarted = async () => {
@@ -40,7 +41,7 @@ export default function WelcomeScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
+    <View className="flex-1 bg-background" style={{ paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }}>
       <View className="flex-1 px-6 pt-4 pb-4">
         {/* Skip Button */}
         <View className="items-end mb-2">
@@ -145,6 +146,6 @@ export default function WelcomeScreen() {
           />
         </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
