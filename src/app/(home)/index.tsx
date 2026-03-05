@@ -1,11 +1,15 @@
+import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@clerk/clerk-expo";
-import { Stack } from "expo-router";
+import { router, Stack } from "expo-router";
+import * as Haptics from "expo-haptics";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 export default function Home() {
 	const { signOut } = useAuth();
+	const { colors } = useTheme();
 
 	const handleSignOut = () => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 		Alert.alert("Sign Out", "Are you sure you want to sign out?", [
 			{ text: "Cancel", style: "cancel" },
 			{
@@ -17,26 +21,25 @@ export default function Home() {
 	};
 
 	return (
-		<View style={styles.container}>
+		<View style={[styles.container, { backgroundColor: colors.background }]}>
 			<Stack.Toolbar placement="right">
 				<Stack.Toolbar.Button
-					icon={"star"}
-					onPress={() => Alert.alert("Share")}
+					icon={"folder"}
+					onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); Alert.alert("Share"); }}
 				/>
 				<Stack.Toolbar.Button
-					icon="square.and.arrow.up"
-					onPress={() => Alert.alert("Share")}
+					icon="gearshape"
+					onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(settings)"); }}
 				/>
 			</Stack.Toolbar>
-			<Stack.Toolbar placement="left">
-				<Stack.Toolbar.Button
-					icon="sidebar.left"
-					onPress={() => Alert.alert("Sidebar")}
-				/>
-			</Stack.Toolbar>
-			<Text style={styles.text}>Home</Text>
-			<Pressable style={styles.button} onPress={handleSignOut}>
-				<Text style={styles.buttonText}>Sign Out</Text>
+			<Text style={[styles.text, { color: colors.foreground }]}>Home</Text>
+			<Pressable
+				style={[styles.button, { backgroundColor: colors.card }]}
+				onPress={handleSignOut}
+			>
+				<Text style={[styles.buttonText, { color: colors.destructive }]}>
+					Sign Out
+				</Text>
 			</Pressable>
 		</View>
 	);
@@ -47,21 +50,17 @@ const styles = StyleSheet.create({
 		flex: 1,
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: "#000",
-		gap: 24,
 	},
 	text: {
-		color: "#fff",
 		fontSize: 18,
 	},
 	button: {
 		paddingHorizontal: 24,
 		paddingVertical: 12,
 		borderRadius: 10,
-		backgroundColor: "#1a1a1a",
+		marginTop: 24,
 	},
 	buttonText: {
-		color: "#ff4444",
 		fontSize: 16,
 		fontWeight: "500",
 	},

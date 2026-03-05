@@ -1,3 +1,4 @@
+import { useTheme } from "@/context/ThemeContext";
 import useSocialAuth from "@/hooks/useSocialAuth";
 import { useWarmUpBrowser } from "@/hooks/useWarmUpBrowser";
 import * as Haptics from "expo-haptics";
@@ -15,6 +16,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 const Index = () => {
   useWarmUpBrowser();
+  const { colors } = useTheme();
   const { loadingStrategy, handleSocialAuth } = useSocialAuth();
 
   const isLoadingGoogle = loadingStrategy === "oauth_google";
@@ -32,39 +34,41 @@ const Index = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.content}>
-        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.subtitle}>Sign in to</Text>
-          <Text style={styles.title}>Rotom AI</Text>
+          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+            Sign in to
+          </Text>
+          <Text style={[styles.title, { color: colors.foreground }]}>
+            Rotom AI
+          </Text>
         </View>
 
-        {/* Sign In Buttons */}
         <View style={styles.buttons}>
           <Pressable
-            style={[styles.button, styles.googleButton]}
+            style={[styles.button, { backgroundColor: colors.secondary }]}
             onPress={handleGoogleAuth}
             disabled={isLoading}
           >
             {isLoadingGoogle ? (
-              <ActivityIndicator color="#000" />
+              <ActivityIndicator color={colors.secondaryForeground} />
             ) : (
-              <Text style={[styles.buttonText, styles.googleText]}>
+              <Text style={[styles.buttonText, { color: colors.secondaryForeground }]}>
                 Continue with Google
               </Text>
             )}
           </Pressable>
 
           <Pressable
-            style={[styles.button, styles.appleButton]}
+            style={[styles.button, { backgroundColor: colors.card }]}
             onPress={handleAppleAuth}
             disabled={isLoading}
           >
             {isLoadingApple ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.cardForeground} />
             ) : (
-              <Text style={[styles.buttonText, styles.appleText]}>
+              <Text style={[styles.buttonText, { color: colors.cardForeground }]}>
                 Continue with Apple
               </Text>
             )}
@@ -78,7 +82,6 @@ const Index = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#000",
   },
   content: {
     flex: 1,
@@ -92,7 +95,6 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 12,
-    color: "#888",
     textTransform: "uppercase",
     letterSpacing: 4,
     marginBottom: 8,
@@ -100,7 +102,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 42,
     fontWeight: "700",
-    color: "#fff",
     letterSpacing: -1,
   },
   buttons: {
@@ -113,21 +114,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  googleButton: {
-    backgroundColor: "#fff",
-  },
-  appleButton: {
-    backgroundColor: "#1a1a1a",
-  },
   buttonText: {
     fontSize: 16,
     fontWeight: "500",
-  },
-  googleText: {
-    color: "#000",
-  },
-  appleText: {
-    color: "#fff",
   },
 });
 
