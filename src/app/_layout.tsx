@@ -3,6 +3,11 @@ import { queryClient } from "@/config/queryClient";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { ClerkLoaded, ClerkProvider } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
+import {
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider as NavigationThemeProvider,
+} from "@react-navigation/native";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { SplashScreen, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -15,8 +20,22 @@ const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 function AppContent() {
   const { theme, colors } = useTheme();
 
+  const navigationTheme = theme === "dark" ? DarkTheme : DefaultTheme;
+
   return (
-    <>
+    <NavigationThemeProvider
+      value={{
+        ...navigationTheme,
+        colors: {
+          ...navigationTheme.colors,
+          background: colors.background,
+          card: colors.background,
+          text: colors.foreground,
+          border: colors.border,
+          primary: colors.primary,
+        },
+      }}
+    >
       <AuthSync />
       <StatusBar style={theme === "dark" ? "light" : "dark"} />
       <Stack
@@ -41,7 +60,7 @@ function AppContent() {
           }}
         />
       </Stack>
-    </>
+    </NavigationThemeProvider>
   );
 }
 
