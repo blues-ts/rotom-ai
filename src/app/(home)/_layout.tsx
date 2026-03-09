@@ -1,5 +1,6 @@
-import { useAuth } from "@clerk/clerk-expo";
 import { Redirect, Stack } from "expo-router";
+
+import { useAuth } from "@clerk/clerk-expo";
 
 export default function HomeLayout() {
 	const { isSignedIn, isLoaded } = useAuth();
@@ -15,9 +16,11 @@ export default function HomeLayout() {
 	return (
 		<Stack
 			screenOptions={{
-				headerShown: false,
-				headerTitle: "",
+				headerShown: true,
+				headerTransparent: false,
 				headerShadowVisible: false,
+				headerTitle: "River",
+				headerTitleStyle: { fontSize: 20, fontWeight: "700" },
 			}}
 		/>
 	);

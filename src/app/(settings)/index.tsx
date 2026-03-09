@@ -1,7 +1,15 @@
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import * as Haptics from "expo-haptics";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { router } from "expo-router";
+import {
+	Alert,
+	Pressable,
+	ScrollView,
+	StyleSheet,
+	Text,
+	View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Settings() {
@@ -16,29 +24,71 @@ export default function Settings() {
 			{
 				text: "Sign Out",
 				style: "destructive",
-				onPress: () => signOut(),
+				onPress: async () => {
+					await signOut();
+					router.replace("/(auth)");
+				},
 			},
 		]);
 	};
 
 	return (
-		<SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={["bottom"]}>
+		<SafeAreaView
+			style={[styles.container, { backgroundColor: colors.background }]}
+			edges={["bottom"]}
+		>
 			<ScrollView contentContainerStyle={styles.content}>
 				{/* Account Section */}
 				<View style={styles.section}>
-					<Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>
+					<Text
+						style={[
+							styles.sectionTitle,
+							{ color: colors.mutedForeground },
+						]}
+					>
 						Account
 					</Text>
-					<View style={[styles.card, { backgroundColor: colors.card }]}>
-						<View style={[styles.row, { borderBottomColor: colors.border }]}>
-							<Text style={[styles.label, { color: colors.foreground }]}>Email</Text>
-							<Text style={[styles.value, { color: colors.mutedForeground }]}>
+					<View
+						style={[styles.card, { backgroundColor: colors.card }]}
+					>
+						<View
+							style={[
+								styles.row,
+								{ borderBottomColor: colors.border },
+							]}
+						>
+							<Text
+								style={[
+									styles.label,
+									{ color: colors.foreground },
+								]}
+							>
+								Email
+							</Text>
+							<Text
+								style={[
+									styles.value,
+									{ color: colors.mutedForeground },
+								]}
+							>
 								{user?.primaryEmailAddress?.emailAddress ?? "—"}
 							</Text>
 						</View>
 						<View style={styles.row}>
-							<Text style={[styles.label, { color: colors.foreground }]}>Name</Text>
-							<Text style={[styles.value, { color: colors.mutedForeground }]}>
+							<Text
+								style={[
+									styles.label,
+									{ color: colors.foreground },
+								]}
+							>
+								Name
+							</Text>
+							<Text
+								style={[
+									styles.value,
+									{ color: colors.mutedForeground },
+								]}
+							>
 								{user?.fullName ?? "—"}
 							</Text>
 						</View>
@@ -48,10 +98,18 @@ export default function Settings() {
 				{/* Sign Out */}
 				<View style={styles.section}>
 					<Pressable
-						style={[styles.signOutButton, { backgroundColor: colors.card }]}
+						style={[
+							styles.signOutButton,
+							{ backgroundColor: colors.card },
+						]}
 						onPress={handleSignOut}
 					>
-						<Text style={[styles.signOutText, { color: colors.destructive }]}>
+						<Text
+							style={[
+								styles.signOutText,
+								{ color: colors.destructive },
+							]}
+						>
 							Sign Out
 						</Text>
 					</Pressable>

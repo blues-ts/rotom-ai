@@ -53,6 +53,8 @@ PODS:
     - SDWebImageWebPCoder (~> 0.14.6)
   - ExpoKeepAwake (55.0.4):
     - ExpoModulesCore
+  - ExpoLinearGradient (55.0.8):
+    - ExpoModulesCore
   - ExpoLinking (55.0.7):
     - ExpoModulesCore
   - ExpoLogBox (55.0.7):
@@ -2208,6 +2210,7 @@ DEPENDENCIES:
   - ExpoHaptics (from `../node_modules/expo-haptics/ios`)
   - ExpoImage (from `../node_modules/expo-image/ios`)
   - ExpoKeepAwake (from `../node_modules/expo-keep-awake/ios`)
+  - ExpoLinearGradient (from `../node_modules/expo-linear-gradient/ios`)
   - ExpoLinking (from `../node_modules/expo-linking/ios`)
   - "ExpoLogBox (from `../node_modules/@expo/log-box`)"
   - ExpoModulesCore (from `../node_modules/expo-modules-core`)
@@ -2335,6 +2338,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-image/ios"
   ExpoKeepAwake:
     :path: "../node_modules/expo-keep-awake/ios"
+  ExpoLinearGradient:
+    :path: "../node_modules/expo-linear-gradient/ios"
   ExpoLinking:
     :path: "../node_modules/expo-linking/ios"
   ExpoLogBox:
@@ -2527,6 +2532,7 @@ SPEC CHECKSUMS:
   ExpoHaptics: 8952528daeafbb20d147c33f8cc6ab648cd34c58
   ExpoImage: 91c9af23b21f8fdbfc4428669502e0057ebef178
   ExpoKeepAwake: 7f3b28c361c37389b18841bb52a58003b39fcb33
+  ExpoLinearGradient: 499856f296f83c05279d18447bdb57ab0e06d294
   ExpoLinking: 88ba36a28c83525e564b8229e02d451347accb70
   ExpoLogBox: 89b634d5a8a64c4a6a7caad8f9985a28463c7002
   ExpoModulesCore: 8934d83ba557344022eff47658dd43d197cb481e
