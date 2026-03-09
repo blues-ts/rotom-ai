@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
 	},
 	inputRow: {
 		flexDirection: "row",
-		alignItems: "flex-end",
+		alignItems: "center",
 		borderRadius: 22,
 		borderWidth: 1,
 		paddingLeft: 16,
@@ -93,10 +93,8 @@ const styles = StyleSheet.create({
 	input: {
 		flex: 1,
 		fontSize: 16,
-		lineHeight: 22,
+		minHeight: 34,
 		maxHeight: 100,
-		paddingTop: 6,
-		paddingBottom: 6,
 	},
 	sendButton: {
 		width: 32,
