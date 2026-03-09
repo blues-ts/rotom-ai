@@ -1,37 +1,64 @@
-import { useState } from "react";
-
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
 
 import { router, Stack } from "expo-router";
 
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import FeaturedCard from "@/components/FeaturedCard";
+import ChatInput from "@/components/ChatInput";
+import ChatMessageList from "@/components/ChatMessageList";
+import EmptyChat from "@/components/EmptyChat";
 import { useTheme } from "@/context/ThemeContext";
-
-type Language = "all" | "english" | "japanese";
+import { useChat } from "@/hooks/useChat";
 
 export default function Home() {
 	const { colors } = useTheme();
-	const [language, setLanguage] = useState<Language>("all");
+	const { bottom, top } = useSafeAreaInsets();
+
+	const {
+		messages,
+		streamingContent,
+		isStreaming,
+		sendMessage,
+		startNewChat,
+	} = useChat();
+
+	const handleNewChat = () => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+		if (messages.length > 0) {
+			Alert.alert(
+				"New Chat",
+				"Start a new conversation? Your current chat will be cleared.",
+				[
+					{ text: "Cancel", style: "cancel" },
+					{
+						text: "New Chat",
+						onPress: startNewChat,
+					},
+				],
+			);
+		}
+	};
 
 	return (
-		<View
-			style={[styles.container, { backgroundColor: colors.background }]}
-		>
+		<>
+			{/* Background Gradient */}
 			<LinearGradient
 				colors={[colors.primary, colors.background]}
 				style={StyleSheet.absoluteFill}
 			/>
+
+			{/* Toolbar */}
 			<Stack.Toolbar placement="right">
 				<Stack.Toolbar.Button
-					icon={"folder"}
-					onPress={() => {
-						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-						Alert.alert("Share");
-					}}
+					icon={"square.and.pencil"}
+					onPress={handleNewChat}
 				/>
+			</Stack.Toolbar>
+
+			<Stack.Toolbar placement="left">
 				<Stack.Toolbar.Button
 					icon="gearshape"
 					onPress={() => {
@@ -39,57 +66,34 @@ export default function Home() {
 						router.push("/(settings)");
 					}}
 				/>
-			</Stack.Toolbar>
-			<Stack.SearchBar
-				placeholder={
-					language === "all"
-						? "Search All Cards"
-						: language === "english"
-							? "Search English Cards"
-							: "Search Japanese Cards"
-				}
-				onChangeText={() => {}}
-			/>
-			<Stack.Toolbar placement="bottom">
-				<Stack.Toolbar.SearchBarSlot />
-				<Stack.Toolbar.Menu icon="ellipsis.circle">
-					<Stack.Toolbar.MenuAction
-						isOn={language === "all"}
-						onPress={() => setLanguage("all")}
-					>
-						🌎 All
-					</Stack.Toolbar.MenuAction>
-					<Stack.Toolbar.MenuAction
-						isOn={language === "english"}
-						onPress={() => setLanguage("english")}
-					>
-						🇺🇸 English
-					</Stack.Toolbar.MenuAction>
-					<Stack.Toolbar.MenuAction
-						isOn={language === "japanese"}
-						onPress={() => setLanguage("japanese")}
-					>
-						🇯🇵 Japanese
-					</Stack.Toolbar.MenuAction>
-				</Stack.Toolbar.Menu>
+
+				<Stack.Toolbar.Button
+					icon={"folder"}
+					onPress={() => {
+						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+						Alert.alert("Collections");
+					}}
+				/>
 			</Stack.Toolbar>
 
-			<ScrollView
-				style={styles.scrollView}
-				contentInsetAdjustmentBehavior="automatic"
-				showsVerticalScrollIndicator={false}
-			>
-				<FeaturedCard />
-			</ScrollView>
-		</View>
+			{/* Chat Area */}
+			{messages.length === 0 && !isStreaming ? (
+					<EmptyChat />
+			) : (
+				<View style={{ flex: 1 }}>
+					<ChatMessageList
+						messages={messages}
+						streamingContent={streamingContent}
+						isStreaming={isStreaming}
+						bottomPadding={bottom + 70}
+					/>
+				</View>
+			)}
+
+			{/* Chat Input */}
+			<View style={{ position: "absolute", bottom: bottom, left: 0, right: 0 }}>
+				<ChatInput onSend={sendMessage} disabled={isStreaming} />
+			</View>
+		</>
 	);
 }
-
-const styles = StyleSheet.create({
-	container: {
-		flex: 1,
-	},
-	scrollView: {
-		flex: 1,
-	},
-});

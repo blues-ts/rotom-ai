@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@clerk/clerk-expo": "^2.19.30",
+    "@react-native-masked-view/masked-view": "^0.3.2",
     "@react-navigation/bottom-tabs": "^7.7.3",
     "@react-navigation/elements": "^2.8.1",
     "@react-navigation/native": "^7.1.28",

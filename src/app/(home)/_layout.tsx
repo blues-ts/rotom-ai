@@ -1,5 +1,5 @@
+import { View } from "react-native";
 import { Redirect, Stack } from "expo-router";
-
 import { useAuth } from "@clerk/clerk-expo";
 
 export default function HomeLayout() {
@@ -19,8 +19,13 @@ export default function HomeLayout() {
 				headerShown: true,
 				headerTransparent: false,
 				headerShadowVisible: false,
-				headerTitle: "River",
-				headerTitleStyle: { fontSize: 20, fontWeight: "700" },
+				headerTitle: "",
+				headerStyle: {
+					backgroundColor: "transparent",
+				},
+				headerBackground: () => (
+					<View style={{ backgroundColor: "transparent", flex: 1 }} />
+				),
 			}}
 		/>
 	);
