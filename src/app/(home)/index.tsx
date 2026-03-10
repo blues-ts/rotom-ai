@@ -117,6 +117,13 @@ export default function Home() {
 						Alert.alert("Collections");
 					}}
 				/>
+				<Stack.Toolbar.Button
+					icon={"magnifyingglass"}
+					onPress={() => {
+						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+						Alert.alert("Collections");
+					}}
+				/>
 			</Stack.Toolbar>
 
 			{/* Chat Area */}
