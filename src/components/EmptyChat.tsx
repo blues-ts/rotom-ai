@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useTheme } from "@/context/ThemeContext";
 
@@ -6,14 +6,14 @@ export default function EmptyChat() {
 	const { colors } = useTheme();
 
 	return (
-		<View style={styles.container}>
+		<Pressable style={styles.container} onPress={Keyboard.dismiss}>
 			<Text style={[styles.title, { color: colors.foreground }]}>
 				River
 			</Text>
 			<Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
 				Your Pokemon AI Assistant
 			</Text>
-		</View>
+		</Pressable>
 	);
 }
 

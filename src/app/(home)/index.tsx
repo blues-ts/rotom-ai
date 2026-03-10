@@ -5,12 +5,22 @@ import { router, Stack } from "expo-router";
 
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import Animated, {
+	interpolate,
+	useAnimatedStyle,
+	useSharedValue,
+	withTiming,
+} from "react-native-reanimated";
+import {
+	KeyboardAvoidingView,
+	useReanimatedKeyboardAnimation,
+} from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import ChatInput from "@/components/ChatInput";
-import ChatMessageList, { type ChatMessageListRef } from "@/components/ChatMessageList";
+import ChatMessageList, {
+	type ChatMessageListRef,
+} from "@/components/ChatMessageList";
 import EmptyChat from "@/components/EmptyChat";
 import { useTheme } from "@/context/ThemeContext";
 import { useChat } from "@/hooks/useChat";
@@ -20,6 +30,16 @@ export default function Home() {
 	const { bottom } = useSafeAreaInsets();
 	const chatListRef = useRef<ChatMessageListRef>(null);
 	const gradientOpacity = useSharedValue(1);
+	const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
+
+	const bottomSpacerStyle = useAnimatedStyle(() => ({
+		marginBottom: interpolate(
+			keyboardHeight.value,
+			[0, -1],
+			[bottom, 4],
+			"clamp",
+		),
+	}));
 
 	const {
 		messages,
@@ -32,7 +52,9 @@ export default function Home() {
 	const hasMessages = messages.length > 0 || isStreaming;
 
 	useEffect(() => {
-		gradientOpacity.value = withTiming(hasMessages ? 0 : 1, { duration: 500 });
+		gradientOpacity.value = withTiming(hasMessages ? 0 : 1, {
+			duration: 500,
+		});
 	}, [hasMessages]);
 
 	const gradientStyle = useAnimatedStyle(() => ({
@@ -67,6 +89,7 @@ export default function Home() {
 			<Animated.View style={[StyleSheet.absoluteFill, gradientStyle]}>
 				<LinearGradient
 					colors={[colors.primary, colors.background]}
+					accessibilityRespondsToUserInteraction={false}
 					style={StyleSheet.absoluteFill}
 				/>
 			</Animated.View>
@@ -116,9 +139,12 @@ export default function Home() {
 				)}
 
 				{/* Chat Input */}
-				<View style={{ paddingBottom: bottom }}>
-					<ChatInput onSend={sendMessage} disabled={isStreaming} onFocus={handleInputFocus} />
-				</View>
+				<ChatInput
+					onSend={sendMessage}
+					disabled={isStreaming}
+					onFocus={handleInputFocus}
+				/>
+				<Animated.View style={bottomSpacerStyle} />
 			</KeyboardAvoidingView>
 		</>
 	);
