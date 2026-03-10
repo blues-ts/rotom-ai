@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Keyboard, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
@@ -7,18 +7,26 @@ import { useTheme } from "@/context/ThemeContext";
 interface ChatInputProps {
 	onSend: (text: string) => void;
 	disabled?: boolean;
+	onFocus?: () => void;
 }
 
-export default function ChatInput({ onSend, disabled }: ChatInputProps) {
+export default function ChatInput({
+	onSend,
+	disabled,
+	onFocus,
+}: ChatInputProps) {
 	const { colors } = useTheme();
 	const [text, setText] = useState("");
+	const canSend = useMemo(
+		() => text.trim().length > 0 && !disabled,
+		[text, disabled],
+	);
 
 	const handleSend = () => {
 		const trimmed = text.trim();
 		if (!trimmed || disabled) return;
 		onSend(trimmed);
 		setText("");
-		Keyboard.dismiss();
 	};
 
 	return (
@@ -38,22 +46,26 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
 					placeholderTextColor={colors.mutedForeground}
 					value={text}
 					onChangeText={setText}
+					onFocus={onFocus}
 					onSubmitEditing={handleSend}
 					returnKeyType="send"
-					blurOnSubmit
+					blurOnSubmit={false}
 					maxLength={2000}
 					editable={!disabled}
+					accessibilityLabel="Message input"
+					accessibilityHint="Type your message to River"
 				/>
 				<Pressable
 					onPress={handleSend}
-					disabled={!text.trim() || disabled}
+					disabled={!canSend}
+					accessibilityLabel="Send message"
+					accessibilityRole="button"
 					style={[
 						styles.sendButton,
 						{
-							backgroundColor:
-								text.trim() && !disabled
-									? colors.primary
-									: colors.muted,
+							backgroundColor: canSend
+								? colors.primary
+								: colors.muted,
 						},
 					]}
 				>
@@ -61,7 +73,7 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
 						name="arrow-up"
 						size={20}
 						color={
-							text.trim() && !disabled
+							canSend
 								? colors.primaryForeground
 								: colors.mutedForeground
 						}
@@ -75,6 +87,7 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
 const styles = StyleSheet.create({
 	container: {
 		paddingHorizontal: 12,
+		paddingTop: 6,
 	},
 	inputRow: {
 		flexDirection: "row",
@@ -84,11 +97,11 @@ const styles = StyleSheet.create({
 		paddingLeft: 16,
 		paddingRight: 6,
 		paddingVertical: 6,
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.4,
-		shadowRadius: 8,
-		elevation: 4,
+		// shadowColor: "#000",
+		// shadowOffset: { width: 0, height: 2 },
+		// shadowOpacity: 0.2,
+		// shadowRadius: 8,
+		// elevation: 4,
 	},
 	input: {
 		flex: 1,

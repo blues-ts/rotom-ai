@@ -8,10 +8,10 @@ export default function EmptyChat() {
 	return (
 		<View style={styles.container}>
 			<Text style={[styles.title, { color: colors.foreground }]}>
-				Ask River
+				River
 			</Text>
 			<Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-				Your Pokemon TCG assistant
+				Your Pokemon AI Assistant
 			</Text>
 		</View>
 	);
@@ -19,7 +19,7 @@ export default function EmptyChat() {
 
 const styles = StyleSheet.create({
 	container: {
-		...StyleSheet.absoluteFillObject,
+		flex: 1,
 		justifyContent: "center",
 		alignItems: "center",
 		paddingHorizontal: 32,

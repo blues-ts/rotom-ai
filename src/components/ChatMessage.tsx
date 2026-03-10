@@ -18,36 +18,33 @@ export default function ChatMessage({ message }: ChatMessageProps) {
 				isUser ? styles.rowUser : styles.rowAssistant,
 			]}
 		>
-			<View
-				style={[
-					styles.bubble,
-					isUser
-						? [
-								styles.bubbleUser,
-								{ backgroundColor: colors.primary },
-							]
-						: [
-								styles.bubbleAssistant,
-								{
-									backgroundColor: colors.card,
-									borderColor: colors.border,
-								},
-							],
-				]}
-			>
+			{isUser ? (
+				<View
+					style={[
+						styles.bubble,
+						styles.bubbleUser,
+						{ backgroundColor: colors.primary },
+					]}
+				>
+					<Text
+						style={[
+							styles.text,
+							{ color: colors.primaryForeground },
+						]}
+					>
+						{message.content}
+					</Text>
+				</View>
+			) : (
 				<Text
 					style={[
 						styles.text,
-						{
-							color: isUser
-								? colors.primaryForeground
-								: colors.foreground,
-						},
+						{ color: colors.foreground },
 					]}
 				>
 					{message.content}
 				</Text>
-			</View>
+			)}
 		</View>
 	);
 }
@@ -69,13 +66,7 @@ const styles = StyleSheet.create({
 		paddingVertical: 10,
 		borderRadius: 18,
 	},
-	bubbleUser: {
-		borderBottomRightRadius: 4,
-	},
-	bubbleAssistant: {
-		borderBottomLeftRadius: 4,
-		borderWidth: StyleSheet.hairlineWidth,
-	},
+	bubbleUser: {},
 	text: {
 		fontSize: 16,
 		lineHeight: 22,
