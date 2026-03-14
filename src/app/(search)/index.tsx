@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Stack } from "expo-router";
+import { router, Stack } from "expo-router";
+import * as Haptics from "expo-haptics";
 import { useTheme } from "@/context/ThemeContext";
 
 export default function Search() {
@@ -13,6 +14,16 @@ export default function Search() {
 				placeholder="Search cards..."
 				onChangeText={(e) => setSearchQuery(e.nativeEvent.text)}
 			/>
+
+			<Stack.Toolbar placement="left">
+				<Stack.Toolbar.Button
+					icon="chevron.left"
+					onPress={() => {
+						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+						router.back();
+					}}
+				/>
+			</Stack.Toolbar>
 
 			<Stack.Toolbar placement="bottom">
 				<Stack.Toolbar.SearchBarSlot />
