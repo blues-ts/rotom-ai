@@ -57,6 +57,13 @@ function AppContent() {
 				/>
 				<Stack.Screen name="(collections)" />
 				<Stack.Screen
+					name="(search)"
+					options={{
+						animation: "slide_from_right",
+						headerShown: false,
+					}}
+				/>
+				<Stack.Screen
 					name="(settings)"
 					options={{
 						animation: "slide_from_right",

@@ -121,7 +121,7 @@ export default function Home() {
 					icon={"magnifyingglass"}
 					onPress={() => {
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-						Alert.alert("Collections");
+						router.push("/(search)");
 					}}
 				/>
 			</Stack.Toolbar>
