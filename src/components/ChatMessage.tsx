@@ -1,11 +1,16 @@
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useMarkdown } from "react-native-marked";
 
 import { useTheme } from "@/context/ThemeContext";
 import type { ThemeColors } from "@/constants/colors";
 import type { MarkedStyles } from "react-native-marked";
 import type { Message } from "@/types/chat";
+
+import StreamingMessage from "./StreamingMessage";
+
+const IMAGE_REGEX = /!\[[^\]]*\]\(([^)]+)\)/;
 
 interface ChatMessageProps {
 	message: Message;
@@ -100,14 +105,29 @@ function getMarkdownStyles(colors: ThemeColors): MarkedStyles {
 	};
 }
 
-export default function ChatMessage({ message }: ChatMessageProps) {
+function ChatMessage({ message }: ChatMessageProps) {
 	const { colors } = useTheme();
 	const isUser = message.role === "user";
+	const isStreamingMsg = message.id === "streaming";
 
 	const markdownStyles = useMemo(() => getMarkdownStyles(colors), [colors]);
-	const elements = useMarkdown(isUser ? "" : message.content, {
-		styles: markdownStyles,
-	});
+
+	// For completed assistant messages, extract image and strip from markdown
+	const imageUrl = useMemo(() => {
+		if (isUser || isStreamingMsg) return null;
+		const match = message.content.match(IMAGE_REGEX);
+		return match ? match[1] : null;
+	}, [isUser, isStreamingMsg, message.content]);
+
+	const textContent = useMemo(() => {
+		if (isUser || isStreamingMsg) return "";
+		if (imageUrl) {
+			return message.content.replace(/!\[[^\]]*\]\([^)]+\)/, "").trimStart();
+		}
+		return message.content;
+	}, [isUser, isStreamingMsg, imageUrl, message.content]);
+
+	const elements = useMarkdown(textContent, { styles: markdownStyles });
 
 	return (
 		<View
@@ -132,14 +152,30 @@ export default function ChatMessage({ message }: ChatMessageProps) {
 						{message.content}
 					</Text>
 				</View>
+			) : isStreamingMsg ? (
+				<StreamingMessage
+					content={message.content}
+					markdownStyles={markdownStyles}
+				/>
 			) : (
 				<View style={styles.markdownContainer}>
+					{imageUrl && (
+						<Animated.View entering={FadeIn.duration(500)} style={styles.imageContainer}>
+							<Animated.Image
+								source={{ uri: imageUrl }}
+								style={styles.cardImage}
+								resizeMode="contain"
+							/>
+						</Animated.View>
+					)}
 					{elements}
 				</View>
 			)}
 		</View>
 	);
 }
+
+export default React.memo(ChatMessage);
 
 const styles = StyleSheet.create({
 	row: {
@@ -164,5 +200,14 @@ const styles = StyleSheet.create({
 	},
 	markdownContainer: {
 		width: "100%",
+	},
+	imageContainer: {
+		alignItems: "center",
+		marginVertical: 8,
+	},
+	cardImage: {
+		width: "100%",
+		aspectRatio: 5 / 7,
+		borderRadius: 10,
 	},
 });
