@@ -4,6 +4,7 @@ import { FlatList, StyleSheet } from "react-native";
 import type { Message } from "@/types/chat";
 
 import ChatMessage from "./ChatMessage";
+import TypingIndicator from "./TypingIndicator";
 
 interface ChatMessageListProps {
 	messages: Message[];
@@ -25,18 +26,21 @@ const ChatMessageList = forwardRef<ChatMessageListRef, ChatMessageListProps>(
 			},
 		}));
 
+		const showTypingIndicator = isStreaming && !streamingContent;
+
 		const data: Message[] = useMemo(() => {
-			const allMessages = isStreaming
-				? [
-						...messages,
-						{
-							id: "streaming",
-							role: "assistant" as const,
-							content: streamingContent || "...",
-							createdAt: new Date().toISOString(),
-						},
-					]
-				: messages;
+			const allMessages =
+				isStreaming && streamingContent
+					? [
+							...messages,
+							{
+								id: "streaming",
+								role: "assistant" as const,
+								content: streamingContent,
+								createdAt: new Date().toISOString(),
+							},
+						]
+					: messages;
 			// Reverse for inverted list — newest at index 0
 			return [...allMessages].reverse();
 		}, [messages, streamingContent, isStreaming]);
@@ -48,6 +52,9 @@ const ChatMessageList = forwardRef<ChatMessageListRef, ChatMessageListProps>(
 				data={data}
 				keyExtractor={(item) => item.id}
 				renderItem={({ item }) => <ChatMessage message={item} />}
+				ListHeaderComponent={
+					showTypingIndicator ? <TypingIndicator /> : null
+				}
 				style={styles.list}
 				contentContainerStyle={styles.content}
 				showsVerticalScrollIndicator={false}
