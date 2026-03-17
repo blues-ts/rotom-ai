@@ -7,8 +7,6 @@ import type { ThemeColors } from "@/constants/colors";
 import type { MarkedStyles } from "react-native-marked";
 import type { Message } from "@/types/chat";
 
-import StreamingMessage from "./StreamingMessage";
-
 interface ChatMessageProps {
 	message: Message;
 }
@@ -105,12 +103,11 @@ function getMarkdownStyles(colors: ThemeColors): MarkedStyles {
 function ChatMessage({ message }: ChatMessageProps) {
 	const { colors } = useTheme();
 	const isUser = message.role === "user";
-	const isStreamingMsg = message.id === "streaming";
 
 	const markdownStyles = useMemo(() => getMarkdownStyles(colors), [colors]);
 
 	const elements = useMarkdown(
-		isUser || isStreamingMsg ? "" : message.content,
+		isUser ? "" : message.content,
 		{ styles: markdownStyles },
 	);
 
@@ -137,11 +134,6 @@ function ChatMessage({ message }: ChatMessageProps) {
 						{message.content}
 					</Text>
 				</View>
-			) : isStreamingMsg ? (
-				<StreamingMessage
-					content={message.content}
-					markdownStyles={markdownStyles}
-				/>
 			) : (
 				<View style={styles.markdownContainer}>
 					{elements}
