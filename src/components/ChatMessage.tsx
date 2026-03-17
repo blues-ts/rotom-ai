@@ -1,6 +1,5 @@
 import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import Animated, { FadeIn } from "react-native-reanimated";
 import { useMarkdown } from "react-native-marked";
 
 import { useTheme } from "@/context/ThemeContext";
@@ -9,8 +8,6 @@ import type { MarkedStyles } from "react-native-marked";
 import type { Message } from "@/types/chat";
 
 import StreamingMessage from "./StreamingMessage";
-
-const IMAGE_REGEX = /!\[[^\]]*\]\(([^)]+)\)/;
 
 interface ChatMessageProps {
 	message: Message;
@@ -112,22 +109,10 @@ function ChatMessage({ message }: ChatMessageProps) {
 
 	const markdownStyles = useMemo(() => getMarkdownStyles(colors), [colors]);
 
-	// For completed assistant messages, extract image and strip from markdown
-	const imageUrl = useMemo(() => {
-		if (isUser || isStreamingMsg) return null;
-		const match = message.content.match(IMAGE_REGEX);
-		return match ? match[1] : null;
-	}, [isUser, isStreamingMsg, message.content]);
-
-	const textContent = useMemo(() => {
-		if (isUser || isStreamingMsg) return "";
-		if (imageUrl) {
-			return message.content.replace(/!\[[^\]]*\]\([^)]+\)/, "").trimStart();
-		}
-		return message.content;
-	}, [isUser, isStreamingMsg, imageUrl, message.content]);
-
-	const elements = useMarkdown(textContent, { styles: markdownStyles });
+	const elements = useMarkdown(
+		isUser || isStreamingMsg ? "" : message.content,
+		{ styles: markdownStyles },
+	);
 
 	return (
 		<View
@@ -159,15 +144,6 @@ function ChatMessage({ message }: ChatMessageProps) {
 				/>
 			) : (
 				<View style={styles.markdownContainer}>
-					{imageUrl && (
-						<Animated.View entering={FadeIn.duration(500)} style={styles.imageContainer}>
-							<Animated.Image
-								source={{ uri: imageUrl }}
-								style={styles.cardImage}
-								resizeMode="contain"
-							/>
-						</Animated.View>
-					)}
 					{elements}
 				</View>
 			)}
@@ -200,14 +176,5 @@ const styles = StyleSheet.create({
 	},
 	markdownContainer: {
 		width: "100%",
-	},
-	imageContainer: {
-		alignItems: "center",
-		marginVertical: 8,
-	},
-	cardImage: {
-		width: "100%",
-		aspectRatio: 5 / 7,
-		borderRadius: 10,
 	},
 });
