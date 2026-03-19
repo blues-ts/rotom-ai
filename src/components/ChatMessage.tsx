@@ -6,6 +6,7 @@ import { useTheme } from "@/context/ThemeContext";
 import type { ThemeColors } from "@/constants/colors";
 import type { MarkedStyles } from "react-native-marked";
 import type { Message } from "@/types/chat";
+import { ColoredRenderer } from "./ColoredRenderer";
 
 interface ChatMessageProps {
 	message: Message;
@@ -105,10 +106,11 @@ function ChatMessage({ message }: ChatMessageProps) {
 	const isUser = message.role === "user";
 
 	const markdownStyles = useMemo(() => getMarkdownStyles(colors), [colors]);
+	const renderer = useMemo(() => new ColoredRenderer(), []);
 
 	const elements = useMarkdown(
 		isUser ? "" : message.content,
-		{ styles: markdownStyles },
+		{ styles: markdownStyles, renderer },
 	);
 
 	return (

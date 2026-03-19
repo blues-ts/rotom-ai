@@ -78,7 +78,9 @@ export function useChat() {
 				const assistantMessage: Message = {
 					id: (Date.now() + 1).toString(),
 					role: "assistant",
-					content: responseText,
+					content:
+					responseText.trim() ||
+					"Sorry, I wasn't able to generate a response. Please try again.",
 					createdAt: new Date().toISOString(),
 				};
 
