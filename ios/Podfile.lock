@@ -30,6 +30,8 @@ PODS:
     - Yoga
   - ExpoAsset (55.0.8):
     - ExpoModulesCore
+  - ExpoClipboard (55.0.9):
+    - ExpoModulesCore
   - ExpoCrypto (55.0.8):
     - ExpoModulesCore
   - ExpoDevice (55.0.9):
@@ -2313,6 +2315,7 @@ DEPENDENCIES:
   - EXConstants (from `../node_modules/expo-constants/ios`)
   - Expo (from `../node_modules/expo`)
   - ExpoAsset (from `../node_modules/expo-asset/ios`)
+  - ExpoClipboard (from `../node_modules/expo-clipboard/ios`)
   - ExpoCrypto (from `../node_modules/expo-crypto/ios`)
   - ExpoDevice (from `../node_modules/expo-device/ios`)
   - "ExpoDomWebView (from `../node_modules/@expo/dom-webview/ios`)"
@@ -2435,6 +2438,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo"
   ExpoAsset:
     :path: "../node_modules/expo-asset/ios"
+  ExpoClipboard:
+    :path: "../node_modules/expo-clipboard/ios"
   ExpoCrypto:
     :path: "../node_modules/expo-crypto/ios"
   ExpoDevice:
@@ -2644,6 +2649,7 @@ SPEC CHECKSUMS:
   EXConstants: b3c63be5f8648e4ab8e6ff5099b62f629247f969
   Expo: d592aa311ef87e4176c61f851b127c4f2e38308e
   ExpoAsset: bdc7bc21fe25d197c3aa7547e14c12c42087d9c9
+  ExpoClipboard: fba6501fed478667b1cc888e999f82fb2838c685
   ExpoCrypto: 40320a7d4caa13b1f55691241220d961c7757519
   ExpoDevice: 8fb20656b96e38f8928cd069210a1aad0c759ac3
   ExpoDomWebView: f101fb3db4b6eec4163fca51f7507189b7e48661

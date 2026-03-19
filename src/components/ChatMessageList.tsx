@@ -4,6 +4,7 @@ import { FlatList, StyleSheet } from "react-native";
 import type { Message } from "@/types/chat";
 
 import ChatMessage from "./ChatMessage";
+import StreamingMessage from "./StreamingMessage";
 import TypingIndicator from "./TypingIndicator";
 
 interface ChatMessageListProps {
@@ -26,24 +27,19 @@ const ChatMessageList = forwardRef<ChatMessageListRef, ChatMessageListProps>(
 			},
 		}));
 
-		const showTypingIndicator = isStreaming && !streamingContent;
-
 		const data: Message[] = useMemo(() => {
-			const allMessages =
-				isStreaming && streamingContent
-					? [
-							...messages,
-							{
-								id: "streaming",
-								role: "assistant" as const,
-								content: streamingContent,
-								createdAt: new Date().toISOString(),
-							},
-						]
-					: messages;
-			// Reverse for inverted list — newest at index 0
-			return [...allMessages].reverse();
-		}, [messages, streamingContent, isStreaming]);
+			return [...messages].reverse();
+		}, [messages]);
+
+		const headerComponent = useMemo(() => {
+			if (isStreaming && streamingContent) {
+				return <StreamingMessage content={streamingContent} />;
+			}
+			if (isStreaming) {
+				return <TypingIndicator />;
+			}
+			return null;
+		}, [isStreaming, streamingContent]);
 
 		return (
 			<FlatList
@@ -52,13 +48,13 @@ const ChatMessageList = forwardRef<ChatMessageListRef, ChatMessageListProps>(
 				data={data}
 				keyExtractor={(item) => item.id}
 				renderItem={({ item }) => <ChatMessage message={item} />}
-				ListHeaderComponent={
-					showTypingIndicator ? <TypingIndicator /> : null
-				}
+				ListHeaderComponent={headerComponent}
 				style={styles.list}
 				contentContainerStyle={styles.content}
 				showsVerticalScrollIndicator={false}
 				keyboardDismissMode="on-drag"
+				maxToRenderPerBatch={10}
+				windowSize={10}
 				maintainVisibleContentPosition={{
 					minIndexForVisible: 0,
 					autoscrollToTopThreshold: 150,

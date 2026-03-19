@@ -14,6 +14,7 @@
         "axios": "^1.13.6",
         "expo": "~55.0.4",
         "expo-auth-session": "^55.0.6",
+        "expo-clipboard": "~55.0.9",
         "expo-constants": "~55.0.7",
         "expo-device": "~55.0.9",
         "expo-font": "~55.0.4",
@@ -29,6 +30,7 @@
         "expo-symbols": "~55.0.4",
         "expo-system-ui": "~55.0.9",
         "expo-web-browser": "~55.0.9",
+        "highlight.js": "^11.11.1",
         "react": "19.2.0",
         "react-dom": "19.2.0",
         "react-native": "0.83.2",
@@ -858,6 +860,8 @@
 
     "expo-auth-session": ["expo-auth-session@55.0.6", "", { "dependencies": { "expo-application": "~55.0.8", "expo-constants": "~55.0.7", "expo-crypto": "~55.0.8", "expo-linking": "~55.0.7", "expo-web-browser": "~55.0.9", "invariant": "^2.2.4" }, "peerDependencies": { "react": "*", "react-native": "*" } }, "sha512-GeGBzEDGMvqdjZMluM5YOyvJ0nFDc2FVljuO0vnilPIheWR7MUL6OuNvrnWM30B9SQv4qyzu9ctThvJJUNpZfg=="],
 
+    "expo-clipboard": ["expo-clipboard@55.0.9", "", { "peerDependencies": { "expo": "*", "react": "*", "react-native": "*" } }, "sha512-WJ9ougE8fEDu3/RV5Vz3gE5aNgnj1C0WByXCz3WUj8y/06bJyaIUDMq8FDLv3n0AO3guiErmkUunsD0EzSDUUw=="],
+
     "expo-constants": ["expo-constants@55.0.7", "", { "dependencies": { "@expo/config": "~55.0.8", "@expo/env": "~2.1.1" }, "peerDependencies": { "expo": "*", "react-native": "*" } }, "sha512-kdcO4TsQRRqt0USvjaY5vgQMO9H52K3kBZ/ejC7F6rz70mv08GoowrZ1CYOr5O4JpPDRlIpQfZJUucaS/c+KWQ=="],
 
     "expo-crypto": ["expo-crypto@55.0.8", "", { "peerDependencies": { "expo": "*" } }, "sha512-s4G4l1gRgSv3rS4JeKbybXzobWFUcO/B1F6nffjtoGS4WWU5+DNrmbiMnF9mvW21/ozYKtUu21u3pl2+7cGWnw=="],
@@ -987,6 +991,8 @@
     "hermes-estree": ["hermes-estree@0.32.0", "", {}, "sha512-KWn3BqnlDOl97Xe1Yviur6NbgIZ+IP+UVSpshlZWkq+EtoHg6/cwiDj/osP9PCEgFE15KBm1O55JRwbMEm5ejQ=="],
 
     "hermes-parser": ["hermes-parser@0.32.0", "", { "dependencies": { "hermes-estree": "0.32.0" } }, "sha512-g4nBOWFpuiTqjR3LZdRxKUkij9iyveWeuks7INEsMX741f3r9xxrOe8TeQfUxtda0eXmiIFiMQzoeSQEno33Hw=="],
+
+    "highlight.js": ["highlight.js@11.11.1", "", {}, "sha512-Xwwo44whKBVCYoliBQwaPvtd/2tYFkRQtXDWj1nackaV2JPXx3L0+Jvd8/qCJ2p+ML0/XVkJ2q+Mr+UVdpJK5w=="],
 
     "hoist-non-react-statics": ["hoist-non-react-statics@3.3.2", "", { "dependencies": { "react-is": "^16.7.0" } }, "sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw=="],
 

@@ -1,10 +1,12 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@clerk/clerk-expo";
 
 import type { Message } from "@/types/chat";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
+const DRAIN_INTERVAL_MS = 16;
+const CHARS_PER_TICK = 4;
 
 export function useChat() {
 	const { getToken } = useAuth();
@@ -12,6 +14,49 @@ export function useChat() {
 	const [streamingContent, setStreamingContent] = useState("");
 	const [isStreaming, setIsStreaming] = useState(false);
 	const abortRef = useRef<{ abort: () => void } | null>(null);
+	const bufferRef = useRef("");
+	const displayedLenRef = useRef(0);
+	const drainIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+	const clearDrainInterval = useCallback(() => {
+		if (drainIntervalRef.current) {
+			clearInterval(drainIntervalRef.current);
+			drainIntervalRef.current = null;
+		}
+	}, []);
+
+	const startDrainInterval = useCallback(() => {
+		clearDrainInterval();
+		drainIntervalRef.current = setInterval(() => {
+			const bufLen = bufferRef.current.length;
+			const dispLen = displayedLenRef.current;
+			if (bufLen > dispLen) {
+				const newLen = Math.min(dispLen + CHARS_PER_TICK, bufLen);
+				displayedLenRef.current = newLen;
+				setStreamingContent(bufferRef.current.slice(0, newLen));
+			}
+		}, DRAIN_INTERVAL_MS);
+	}, [clearDrainInterval]);
+
+	const flushBuffer = useCallback(() => {
+		clearDrainInterval();
+		if (bufferRef.current) {
+			displayedLenRef.current = bufferRef.current.length;
+			setStreamingContent(bufferRef.current);
+		}
+	}, [clearDrainInterval]);
+
+	const resetStreamingState = useCallback(() => {
+		clearDrainInterval();
+		bufferRef.current = "";
+		displayedLenRef.current = 0;
+		setIsStreaming(false);
+		setStreamingContent("");
+		abortRef.current = null;
+	}, [clearDrainInterval]);
+
+	// Clean up on unmount
+	useEffect(() => clearDrainInterval, [clearDrainInterval]);
 
 	const sendMessage = useCallback(
 		async (text: string) => {
@@ -27,6 +72,8 @@ export function useChat() {
 			setMessages((prev) => [...prev, userMessage]);
 			setIsStreaming(true);
 			setStreamingContent("");
+			bufferRef.current = "";
+			displayedLenRef.current = 0;
 
 			try {
 				const token = await getToken();
@@ -42,7 +89,11 @@ export function useChat() {
 						xhr.timeout = 60000;
 
 						xhr.onprogress = () => {
-							setStreamingContent(xhr.responseText);
+							bufferRef.current = xhr.responseText;
+							// Start drain interval on first chunk
+							if (!drainIntervalRef.current) {
+								startDrainInterval();
+							}
 						};
 
 						xhr.onload = () => {
@@ -75,12 +126,15 @@ export function useChat() {
 					},
 				);
 
+				// Flush any remaining buffered text before creating final message
+				flushBuffer();
+
 				const assistantMessage: Message = {
 					id: (Date.now() + 1).toString(),
 					role: "assistant",
 					content:
-					responseText.trim() ||
-					"Sorry, I wasn't able to generate a response. Please try again.",
+						responseText.trim() ||
+						"Sorry, I wasn't able to generate a response. Please try again.",
 					createdAt: new Date().toISOString(),
 				};
 
@@ -96,12 +150,10 @@ export function useChat() {
 				};
 				setMessages((prev) => [...prev, errorMessage]);
 			} finally {
-				setIsStreaming(false);
-				setStreamingContent("");
-				abortRef.current = null;
+				resetStreamingState();
 			}
 		},
-		[isStreaming, messages, getToken],
+		[isStreaming, messages, getToken, startDrainInterval, flushBuffer, resetStreamingState],
 	);
 
 	const startNewChat = useCallback(() => {
@@ -109,9 +161,8 @@ export function useChat() {
 			abortRef.current.abort();
 		}
 		setMessages([]);
-		setStreamingContent("");
-		setIsStreaming(false);
-	}, []);
+		resetStreamingState();
+	}, [resetStreamingState]);
 
 	return {
 		messages,

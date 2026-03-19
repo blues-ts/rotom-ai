@@ -1,14 +1,25 @@
 import React, { type ReactNode } from "react";
-import { Text, type TextStyle } from "react-native";
+import { Text, type TextStyle, type ViewStyle } from "react-native";
 import { Renderer } from "react-native-marked";
+
+import CodeBlock from "./CodeBlock";
 
 const PERCENT_REGEX = /(\([+-][\d.]+%\))/g;
 
 /**
- * Custom markdown renderer that colorizes percentage changes.
- * e.g. "(+2.3%)" renders green, "(-7.0%)" renders red.
+ * Custom markdown renderer that colorizes percentage changes
+ * and renders syntax-highlighted code blocks.
  */
 export class ColoredRenderer extends Renderer {
+	code(
+		text: string,
+		language?: string,
+		_containerStyle?: ViewStyle,
+		_textStyle?: TextStyle,
+	): ReactNode {
+		return <CodeBlock key={this.getKey()} code={text} language={language} />;
+	}
+
 	text(text: string | ReactNode[], styles?: TextStyle): ReactNode {
 		if (typeof text === "string" && PERCENT_REGEX.test(text)) {
 			const parts = text.split(PERCENT_REGEX);
