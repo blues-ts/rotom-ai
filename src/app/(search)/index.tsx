@@ -8,6 +8,7 @@ import {
 	Text,
 	View,
 } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { router, Stack } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useTheme } from "@/context/ThemeContext";
@@ -73,12 +74,14 @@ export default function Search() {
 	}, [searchQuery, searchCards]);
 
 	const renderItem = useCallback(
-		({ item }: { item: CardResult }) => (
-			<Image
-				source={{ uri: item.image }}
-				style={[styles.cardImage, { backgroundColor: colors.card }]}
-				resizeMode="contain"
-			/>
+		({ item, index }: { item: CardResult; index: number }) => (
+			<Animated.View entering={FadeIn.delay(index * 80).duration(300)}>
+				<Image
+					source={{ uri: item.image }}
+					style={[styles.cardImage, { backgroundColor: colors.card }]}
+					resizeMode="contain"
+				/>
+			</Animated.View>
 		),
 		[colors.card],
 	);
@@ -148,6 +151,8 @@ const styles = StyleSheet.create({
 	},
 	grid: {
 		padding: PADDING,
+		paddingTop: 20,
+		paddingBottom: 100,
 	},
 	row: {
 		gap: GAP,
