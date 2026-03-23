@@ -17,7 +17,7 @@ export default function Search() {
 
 			<Stack.Toolbar placement="left">
 				<Stack.Toolbar.Button
-					icon="chevron.left"
+					icon="xmark"
 					onPress={() => {
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 						router.back();

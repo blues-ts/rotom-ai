@@ -59,7 +59,7 @@ function AppContent() {
 				<Stack.Screen
 					name="(search)"
 					options={{
-						animation: "slide_from_right",
+						presentation: "modal",
 						headerShown: false,
 					}}
 				/>
