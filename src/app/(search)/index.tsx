@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-	ActivityIndicator,
 	Dimensions,
 	FlatList,
 	Image,
@@ -29,6 +28,7 @@ interface CardResult {
 	id: string;
 	name: string;
 	image: string;
+	cardNumber: string;
 }
 
 interface SearchResponse {
@@ -83,6 +83,7 @@ export default function Search() {
 	const api = useApi();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [debouncedQuery, setDebouncedQuery] = useState("");
+	const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
 	// Debounce search input
 	useEffect(() => {
@@ -110,7 +111,8 @@ export default function Search() {
 			return res.data;
 		},
 		initialPageParam: undefined as string | undefined,
-		getNextPageParam: (lastPage) => lastPage.pagination.nextCursor ?? undefined,
+		getNextPageParam: (lastPage) =>
+			lastPage.pagination.hasMore ? lastPage.pagination.nextCursor ?? undefined : undefined,
 		enabled: debouncedQuery.trim().length > 0,
 	});
 
@@ -126,23 +128,43 @@ export default function Search() {
 	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
 	const renderItem = useCallback(
-		({ item, index }: { item: CardResult; index: number }) => (
-			<Animated.View entering={FadeIn.delay(index * 80).duration(300)} exiting={FadeOut.duration(200)}>
-				<Pressable
-					onPress={() => {
-						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-						router.push(`/(card)/${item.id}?name=${encodeURIComponent(item.name)}`);
-					}}
-				>
-					<Image
-						source={{ uri: item.image }}
-						style={[styles.cardImage, { backgroundColor: colors.card }]}
-						resizeMode="contain"
-					/>
-				</Pressable>
-			</Animated.View>
-		),
-		[colors.card],
+		({ item, index }: { item: CardResult; index: number }) => {
+			const showPlaceholder = !item.image || failedImages.has(item.id);
+			return (
+				<Animated.View entering={FadeIn.delay(index * 30).duration(150)} exiting={FadeOut.duration(100)}>
+					<Pressable
+						onPress={() => {
+							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+							router.push(`/(card)/${item.id}?name=${encodeURIComponent(item.name)}`);
+						}}
+					>
+						{showPlaceholder ? (
+							<View style={[styles.cardImage, styles.placeholder, { backgroundColor: colors.card }]}>
+								<Ionicons name="image-outline" size={24} color={colors.mutedForeground} />
+								<Text style={[styles.placeholderName, { color: colors.foreground }]} numberOfLines={2}>
+									{item.name}
+								</Text>
+								{item.cardNumber && (
+									<Text style={[styles.placeholderNumber, { color: colors.mutedForeground }]}>
+										#{item.cardNumber}
+									</Text>
+								)}
+							</View>
+						) : (
+							<Image
+								source={{ uri: item.image }}
+								style={[styles.cardImage, { backgroundColor: colors.card }]}
+								resizeMode="contain"
+								onError={() => {
+									setFailedImages((prev) => new Set(prev).add(item.id));
+								}}
+							/>
+						)}
+					</Pressable>
+				</Animated.View>
+			);
+		},
+		[colors.card, colors.foreground, colors.mutedForeground, failedImages],
 	);
 
 	const isSearching = debouncedQuery.trim().length > 0;
@@ -211,10 +233,11 @@ export default function Search() {
 						onEndReachedThreshold={0.5}
 						ListFooterComponent={
 							isFetchingNextPage ? (
-								<ActivityIndicator
-									style={styles.footerLoader}
-									color={colors.mutedForeground}
-								/>
+								<View style={styles.skeletonRow}>
+									<SkeletonCard color={colors.border} />
+									<SkeletonCard color={colors.border} />
+									<SkeletonCard color={colors.border} />
+								</View>
 							) : null
 						}
 					/>
@@ -253,12 +276,28 @@ const styles = StyleSheet.create({
 		gap: GAP,
 		marginBottom: GAP,
 	},
+	skeletonRow: {
+		flexDirection: "row",
+		gap: GAP,
+		marginBottom: GAP,
+	},
 	cardImage: {
 		width: imageWidth,
 		height: imageHeight,
 		borderRadius: 8,
 	},
-	footerLoader: {
-		paddingVertical: 20,
+	placeholder: {
+		alignItems: "center",
+		justifyContent: "center",
+		paddingHorizontal: 8,
+		gap: 4,
+	},
+	placeholderName: {
+		fontSize: 11,
+		fontWeight: "600",
+		textAlign: "center",
+	},
+	placeholderNumber: {
+		fontSize: 10,
 	},
 });
