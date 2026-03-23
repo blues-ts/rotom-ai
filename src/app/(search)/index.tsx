@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+	ActivityIndicator,
 	Dimensions,
 	FlatList,
 	Image,
+	Pressable,
 	StyleSheet,
 	Text,
 	View,
@@ -19,6 +21,7 @@ import Animated, {
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useTheme } from "@/context/ThemeContext";
 import { useApi } from "@/lib/axios";
 
@@ -26,6 +29,16 @@ interface CardResult {
 	id: string;
 	name: string;
 	image: string;
+}
+
+interface SearchResponse {
+	success: boolean;
+	data: CardResult[];
+	pagination: {
+		hasMore: boolean;
+		nextCursor: string | null;
+		count: number;
+	};
 }
 
 const SKELETON_DATA = Array.from({ length: 15 }, (_, i) => ({ id: `skeleton-${i}` }));
@@ -69,60 +82,73 @@ export default function Search() {
 	const { colors } = useTheme();
 	const api = useApi();
 	const [searchQuery, setSearchQuery] = useState("");
-	const [results, setResults] = useState<CardResult[]>([]);
-	const [loading, setLoading] = useState(false);
-	const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const [debouncedQuery, setDebouncedQuery] = useState("");
 
-	const searchCards = useCallback(
-		async (query: string) => {
-			if (!query.trim()) {
-				setResults([]);
-				setLoading(false);
-				return;
-			}
-			setLoading(true);
-			try {
-				const res = await api.get("/api/pricing/cards", {
-					params: { search: query, limit: 20 },
-				});
-				setResults(res.data.data ?? []);
-			} catch {
-				setResults([]);
-			} finally {
-				setLoading(false);
-			}
+	// Debounce search input
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			setDebouncedQuery(searchQuery);
+		}, 400);
+		return () => clearTimeout(timer);
+	}, [searchQuery]);
+
+	const {
+		data,
+		isLoading,
+		isFetchingNextPage,
+		hasNextPage,
+		fetchNextPage,
+	} = useInfiniteQuery<SearchResponse>({
+		queryKey: ["searchCards", debouncedQuery],
+		queryFn: async ({ pageParam }) => {
+			const params: Record<string, string | number> = {
+				search: debouncedQuery,
+				limit: 20,
+			};
+			if (pageParam) params.cursor = pageParam as string;
+			const res = await api.get("/api/pricing/cards", { params });
+			return res.data;
 		},
-		[api],
+		initialPageParam: undefined as string | undefined,
+		getNextPageParam: (lastPage) => lastPage.pagination.nextCursor ?? undefined,
+		enabled: debouncedQuery.trim().length > 0,
+	});
+
+	const cards = useMemo(
+		() => data?.pages.flatMap((p) => p.data) ?? [],
+		[data],
 	);
 
-	useEffect(() => {
-		if (debounceRef.current) clearTimeout(debounceRef.current);
-		if (!searchQuery.trim()) {
-			setResults([]);
-			setLoading(false);
-			return;
+	const handleEndReached = useCallback(() => {
+		if (hasNextPage && !isFetchingNextPage) {
+			fetchNextPage();
 		}
-		setLoading(true);
-		debounceRef.current = setTimeout(() => {
-			searchCards(searchQuery);
-		}, 400);
-		return () => {
-			if (debounceRef.current) clearTimeout(debounceRef.current);
-		};
-	}, [searchQuery, searchCards]);
+	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
 	const renderItem = useCallback(
 		({ item, index }: { item: CardResult; index: number }) => (
 			<Animated.View entering={FadeIn.delay(index * 80).duration(300)} exiting={FadeOut.duration(200)}>
-				<Image
-					source={{ uri: item.image }}
-					style={[styles.cardImage, { backgroundColor: colors.card }]}
-					resizeMode="contain"
-				/>
+				<Pressable
+					onPress={() => {
+						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+						router.push(`/(card)/${item.id}?name=${encodeURIComponent(item.name)}`);
+					}}
+				>
+					<Image
+						source={{ uri: item.image }}
+						style={[styles.cardImage, { backgroundColor: colors.card }]}
+						resizeMode="contain"
+					/>
+				</Pressable>
 			</Animated.View>
 		),
 		[colors.card],
 	);
+
+	const isSearching = debouncedQuery.trim().length > 0;
+	const showHint = !searchQuery.trim() && !isSearching;
+	const showSkeleton = isSearching && isLoading;
+	const showNoResults = isSearching && !isLoading && cards.length === 0;
 
 	return (
 		<>
@@ -148,7 +174,7 @@ export default function Search() {
 			<View
 				style={[styles.container, { backgroundColor: colors.background }]}
 			>
-				{!searchQuery.trim() && !loading && results.length === 0 && (
+				{showHint && (
 					<View style={styles.hint}>
 						<Ionicons name="search" size={40} color={colors.mutedForeground} />
 						<Text style={[styles.hintText, { color: colors.mutedForeground }]}>
@@ -156,7 +182,7 @@ export default function Search() {
 						</Text>
 					</View>
 				)}
-				{loading && results.length === 0 && (
+				{showSkeleton && (
 					<FlatList
 						data={SKELETON_DATA}
 						keyExtractor={(item) => item.id}
@@ -167,20 +193,30 @@ export default function Search() {
 						scrollEnabled={false}
 					/>
 				)}
-				{!loading && searchQuery.trim() && results.length === 0 && (
+				{showNoResults && (
 					<Text style={[styles.empty, { color: colors.mutedForeground }]}>
 						No cards found
 					</Text>
 				)}
-				{results.length > 0 && (
+				{cards.length > 0 && (
 					<FlatList
-						data={results}
+						data={cards}
 						keyExtractor={(item) => item.id}
 						numColumns={COLUMNS}
 						renderItem={renderItem}
 						contentContainerStyle={styles.grid}
 						columnWrapperStyle={styles.row}
 						showsVerticalScrollIndicator={false}
+						onEndReached={handleEndReached}
+						onEndReachedThreshold={0.5}
+						ListFooterComponent={
+							isFetchingNextPage ? (
+								<ActivityIndicator
+									style={styles.footerLoader}
+									color={colors.mutedForeground}
+								/>
+							) : null
+						}
 					/>
 				)}
 			</View>
@@ -221,5 +257,8 @@ const styles = StyleSheet.create({
 		width: imageWidth,
 		height: imageHeight,
 		borderRadius: 8,
+	},
+	footerLoader: {
+		paddingVertical: 20,
 	},
 });

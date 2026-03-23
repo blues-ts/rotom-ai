@@ -64,6 +64,13 @@ function AppContent() {
 					}}
 				/>
 				<Stack.Screen
+					name="(card)"
+					options={{
+						presentation: "modal",
+						headerShown: false,
+					}}
+				/>
+				<Stack.Screen
 					name="(settings)"
 					options={{
 						animation: "slide_from_right",
