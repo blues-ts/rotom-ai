@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-	ActivityIndicator,
 	Dimensions,
 	FlatList,
 	Image,
@@ -8,7 +7,15 @@ import {
 	Text,
 	View,
 } from "react-native";
-import Animated, { FadeIn } from "react-native-reanimated";
+import Animated, {
+	FadeIn,
+	FadeOut,
+	useAnimatedStyle,
+	useSharedValue,
+	withRepeat,
+	withSequence,
+	withTiming,
+} from "react-native-reanimated";
 import { router, Stack } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useTheme } from "@/context/ThemeContext";
@@ -20,12 +27,42 @@ interface CardResult {
 	image: string;
 }
 
+const SKELETON_DATA = Array.from({ length: 15 }, (_, i) => ({ id: `skeleton-${i}` }));
+
 const COLUMNS = 3;
 const GAP = 8;
 const PADDING = 12;
 const screenWidth = Dimensions.get("window").width;
 const imageWidth = (screenWidth - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 const imageHeight = imageWidth * 1.4;
+
+function SkeletonCard({ color }: { color: string }) {
+	const opacity = useSharedValue(0.3);
+
+	useEffect(() => {
+		opacity.value = withRepeat(
+			withSequence(
+				withTiming(0.7, { duration: 800 }),
+				withTiming(0.3, { duration: 800 }),
+			),
+			-1,
+		);
+	}, []);
+
+	const animatedStyle = useAnimatedStyle(() => ({
+		opacity: opacity.value,
+	}));
+
+	return (
+		<Animated.View
+			style={[
+				styles.cardImage,
+				{ backgroundColor: color },
+				animatedStyle,
+			]}
+		/>
+	);
+}
 
 export default function Search() {
 	const { colors } = useTheme();
@@ -75,7 +112,7 @@ export default function Search() {
 
 	const renderItem = useCallback(
 		({ item, index }: { item: CardResult; index: number }) => (
-			<Animated.View entering={FadeIn.delay(index * 80).duration(300)}>
+			<Animated.View entering={FadeIn.delay(index * 80).duration(300)} exiting={FadeOut.duration(200)}>
 				<Image
 					source={{ uri: item.image }}
 					style={[styles.cardImage, { backgroundColor: colors.card }]}
@@ -111,9 +148,14 @@ export default function Search() {
 				style={[styles.container, { backgroundColor: colors.background }]}
 			>
 				{loading && results.length === 0 && (
-					<ActivityIndicator
-						style={styles.loader}
-						color={colors.mutedForeground}
+					<FlatList
+						data={SKELETON_DATA}
+						keyExtractor={(item) => item.id}
+						numColumns={COLUMNS}
+						renderItem={() => <SkeletonCard color={colors.border} />}
+						contentContainerStyle={styles.grid}
+						columnWrapperStyle={styles.row}
+						scrollEnabled={false}
 					/>
 				)}
 				{!loading && searchQuery.trim() && results.length === 0 && (
@@ -140,9 +182,6 @@ export default function Search() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-	},
-	loader: {
-		marginTop: 40,
 	},
 	empty: {
 		textAlign: "center",
