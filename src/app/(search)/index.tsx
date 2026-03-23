@@ -16,6 +16,7 @@ import Animated, {
 	withSequence,
 	withTiming,
 } from "react-native-reanimated";
+import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useTheme } from "@/context/ThemeContext";
@@ -147,6 +148,14 @@ export default function Search() {
 			<View
 				style={[styles.container, { backgroundColor: colors.background }]}
 			>
+				{!searchQuery.trim() && !loading && results.length === 0 && (
+					<View style={styles.hint}>
+						<Ionicons name="search" size={40} color={colors.mutedForeground} />
+						<Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+							Search over 27,000 Pokemon cards
+						</Text>
+					</View>
+				)}
 				{loading && results.length === 0 && (
 					<FlatList
 						data={SKELETON_DATA}
@@ -182,6 +191,17 @@ export default function Search() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
+	},
+	hint: {
+		flex: 1,
+		alignItems: "center",
+		justifyContent: "center",
+		gap: 12,
+		paddingBottom: 80,
+	},
+	hintText: {
+		fontSize: 16,
+		textAlign: "center",
 	},
 	empty: {
 		textAlign: "center",
