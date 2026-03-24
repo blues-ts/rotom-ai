@@ -50,6 +50,35 @@ const screenWidth = Dimensions.get("window").width;
 const imageWidth = (screenWidth - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 const imageHeight = imageWidth * 1.4;
 
+function FadeImage({ uri, style, backgroundColor, onError }: {
+	uri: string;
+	style: any;
+	backgroundColor: string;
+	onError: () => void;
+}) {
+	const opacity = useSharedValue(0);
+
+	const animatedStyle = useAnimatedStyle(() => ({
+		opacity: opacity.value,
+	}));
+
+	return (
+		<View style={[style, { backgroundColor, overflow: "hidden" }]}>
+			<Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
+				<Image
+					source={{ uri }}
+					style={StyleSheet.absoluteFill}
+					resizeMode="contain"
+					onLoad={() => {
+						opacity.value = withTiming(1, { duration: 200 });
+					}}
+					onError={onError}
+				/>
+			</Animated.View>
+		</View>
+	);
+}
+
 function SkeletonCard({ color }: { color: string }) {
 	const opacity = useSharedValue(0.3);
 
@@ -109,7 +138,11 @@ export default function Search() {
 			};
 			if (pageParam) params.cursor = pageParam as string;
 			const res = await api.get("/api/pricing/cards", { params });
-			return res.data;
+			const result: SearchResponse = res.data;
+			await Promise.allSettled(
+				result.data.map((card) => card.image ? Image.prefetch(card.image) : Promise.resolve()),
+			);
+			return result;
 		},
 		initialPageParam: undefined as string | undefined,
 		getNextPageParam: (lastPage) =>
@@ -132,7 +165,7 @@ export default function Search() {
 		({ item, index }: { item: CardResult; index: number }) => {
 			const showPlaceholder = !item.image || failedImages.has(item.id);
 			return (
-				<Animated.View entering={FadeIn.delay(index * 30).duration(150)} exiting={FadeOut.duration(100)}>
+				<Animated.View exiting={FadeOut.duration(100)}>
 					<Pressable
 						onPress={() => {
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -152,10 +185,10 @@ export default function Search() {
 								)}
 							</View>
 						) : (
-							<Image
-								source={{ uri: item.image }}
-								style={[styles.cardImage, { backgroundColor: colors.card }]}
-								resizeMode="contain"
+							<FadeImage
+								uri={item.image}
+								style={styles.cardImage}
+								backgroundColor={colors.card}
 								onError={() => {
 									setFailedImages((prev) => new Set(prev).add(item.id));
 								}}
@@ -230,9 +263,9 @@ export default function Search() {
 						contentContainerStyle={styles.grid}
 						columnWrapperStyle={styles.row}
 						showsVerticalScrollIndicator={false}
-						bounces={hasNextPage !== false}
+						bounces={false}
 						onEndReached={handleEndReached}
-						onEndReachedThreshold={0.5}
+						onEndReachedThreshold={0.1}
 						ListFooterComponent={null}
 					/>
 				)}
@@ -264,7 +297,7 @@ const styles = StyleSheet.create({
 	grid: {
 		padding: PADDING,
 		paddingTop: 20,
-		paddingBottom: 100,
+		paddingBottom: 75,
 	},
 	row: {
 		gap: GAP,
