@@ -234,7 +234,6 @@ export default function Search() {
 					exiting={FadeOut.duration(100)}
 				>
 					<Pressable
-						style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.97 : 1 }] }]}
 						onPress={() => {
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 							router.push(`/(card)/${item.id}?name=${encodeURIComponent(item.name)}`);
@@ -326,9 +325,9 @@ export default function Search() {
 						onEndReachedThreshold={0.5}
 						ListFooterComponent={
 							isFetchingNextPage ? (
-								<View style={styles.footer}>
+								<Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(300)} style={styles.footer}>
 									<LoadingSpinner color={colors.mutedForeground} />
-								</View>
+								</Animated.View>
 							) : !hasNextPage && cards.length > 0 ? (
 								<Text style={[styles.endText, { color: colors.mutedForeground }]}>
 									No more results

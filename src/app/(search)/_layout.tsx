@@ -1,5 +1,8 @@
-import { Redirect, Stack } from "expo-router";
+import { Pressable } from "react-native";
+import { Redirect, router, Stack } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
+import * as Haptics from "expo-haptics";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
 
 export default function SearchLayout() {
@@ -22,6 +25,16 @@ export default function SearchLayout() {
 				headerShadowVisible: false,
 				headerStyle: { backgroundColor: colors.background },
 				headerTintColor: colors.foreground,
+				headerLeft: () => (
+					<Pressable
+						onPress={() => {
+							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+							router.back();
+						}}
+					>
+						<Ionicons name="close" size={24} color={colors.foreground} />
+					</Pressable>
+				),
 			}}
 		/>
 	);
