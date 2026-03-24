@@ -7,31 +7,31 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		06331B7B2C854A878FB01327 /* expo.icon in Resources */ = {isa = PBXBuildFile; fileRef = 37D6002DE50C45ED92185712 /* expo.icon */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		15EC0052B2E7B289FFA598F9 /* libPods-rotomai.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D89D3F74982720598C756A76 /* libPods-rotomai.a */; };
-		2B4FB3361897C54E203D4329 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43BAF9461F17BC1ACC122E9D /* ExpoModulesProvider.swift */; };
+		39CFA5112CC86043692B226F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 456CE48C4475E7CAB001A5FE /* PrivacyInfo.xcprivacy */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		9386826778B1C403B3FDAD6A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 26662D1DF586A83E76179ECE /* PrivacyInfo.xcprivacy */; };
+		55A18208575CCD6344032277 /* libPods-rotomai.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CE4A222E34C2DC5E2AE08A8C /* libPods-rotomai.a */; };
+		5E4163FD25074EF4AE3E170A /* expo.icon in Resources */ = {isa = PBXBuildFile; fileRef = 52D7383B4C27408DBBD1A701 /* expo.icon */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
+		BE35BC08A03EAB817049BCF3 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA2F7C6974D177BF8132461B /* ExpoModulesProvider.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		00CED414EC5DAB3A2EEAB98D /* Pods-rotomai.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-rotomai.debug.xcconfig"; path = "Target Support Files/Pods-rotomai/Pods-rotomai.debug.xcconfig"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* rotomai.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = rotomai.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = rotomai/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = rotomai/Info.plist; sourceTree = "<group>"; };
-		26662D1DF586A83E76179ECE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = rotomai/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		37D6002DE50C45ED92185712 /* expo.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = expo.icon; path = rotomai/expo.icon; sourceTree = "<group>"; };
-		43BAF9461F17BC1ACC122E9D /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-rotomai/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		4F907F3AE8AE9932C7D3540A /* Pods-rotomai.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-rotomai.debug.xcconfig"; path = "Target Support Files/Pods-rotomai/Pods-rotomai.debug.xcconfig"; sourceTree = "<group>"; };
-		5018E07F2BB08908AFE86410 /* Pods-rotomai.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-rotomai.release.xcconfig"; path = "Target Support Files/Pods-rotomai/Pods-rotomai.release.xcconfig"; sourceTree = "<group>"; };
+		34E54E4E9ED95FB0F05B7741 /* Pods-rotomai.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-rotomai.release.xcconfig"; path = "Target Support Files/Pods-rotomai/Pods-rotomai.release.xcconfig"; sourceTree = "<group>"; };
+		456CE48C4475E7CAB001A5FE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = rotomai/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		52D7383B4C27408DBBD1A701 /* expo.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = expo.icon; path = rotomai/expo.icon; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = rotomai/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		D89D3F74982720598C756A76 /* libPods-rotomai.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-rotomai.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		CE4A222E34C2DC5E2AE08A8C /* libPods-rotomai.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-rotomai.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = rotomai/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* rotomai-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "rotomai-Bridging-Header.h"; path = "rotomai/rotomai-Bridging-Header.h"; sourceTree = "<group>"; };
+		FA2F7C6974D177BF8132461B /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-rotomai/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -39,7 +39,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				15EC0052B2E7B289FFA598F9 /* libPods-rotomai.a in Frameworks */,
+				55A18208575CCD6344032277 /* libPods-rotomai.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -55,8 +55,8 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				37D6002DE50C45ED92185712 /* expo.icon */,
-				26662D1DF586A83E76179ECE /* PrivacyInfo.xcprivacy */,
+				52D7383B4C27408DBBD1A701 /* expo.icon */,
+				456CE48C4475E7CAB001A5FE /* PrivacyInfo.xcprivacy */,
 			);
 			name = rotomai;
 			sourceTree = "<group>";
@@ -65,9 +65,27 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				D89D3F74982720598C756A76 /* libPods-rotomai.a */,
+				CE4A222E34C2DC5E2AE08A8C /* libPods-rotomai.a */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		59C9B8F114CD92F0B820D1C4 /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				C08C5886068B4E0A78C3F2B2 /* rotomai */,
+			);
+			name = ExpoModulesProviders;
+			sourceTree = "<group>";
+		};
+		5DEA68E9E62EC71756657862 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				00CED414EC5DAB3A2EEAB98D /* Pods-rotomai.debug.xcconfig */,
+				34E54E4E9ED95FB0F05B7741 /* Pods-rotomai.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -84,8 +102,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				E84D2A0096B4724BEB12A0C4 /* Pods */,
-				8CE81E953B20C0D49AD6CF88 /* ExpoModulesProviders */,
+				5DEA68E9E62EC71756657862 /* Pods */,
+				59C9B8F114CD92F0B820D1C4 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -100,14 +118,6 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		8CE81E953B20C0D49AD6CF88 /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				F0A4F3EA5E7BD0A829B419B2 /* rotomai */,
-			);
-			name = ExpoModulesProviders;
-			sourceTree = "<group>";
-		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
 			isa = PBXGroup;
 			children = (
@@ -117,20 +127,10 @@
 			path = rotomai/Supporting;
 			sourceTree = "<group>";
 		};
-		E84D2A0096B4724BEB12A0C4 /* Pods */ = {
+		C08C5886068B4E0A78C3F2B2 /* rotomai */ = {
 			isa = PBXGroup;
 			children = (
-				4F907F3AE8AE9932C7D3540A /* Pods-rotomai.debug.xcconfig */,
-				5018E07F2BB08908AFE86410 /* Pods-rotomai.release.xcconfig */,
-			);
-			name = Pods;
-			path = Pods;
-			sourceTree = "<group>";
-		};
-		F0A4F3EA5E7BD0A829B419B2 /* rotomai */ = {
-			isa = PBXGroup;
-			children = (
-				43BAF9461F17BC1ACC122E9D /* ExpoModulesProvider.swift */,
+				FA2F7C6974D177BF8132461B /* ExpoModulesProvider.swift */,
 			);
 			name = rotomai;
 			sourceTree = "<group>";
@@ -143,13 +143,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "rotomai" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				10595410B4A8F43C9CB30689 /* [Expo] Configure project */,
+				D749F51436EB793E796991D5 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				026FA2C0E1DCCF8BDCFCBD23 /* [CP] Embed Pods Frameworks */,
+				93EC526E9E447A10EBC00751 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -199,8 +199,8 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				06331B7B2C854A878FB01327 /* expo.icon in Resources */,
-				9386826778B1C403B3FDAD6A /* PrivacyInfo.xcprivacy in Resources */,
+				5E4163FD25074EF4AE3E170A /* expo.icon in Resources */,
+				39CFA5112CC86043692B226F /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -224,28 +224,6 @@
 			shellPath = /bin/sh;
 			shellScript = "if [[ -f \"$PODS_ROOT/../.xcode.env\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env\"\nfi\nif [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.local\"\nfi\n\n# The project root by default is one level up from the ios directory\nexport PROJECT_ROOT=\"$PROJECT_DIR\"/..\n\nif [[ \"$CONFIGURATION\" = *Debug* ]]; then\n  export SKIP_BUNDLING=1\nfi\nif [[ -z \"$ENTRY_FILE\" ]]; then\n  # Set the entry JS file using the bundler's entry resolution.\n  export ENTRY_FILE=\"$(\"$NODE_BINARY\" -e \"require('expo/scripts/resolveAppEntry')\" \"$PROJECT_ROOT\" ios absolute | tail -n 1)\"\nfi\n\nif [[ -z \"$CLI_PATH\" ]]; then\n  # Use Expo CLI\n  export CLI_PATH=\"$(\"$NODE_BINARY\" --print \"require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })\")\"\nfi\nif [[ -z \"$BUNDLE_COMMAND\" ]]; then\n  # Default Expo CLI command for bundling\n  export BUNDLE_COMMAND=\"export:embed\"\nfi\n\n# Source .xcode.env.updates if it exists to allow\n# SKIP_BUNDLING to be unset if needed\nif [[ -f \"$PODS_ROOT/../.xcode.env.updates\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.updates\"\nfi\n# Source local changes to allow overrides\n# if needed\nif [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.local\"\nfi\n\n`\"$NODE_BINARY\" --print \"require('path').dirname(require.resolve('react-native/package.json')) + '/scripts/react-native-xcode.sh'\"`\n\n";
 		};
-		026FA2C0E1DCCF8BDCFCBD23 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-rotomai/Pods-rotomai-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermesvm.framework/hermesvm",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermesvm.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-rotomai/Pods-rotomai-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 		08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -267,30 +245,6 @@
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
-		};
-		10595410B4A8F43C9CB30689 /* [Expo] Configure project */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/.xcode.env",
-				"$(SRCROOT)/.xcode.env.local",
-				"$(SRCROOT)/rotomai/rotomai.entitlements",
-				"$(SRCROOT)/Pods/Target Support Files/Pods-rotomai/expo-configure-project.sh",
-			);
-			name = "[Expo] Configure project";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(SRCROOT)/Pods/Target Support Files/Pods-rotomai/ExpoModulesProvider.swift",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-rotomai/expo-configure-project.sh\"\n";
 		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -328,6 +282,52 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-rotomai/Pods-rotomai-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
+		93EC526E9E447A10EBC00751 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-rotomai/Pods-rotomai-frameworks.sh",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermesvm.framework/hermesvm",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermesvm.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-rotomai/Pods-rotomai-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		D749F51436EB793E796991D5 /* [Expo] Configure project */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/.xcode.env",
+				"$(SRCROOT)/.xcode.env.local",
+				"$(SRCROOT)/rotomai/rotomai.entitlements",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-rotomai/expo-configure-project.sh",
+			);
+			name = "[Expo] Configure project";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Pods/Target Support Files/Pods-rotomai/ExpoModulesProvider.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-rotomai/expo-configure-project.sh\"\n";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -336,7 +336,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				2B4FB3361897C54E203D4329 /* ExpoModulesProvider.swift in Sources */,
+				BE35BC08A03EAB817049BCF3 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -345,7 +345,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 4F907F3AE8AE9932C7D3540A /* Pods-rotomai.debug.xcconfig */;
+			baseConfigurationReference = 00CED414EC5DAB3A2EEAB98D /* Pods-rotomai.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = expo;
 				CLANG_ENABLE_MODULES = YES;
@@ -381,7 +381,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 5018E07F2BB08908AFE86410 /* Pods-rotomai.release.xcconfig */;
+			baseConfigurationReference = 34E54E4E9ED95FB0F05B7741 /* Pods-rotomai.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = expo;
 				CLANG_ENABLE_MODULES = YES;

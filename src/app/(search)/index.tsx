@@ -50,26 +50,49 @@ const screenWidth = Dimensions.get("window").width;
 const imageWidth = (screenWidth - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 const imageHeight = imageWidth * 1.4;
 
-function FadeImage({ uri, style, backgroundColor, onError }: {
+function FadeImage({ uri, style, backgroundColor, shimmerColor, onError }: {
 	uri: string;
 	style: any;
 	backgroundColor: string;
+	shimmerColor: string;
 	onError: () => void;
 }) {
 	const opacity = useSharedValue(0);
+	const shimmerOpacity = useSharedValue(0.3);
+	const [loaded, setLoaded] = useState(false);
+
+	useEffect(() => {
+		shimmerOpacity.value = withRepeat(
+			withSequence(
+				withTiming(0.7, { duration: 800 }),
+				withTiming(0.3, { duration: 800 }),
+			),
+			-1,
+		);
+	}, []);
 
 	const animatedStyle = useAnimatedStyle(() => ({
 		opacity: opacity.value,
 	}));
 
+	const shimmerStyle = useAnimatedStyle(() => ({
+		opacity: shimmerOpacity.value,
+	}));
+
 	return (
 		<View style={[style, { backgroundColor, overflow: "hidden" }]}>
+			{!loaded && (
+				<Animated.View
+					style={[StyleSheet.absoluteFill, { backgroundColor: shimmerColor }, shimmerStyle]}
+				/>
+			)}
 			<Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
 				<Image
 					source={{ uri }}
 					style={StyleSheet.absoluteFill}
 					resizeMode="contain"
 					onLoad={() => {
+						setLoaded(true);
 						opacity.value = withTiming(1, { duration: 200 });
 					}}
 					onError={onError}
@@ -107,6 +130,50 @@ function SkeletonCard({ color }: { color: string }) {
 	);
 }
 
+function LoadingSpinner({ color }: { color: string }) {
+	const dot1 = useSharedValue(0);
+	const dot2 = useSharedValue(0);
+	const dot3 = useSharedValue(0);
+
+	useEffect(() => {
+		dot1.value = withRepeat(
+			withSequence(
+				withTiming(-8, { duration: 300 }),
+				withTiming(0, { duration: 300 }),
+			),
+			-1,
+		);
+		dot2.value = withRepeat(
+			withSequence(
+				withTiming(0, { duration: 150 }),
+				withTiming(-8, { duration: 300 }),
+				withTiming(0, { duration: 300 }),
+			),
+			-1,
+		);
+		dot3.value = withRepeat(
+			withSequence(
+				withTiming(0, { duration: 300 }),
+				withTiming(-8, { duration: 300 }),
+				withTiming(0, { duration: 300 }),
+			),
+			-1,
+		);
+	}, []);
+
+	const style1 = useAnimatedStyle(() => ({ transform: [{ translateY: dot1.value }] }));
+	const style2 = useAnimatedStyle(() => ({ transform: [{ translateY: dot2.value }] }));
+	const style3 = useAnimatedStyle(() => ({ transform: [{ translateY: dot3.value }] }));
+
+	return (
+		<View style={styles.spinnerRow}>
+			<Animated.View style={[styles.dot, { backgroundColor: color }, style1]} />
+			<Animated.View style={[styles.dot, { backgroundColor: color }, style2]} />
+			<Animated.View style={[styles.dot, { backgroundColor: color }, style3]} />
+		</View>
+	);
+}
+
 export default function Search() {
 	const { colors } = useTheme();
 	const api = useApi();
@@ -139,9 +206,6 @@ export default function Search() {
 			if (pageParam) params.cursor = pageParam as string;
 			const res = await api.get("/api/pricing/cards", { params });
 			const result: SearchResponse = res.data;
-			await Promise.allSettled(
-				result.data.map((card) => card.image ? Image.prefetch(card.image) : Promise.resolve()),
-			);
 			return result;
 		},
 		initialPageParam: undefined as string | undefined,
@@ -165,8 +229,12 @@ export default function Search() {
 		({ item, index }: { item: CardResult; index: number }) => {
 			const showPlaceholder = !item.image || failedImages.has(item.id);
 			return (
-				<Animated.View exiting={FadeOut.duration(100)}>
+				<Animated.View
+					entering={FadeIn.delay(Math.min(index * 30, 300)).duration(200)}
+					exiting={FadeOut.duration(100)}
+				>
 					<Pressable
+						style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.97 : 1 }] }]}
 						onPress={() => {
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 							router.push(`/(card)/${item.id}?name=${encodeURIComponent(item.name)}`);
@@ -189,6 +257,7 @@ export default function Search() {
 								uri={item.image}
 								style={styles.cardImage}
 								backgroundColor={colors.card}
+								shimmerColor={colors.border}
 								onError={() => {
 									setFailedImages((prev) => new Set(prev).add(item.id));
 								}}
@@ -212,16 +281,6 @@ export default function Search() {
 				placeholder="Search cards..."
 				onChangeText={(e) => setSearchQuery(e.nativeEvent.text)}
 			/>
-
-			<Stack.Toolbar placement="left">
-				<Stack.Toolbar.Button
-					icon="xmark"
-					onPress={() => {
-						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-						router.back();
-					}}
-				/>
-			</Stack.Toolbar>
 
 			<Stack.Toolbar placement="bottom">
 				<Stack.Toolbar.SearchBarSlot />
@@ -263,10 +322,19 @@ export default function Search() {
 						contentContainerStyle={styles.grid}
 						columnWrapperStyle={styles.row}
 						showsVerticalScrollIndicator={false}
-						bounces={false}
 						onEndReached={handleEndReached}
-						onEndReachedThreshold={0.1}
-						ListFooterComponent={null}
+						onEndReachedThreshold={0.5}
+						ListFooterComponent={
+							isFetchingNextPage ? (
+								<View style={styles.footer}>
+									<LoadingSpinner color={colors.mutedForeground} />
+								</View>
+							) : !hasNextPage && cards.length > 0 ? (
+								<Text style={[styles.endText, { color: colors.mutedForeground }]}>
+									No more results
+								</Text>
+							) : null
+						}
 					/>
 				)}
 			</View>
@@ -326,5 +394,25 @@ const styles = StyleSheet.create({
 	},
 	placeholderNumber: {
 		fontSize: 10,
+	},
+	footer: {
+		alignItems: "center",
+		paddingVertical: 20,
+	},
+	spinnerRow: {
+		flexDirection: "row",
+		gap: 6,
+		alignItems: "center",
+	},
+	dot: {
+		width: 8,
+		height: 8,
+		borderRadius: 4,
+	},
+	endText: {
+		textAlign: "center",
+		marginTop: 20,
+		marginBottom: 10,
+		fontSize: 14,
 	},
 });
