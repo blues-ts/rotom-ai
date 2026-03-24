@@ -105,6 +105,7 @@ export default function Search() {
 			const params: Record<string, string | number> = {
 				search: debouncedQuery,
 				limit: 20,
+				game: "pokemon",
 			};
 			if (pageParam) params.cursor = pageParam as string;
 			const res = await api.get("/api/pricing/cards", { params });
@@ -229,17 +230,10 @@ export default function Search() {
 						contentContainerStyle={styles.grid}
 						columnWrapperStyle={styles.row}
 						showsVerticalScrollIndicator={false}
+						bounces={hasNextPage !== false}
 						onEndReached={handleEndReached}
 						onEndReachedThreshold={0.5}
-						ListFooterComponent={
-							isFetchingNextPage ? (
-								<View style={styles.skeletonRow}>
-									<SkeletonCard color={colors.border} />
-									<SkeletonCard color={colors.border} />
-									<SkeletonCard color={colors.border} />
-								</View>
-							) : null
-						}
+						ListFooterComponent={null}
 					/>
 				)}
 			</View>
