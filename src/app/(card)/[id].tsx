@@ -14,13 +14,14 @@ import Animated, {
 	withSequence,
 	withTiming,
 } from "react-native-reanimated";
+import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { useApi } from "@/lib/axios";
 import { useTheme } from "@/context/ThemeContext";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
-const IMAGE_WIDTH = SCREEN_WIDTH * 0.75;
+const IMAGE_WIDTH = SCREEN_WIDTH * 0.9;
 const IMAGE_HEIGHT = IMAGE_WIDTH * 1.4;
 
 // --- Helpers ---
@@ -57,15 +58,20 @@ function isGradedTier(tier: string): boolean {
 
 // --- Components ---
 
-function FadeImage({ uri, style, backgroundColor, shimmerColor }: {
+function FadeImage({ uri, name, cardNumber, style, backgroundColor, shimmerColor, foregroundColor, mutedColor }: {
 	uri: string;
+	name?: string;
+	cardNumber?: string;
 	style: any;
 	backgroundColor: string;
 	shimmerColor: string;
+	foregroundColor: string;
+	mutedColor: string;
 }) {
 	const opacity = useSharedValue(0);
 	const shimmerOpacity = useSharedValue(0.3);
 	const [loaded, setLoaded] = useState(false);
+	const [failed, setFailed] = useState(false);
 
 	useEffect(() => {
 		shimmerOpacity.value = withRepeat(
@@ -85,6 +91,24 @@ function FadeImage({ uri, style, backgroundColor, shimmerColor }: {
 		opacity: shimmerOpacity.value,
 	}));
 
+	if (failed) {
+		return (
+			<View style={[style, { backgroundColor, borderRadius: 12, alignItems: "center", justifyContent: "center", gap: 8 }]}>
+				<Ionicons name="image-outline" size={40} color={mutedColor} />
+				{name && (
+					<Text style={{ color: foregroundColor, fontSize: 16, fontWeight: "600", textAlign: "center", paddingHorizontal: 16 }}>
+						{name}
+					</Text>
+				)}
+				{cardNumber && (
+					<Text style={{ color: mutedColor, fontSize: 13 }}>
+						#{cardNumber}
+					</Text>
+				)}
+			</View>
+		);
+	}
+
 	return (
 		<View style={[style, { backgroundColor, overflow: "hidden", borderRadius: 12 }]}>
 			{!loaded && (
@@ -101,6 +125,7 @@ function FadeImage({ uri, style, backgroundColor, shimmerColor }: {
 						setLoaded(true);
 						opacity.value = withTiming(1, { duration: 200 });
 					}}
+					onError={() => setFailed(true)}
 				/>
 			</Animated.View>
 		</View>
@@ -291,9 +316,14 @@ export default function CardDetail() {
 			<Stack.Screen options={{ headerTitle: name ?? "Card" }} />
 
 			{isLoading ? (
-				<View style={[styles.container, { backgroundColor: colors.background }]}>
+				<ScrollView
+					style={[styles.container, { backgroundColor: colors.background }]}
+					contentContainerStyle={styles.content}
+					contentInsetAdjustmentBehavior="automatic"
+					scrollEnabled={false}
+				>
 					<LoadingSkeleton colors={colors} />
-				</View>
+				</ScrollView>
 			) : card ? (
 				<ScrollView
 					style={[styles.container, { backgroundColor: colors.background }]}
@@ -303,18 +333,16 @@ export default function CardDetail() {
 				>
 					{/* Card Image */}
 					<View style={styles.imageContainer}>
-						{card.image ? (
-							<FadeImage
-								uri={card.image}
-								style={{ width: IMAGE_WIDTH, height: IMAGE_HEIGHT }}
-								backgroundColor={colors.card}
-								shimmerColor={colors.border}
-							/>
-						) : (
-							<View style={[styles.imagePlaceholder, { backgroundColor: colors.card, width: IMAGE_WIDTH, height: IMAGE_HEIGHT }]}>
-								<Text style={{ color: colors.mutedForeground, fontSize: 16 }}>No image</Text>
-							</View>
-						)}
+						<FadeImage
+							uri={card.image ?? ""}
+							name={card.name}
+							cardNumber={card.cardNumber}
+							style={{ width: IMAGE_WIDTH, height: IMAGE_HEIGHT }}
+							backgroundColor={colors.card}
+							shimmerColor={colors.border}
+							foregroundColor={colors.foreground}
+							mutedColor={colors.mutedForeground}
+						/>
 					</View>
 
 					{/* Card Info */}
@@ -343,7 +371,7 @@ export default function CardDetail() {
 					</View>
 
 					{/* Top Price / Sale Count */}
-					{(card.topPrice || card.totalSaleCount) && (
+					{(card.topPrice !== undefined || card.totalSaleCount !== undefined) && (
 						<View style={[styles.statsRow, { borderColor: colors.border }]}>
 							{card.topPrice !== undefined && (
 								<View style={styles.statItem}>
