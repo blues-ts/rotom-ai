@@ -16,6 +16,7 @@ import Animated, {
 	withRepeat,
 	withSequence,
 	withTiming,
+	withSpring,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
@@ -49,6 +50,30 @@ const PADDING = 12;
 const screenWidth = Dimensions.get("window").width;
 const imageWidth = (screenWidth - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 const imageHeight = imageWidth * 1.4;
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+function CardPressable({ children, onPress }: { children: React.ReactNode; onPress: () => void }) {
+	const scale = useSharedValue(1);
+	const animatedStyle = useAnimatedStyle(() => ({
+		transform: [{ scale: scale.value }],
+	}));
+
+	return (
+		<AnimatedPressable
+			style={animatedStyle}
+			onPressIn={() => {
+				scale.value = withSpring(0.95, { damping: 20, stiffness: 300 });
+			}}
+			onPressOut={() => {
+				scale.value = withSpring(1, { damping: 15, stiffness: 200 });
+			}}
+			onPress={onPress}
+		>
+			{children}
+		</AnimatedPressable>
+	);
+}
 
 function FadeImage({ uri, style, backgroundColor, shimmerColor, onError }: {
 	uri: string;
@@ -233,7 +258,7 @@ export default function Search() {
 					entering={FadeIn.delay(Math.min(index * 30, 300)).duration(200)}
 					exiting={FadeOut.duration(100)}
 				>
-					<Pressable
+					<CardPressable
 						onPress={() => {
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 							router.push(`/(card)/${item.id}?name=${encodeURIComponent(item.name)}`);
@@ -262,7 +287,7 @@ export default function Search() {
 								}}
 							/>
 						)}
-					</Pressable>
+					</CardPressable>
 				</Animated.View>
 			);
 		},
