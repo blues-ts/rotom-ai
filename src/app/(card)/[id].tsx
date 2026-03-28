@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	Dimensions,
 	Image,
@@ -122,6 +122,48 @@ function InfoPill({ label, color, bgColor }: { label: string; color: string; bgC
 	);
 }
 
+// --- Ticker Animation ---
+
+function TickerText({ value, style }: { value: string; style: any }) {
+	const translateY = useSharedValue(0);
+	const opacity = useSharedValue(1);
+	const [displayValue, setDisplayValue] = useState(value);
+	const isFirst = useRef(true);
+
+	useEffect(() => {
+		if (isFirst.current) {
+			isFirst.current = false;
+			return;
+		}
+		// Animate out: slide up + fade
+		translateY.value = withTiming(-12, { duration: 120 });
+		opacity.value = withTiming(0, { duration: 120 });
+
+		const timeout = setTimeout(() => {
+			setDisplayValue(value);
+			// Reset to below
+			translateY.value = 12;
+			opacity.value = 0;
+			// Animate in: slide up to center + fade in
+			translateY.value = withTiming(0, { duration: 180 });
+			opacity.value = withTiming(1, { duration: 180 });
+		}, 130);
+
+		return () => clearTimeout(timeout);
+	}, [value]);
+
+	const animatedStyle = useAnimatedStyle(() => ({
+		transform: [{ translateY: translateY.value }],
+		opacity: opacity.value,
+	}));
+
+	return (
+		<Animated.Text style={[style, animatedStyle]}>
+			{displayValue}
+		</Animated.Text>
+	);
+}
+
 // --- Toggle & Dropdown Components ---
 
 function PillToggle({ options, selected, onSelect, colors }: {
@@ -161,7 +203,38 @@ function Dropdown({ options, selected, onSelect, colors, placeholder }: {
 	placeholder?: string;
 }) {
 	const [open, setOpen] = useState(false);
+	const [showMenu, setShowMenu] = useState(false);
+	const menuHeight = useSharedValue(0);
+	const menuOpacity = useSharedValue(0);
+	const chevronRotation = useSharedValue(0);
 	const selectedLabel = options.find((o) => o.value === selected)?.label ?? placeholder ?? "Select";
+
+	const ITEM_HEIGHT = 40;
+	const fullHeight = options.length * ITEM_HEIGHT;
+
+	useEffect(() => {
+		if (open) {
+			setShowMenu(true);
+			menuHeight.value = withTiming(fullHeight, { duration: 200 });
+			menuOpacity.value = withTiming(1, { duration: 150 });
+			chevronRotation.value = withTiming(180, { duration: 200 });
+		} else {
+			menuHeight.value = withTiming(0, { duration: 200 });
+			menuOpacity.value = withTiming(0, { duration: 150 });
+			chevronRotation.value = withTiming(0, { duration: 200 });
+			const timeout = setTimeout(() => setShowMenu(false), 210);
+			return () => clearTimeout(timeout);
+		}
+	}, [open]);
+
+	const menuAnimatedStyle = useAnimatedStyle(() => ({
+		height: menuHeight.value,
+		opacity: menuOpacity.value,
+	}));
+
+	const chevronStyle = useAnimatedStyle(() => ({
+		transform: [{ rotate: `${chevronRotation.value}deg` }],
+	}));
 
 	return (
 		<View>
@@ -170,14 +243,16 @@ function Dropdown({ options, selected, onSelect, colors, placeholder }: {
 				onPress={() => setOpen(!open)}
 			>
 				<Text style={[styles.dropdownText, { color: colors.foreground }]}>{selectedLabel}</Text>
-				<Ionicons name={open ? "chevron-up" : "chevron-down"} size={16} color={colors.mutedForeground} />
+				<Animated.View style={chevronStyle}>
+					<Ionicons name="chevron-down" size={16} color={colors.mutedForeground} />
+				</Animated.View>
 			</Pressable>
-			{open && (
-				<View style={[styles.dropdownMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
+			{showMenu && (
+				<Animated.View style={[styles.dropdownMenu, { backgroundColor: colors.card, borderColor: colors.border, overflow: "hidden" }, menuAnimatedStyle]}>
 					{options.map((opt) => (
 						<Pressable
 							key={opt.value}
-							style={[styles.dropdownItem, selected === opt.value && { backgroundColor: `${colors.primary}20` }]}
+							style={[styles.dropdownItem, { height: ITEM_HEIGHT, justifyContent: "center" }, selected === opt.value && { backgroundColor: `${colors.primary}20` }]}
 							onPress={() => { onSelect(opt.value); setOpen(false); }}
 						>
 							<Text style={[styles.dropdownItemText, {
@@ -187,7 +262,7 @@ function Dropdown({ options, selected, onSelect, colors, placeholder }: {
 							</Text>
 						</Pressable>
 					))}
-				</View>
+				</Animated.View>
 			)}
 		</View>
 	);
@@ -450,18 +525,26 @@ export default function CardDetail() {
 							</View>
 						</View>
 						<View style={styles.priceColumn}>
-							<View style={styles.priceTag}>
-								<Text style={[styles.priceTagLabel, { color: colors.mutedForeground }]}>{rawSource} {formatTierLabel(rawCondition)}</Text>
-								<Text style={[styles.priceTagValue, { color: colors.foreground }]}>
-									{formatPrice(rawPrice, card.currency)}
-								</Text>
+							<View style={[styles.priceTag, { overflow: "hidden" }]}>
+								<TickerText
+									value={`${rawSource} ${formatTierLabel(rawCondition)}`}
+									style={[styles.priceTagLabel, { color: colors.mutedForeground }]}
+								/>
+								<TickerText
+									value={formatPrice(rawPrice, card.currency)}
+									style={[styles.priceTagValue, { color: colors.foreground }]}
+								/>
 							</View>
 							{gradedPrice !== undefined && (
-								<View style={styles.priceTag}>
-									<Text style={[styles.priceTagLabel, { color: colors.mutedForeground }]}>{gradedCompany} {gradedGrade}</Text>
-									<Text style={[styles.priceTagValue, { color: colors.primary }]}>
-										{formatPrice(gradedPrice, card.currency)}
-									</Text>
+								<View style={[styles.priceTag, { overflow: "hidden" }]}>
+									<TickerText
+										value={`${gradedCompany} ${gradedGrade}`}
+										style={[styles.priceTagLabel, { color: colors.mutedForeground }]}
+									/>
+									<TickerText
+										value={formatPrice(gradedPrice, card.currency)}
+										style={[styles.priceTagValue, { color: colors.primary }]}
+									/>
 								</View>
 							)}
 						</View>
@@ -494,7 +577,16 @@ export default function CardDetail() {
 							<PillToggle
 								options={gradedCompanies}
 								selected={gradedCompany ?? ""}
-								onSelect={(val) => { setGradedCompany(val); setGradedGrade(null); }}
+								onSelect={(val) => {
+									setGradedCompany(val);
+									// Immediately pick highest grade for new company
+									const grades = (card.gradedOptions ?? [])
+										.map((t: string) => parseGradedTier(t))
+										.filter((p: any) => p.company === val)
+										.map((p: any) => p.grade)
+										.sort((a: string, b: string) => parseFloat(b) - parseFloat(a));
+									setGradedGrade(grades[0] ?? null);
+								}}
 								colors={colors}
 							/>
 							{gradedGrades.length > 0 && (
@@ -643,7 +735,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 20,
 		paddingBottom: 16,
 		marginBottom: 12,
-		borderBottomWidth: StyleSheet.hairlineWidth,
+		borderBottomWidth: 1,
 	},
 	cardName: {
 		fontSize: 22,
@@ -688,7 +780,7 @@ const styles = StyleSheet.create({
 		marginHorizontal: 20,
 		marginBottom: 12,
 		borderRadius: 12,
-		borderWidth: StyleSheet.hairlineWidth,
+		borderWidth: 1,
 		padding: 16,
 	},
 	sectionTitle: {
@@ -705,7 +797,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 14,
 		paddingVertical: 7,
 		borderRadius: 8,
-		borderWidth: StyleSheet.hairlineWidth,
+		borderWidth: 1,
 	},
 	toggleText: {
 		fontSize: 13,
@@ -718,7 +810,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 14,
 		paddingVertical: 10,
 		borderRadius: 8,
-		borderWidth: StyleSheet.hairlineWidth,
+		borderWidth: 1,
 	},
 	dropdownText: {
 		fontSize: 14,
@@ -727,7 +819,7 @@ const styles = StyleSheet.create({
 	dropdownMenu: {
 		marginTop: 4,
 		borderRadius: 8,
-		borderWidth: StyleSheet.hairlineWidth,
+		borderWidth: 1,
 		overflow: "hidden",
 	},
 	dropdownItem: {
