@@ -317,6 +317,18 @@ function LoadingSkeleton({ colors }: { colors: any }) {
 					<Skeleton width={90} height={28} color={colors.border} />
 				</View>
 			</View>
+			{/* Price row skeleton */}
+			<View style={[styles.priceRow, { borderColor: colors.border }]}>
+				<View style={[styles.priceTag, { flex: 1 }]}>
+					<Skeleton width={100} height={12} color={colors.border} />
+					<Skeleton width={80} height={22} color={colors.border} style={{ marginTop: 6 }} />
+				</View>
+				<View style={[styles.priceTag, { flex: 1 }]}>
+					<Skeleton width={60} height={12} color={colors.border} />
+					<Skeleton width={90} height={22} color={colors.border} style={{ marginTop: 6 }} />
+				</View>
+			</View>
+			{/* Section skeletons */}
 			<View style={{ gap: 8, paddingHorizontal: 20 }}>
 				<Skeleton width="100%" height={120} color={colors.border} />
 				<Skeleton width="100%" height={120} color={colors.border} />
@@ -507,47 +519,47 @@ export default function CardDetail() {
 						/>
 					</View>
 
-					{/* Card Info + Prices */}
-					<View style={[styles.priceHeader, { borderColor: colors.border }]}>
-						<View style={{ flex: 1 }}>
-							<Text style={[styles.cardName, { color: colors.foreground }]}>
-								{card.name}
-								{card.cardNumber ? (
-									<Text style={{ color: colors.mutedForeground }}> · {card.cardNumber}</Text>
-								) : null}
-							</Text>
-							<Text style={[styles.setName, { color: colors.mutedForeground }]}>
-								{card.set?.name}
-							</Text>
-							<View style={styles.pillRow}>
-								{card.rarity && <InfoPill label={card.rarity} color={colors.foreground} bgColor={colors.border} />}
-								{card.variant && <InfoPill label={card.variant.replace(/_/g, " ")} color={colors.primary} bgColor={`${colors.primary}20`} />}
-							</View>
+					{/* Card Info */}
+					<View style={styles.infoContainer}>
+						<Text style={[styles.cardName, { color: colors.foreground }]}>
+							{card.name}
+							{card.cardNumber ? (
+								<Text style={{ color: colors.mutedForeground }}> · {card.cardNumber}</Text>
+							) : null}
+						</Text>
+						<Text style={[styles.setName, { color: colors.mutedForeground }]}>
+							{card.set?.name}
+						</Text>
+						<View style={styles.pillRow}>
+							{card.rarity && <InfoPill label={card.rarity} color={colors.foreground} bgColor={colors.border} />}
+							{card.variant && <InfoPill label={card.variant.replace(/_/g, " ")} color={colors.primary} bgColor={`${colors.primary}20`} />}
 						</View>
-						<View style={styles.priceColumn}>
-							<View style={[styles.priceTag, { overflow: "hidden" }]}>
+					</View>
+
+					{/* Prices */}
+					<View style={[styles.priceRow, { borderColor: colors.border }]}>
+						<View style={[styles.priceTag, { overflow: "hidden", flex: 1 }]}>
+							<TickerText
+								value={`${rawSource} ${formatTierLabel(rawCondition)}`}
+								style={[styles.priceTagLabel, { color: colors.mutedForeground }]}
+							/>
+							<TickerText
+								value={formatPrice(rawPrice, card.currency)}
+								style={[styles.priceTagValue, { color: colors.foreground }]}
+							/>
+						</View>
+						{gradedPrice !== undefined && (
+							<View style={[styles.priceTag, { overflow: "hidden", flex: 1 }]}>
 								<TickerText
-									value={`${rawSource} ${formatTierLabel(rawCondition)}`}
+									value={`${gradedCompany} ${gradedGrade}`}
 									style={[styles.priceTagLabel, { color: colors.mutedForeground }]}
 								/>
 								<TickerText
-									value={formatPrice(rawPrice, card.currency)}
-									style={[styles.priceTagValue, { color: colors.foreground }]}
+									value={formatPrice(gradedPrice, card.currency)}
+									style={[styles.priceTagValue, { color: colors.primary }]}
 								/>
 							</View>
-							{gradedPrice !== undefined && (
-								<View style={[styles.priceTag, { overflow: "hidden" }]}>
-									<TickerText
-										value={`${gradedCompany} ${gradedGrade}`}
-										style={[styles.priceTagLabel, { color: colors.mutedForeground }]}
-									/>
-									<TickerText
-										value={formatPrice(gradedPrice, card.currency)}
-										style={[styles.priceTagValue, { color: colors.primary }]}
-									/>
-								</View>
-							)}
-						</View>
+						)}
 					</View>
 
 					{/* Raw Section */}
@@ -730,11 +742,16 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		marginBottom: 20,
 	},
-	priceHeader: {
+	infoContainer: {
+		paddingHorizontal: 20,
+		marginBottom: 12,
+	},
+	priceRow: {
 		flexDirection: "row",
 		paddingHorizontal: 20,
-		paddingBottom: 16,
+		paddingVertical: 14,
 		marginBottom: 12,
+		borderTopWidth: 1,
 		borderBottomWidth: 1,
 	},
 	cardName: {
@@ -766,7 +783,7 @@ const styles = StyleSheet.create({
 		gap: 6,
 	},
 	priceTag: {
-		alignItems: "flex-end",
+		alignItems: "center",
 	},
 	priceTagLabel: {
 		fontSize: 11,
