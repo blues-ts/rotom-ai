@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
 	Dimensions,
 	Image,
+	Pressable,
 	ScrollView,
 	StyleSheet,
 	Text,
@@ -17,6 +18,7 @@ import Animated, {
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
+import { CartesianChart, Line } from "victory-native";
 import { useApi } from "@/lib/axios";
 import { useTheme } from "@/context/ThemeContext";
 
@@ -35,6 +37,7 @@ function formatPrice(price: number | undefined, currency = "USD"): string {
 function formatTierLabel(tier: string): string {
 	return tier
 		.replace(/_/g, " ")
+		.toLowerCase()
 		.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
@@ -48,15 +51,11 @@ function parseGradedTier(tier: string): { company: string; grade: string } {
 	return { company: tier, grade: "" };
 }
 
-function isGradedTier(tier: string): boolean {
-	const rawConditions = [
-		"MINT", "NEAR_MINT", "LIGHTLY_PLAYED",
-		"MODERATELY_PLAYED", "HEAVILY_PLAYED", "DAMAGED", "AGGREGATED",
-	];
-	return !rawConditions.includes(tier);
+function buildGradedTierKey(company: string, grade: string): string {
+	return `${company}_${grade.replace(/\./g, "_")}`;
 }
 
-// --- Components ---
+// --- Shared UI Components ---
 
 function FadeImage({ uri, name, cardNumber, style, backgroundColor, shimmerColor, foregroundColor, mutedColor }: {
 	uri: string;
@@ -83,82 +82,36 @@ function FadeImage({ uri, name, cardNumber, style, backgroundColor, shimmerColor
 		);
 	}, []);
 
-	const animatedStyle = useAnimatedStyle(() => ({
-		opacity: opacity.value,
-	}));
-
-	const shimmerStyle = useAnimatedStyle(() => ({
-		opacity: shimmerOpacity.value,
-	}));
+	const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+	const shimmerStyle = useAnimatedStyle(() => ({ opacity: shimmerOpacity.value }));
 
 	if (failed) {
 		return (
 			<View style={[style, { backgroundColor, borderRadius: 12, alignItems: "center", justifyContent: "center", gap: 8 }]}>
 				<Ionicons name="image-outline" size={40} color={mutedColor} />
-				{name && (
-					<Text style={{ color: foregroundColor, fontSize: 16, fontWeight: "600", textAlign: "center", paddingHorizontal: 16 }}>
-						{name}
-					</Text>
-				)}
-				{cardNumber && (
-					<Text style={{ color: mutedColor, fontSize: 13 }}>
-						#{cardNumber}
-					</Text>
-				)}
+				{name && <Text style={{ color: foregroundColor, fontSize: 16, fontWeight: "600", textAlign: "center", paddingHorizontal: 16 }}>{name}</Text>}
+				{cardNumber && <Text style={{ color: mutedColor, fontSize: 13 }}>#{cardNumber}</Text>}
 			</View>
 		);
 	}
 
 	return (
 		<View style={[style, { backgroundColor, overflow: "hidden", borderRadius: 12 }]}>
-			{!loaded && (
-				<Animated.View
-					style={[StyleSheet.absoluteFill, { backgroundColor: shimmerColor }, shimmerStyle]}
-				/>
-			)}
+			{!loaded && <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: shimmerColor }, shimmerStyle]} />}
 			<Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
-				<Image
-					source={{ uri }}
-					style={StyleSheet.absoluteFill}
-					resizeMode="contain"
-					onLoad={() => {
-						setLoaded(true);
-						opacity.value = withTiming(1, { duration: 200 });
-					}}
-					onError={() => setFailed(true)}
-				/>
+				<Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" onLoad={() => { setLoaded(true); opacity.value = withTiming(1, { duration: 200 }); }} onError={() => setFailed(true)} />
 			</Animated.View>
 		</View>
 	);
 }
 
-function Skeleton({ width, height, color, style }: {
-	width: number | string;
-	height: number;
-	color: string;
-	style?: any;
-}) {
+function Skeleton({ width, height, color, style }: { width: number | string; height: number; color: string; style?: any }) {
 	const shimmerOpacity = useSharedValue(0.3);
-
 	useEffect(() => {
-		shimmerOpacity.value = withRepeat(
-			withSequence(
-				withTiming(0.7, { duration: 800 }),
-				withTiming(0.3, { duration: 800 }),
-			),
-			-1,
-		);
+		shimmerOpacity.value = withRepeat(withSequence(withTiming(0.7, { duration: 800 }), withTiming(0.3, { duration: 800 })), -1);
 	}, []);
-
-	const animatedStyle = useAnimatedStyle(() => ({
-		opacity: shimmerOpacity.value,
-	}));
-
-	return (
-		<Animated.View
-			style={[{ width, height, backgroundColor: color, borderRadius: 8 }, animatedStyle, style]}
-		/>
-	);
+	const animatedStyle = useAnimatedStyle(() => ({ opacity: shimmerOpacity.value }));
+	return <Animated.View style={[{ width, height, backgroundColor: color, borderRadius: 8 }, animatedStyle, style]} />;
 }
 
 function InfoPill({ label, color, bgColor }: { label: string; color: string; bgColor: string }) {
@@ -169,107 +122,107 @@ function InfoPill({ label, color, bgColor }: { label: string; color: string; bgC
 	);
 }
 
-function PriceRow({ label, avg, low, high, saleCount, currency, colors }: {
-	label: string;
-	avg?: number;
-	low?: number;
-	high?: number;
-	saleCount?: number;
-	currency: string;
+// --- Toggle & Dropdown Components ---
+
+function PillToggle({ options, selected, onSelect, colors }: {
+	options: string[];
+	selected: string;
+	onSelect: (val: string) => void;
 	colors: any;
 }) {
 	return (
-		<View style={styles.priceRow}>
-			<Text style={[styles.priceLabel, { color: colors.mutedForeground }]}>{label}</Text>
-			<View style={styles.priceValues}>
-				<Text style={[styles.priceAvg, { color: colors.foreground }]}>
-					{formatPrice(avg, currency)}
-				</Text>
-				{low !== undefined && high !== undefined && (
-					<Text style={[styles.priceRange, { color: colors.mutedForeground }]}>
-						{formatPrice(low, currency)} – {formatPrice(high, currency)}
-					</Text>
-				)}
-				{saleCount !== undefined && saleCount > 0 && (
-					<Text style={[styles.saleBadge, { color: colors.mutedForeground }]}>
-						{saleCount} sale{saleCount !== 1 ? "s" : ""}
-					</Text>
-				)}
-			</View>
+		<View style={styles.toggleRow}>
+			{options.map((opt) => {
+				const active = opt === selected;
+				return (
+					<Pressable
+						key={opt}
+						style={[styles.togglePill, {
+							backgroundColor: active ? colors.foreground : colors.card,
+							borderColor: active ? colors.foreground : colors.border,
+						}]}
+						onPress={() => onSelect(opt)}
+					>
+						<Text style={[styles.toggleText, { color: active ? colors.background : colors.mutedForeground }]}>
+							{opt}
+						</Text>
+					</Pressable>
+				);
+			})}
 		</View>
 	);
 }
 
-function PriceSection({ title, tiers, currency, colors }: {
-	title: string;
-	tiers: Record<string, any>;
-	currency: string;
+function Dropdown({ options, selected, onSelect, colors, placeholder }: {
+	options: { label: string; value: string }[];
+	selected: string | null;
+	onSelect: (val: string) => void;
 	colors: any;
+	placeholder?: string;
 }) {
-	const entries = Object.entries(tiers).filter(([key]) => !isGradedTier(key));
-	if (entries.length === 0) return null;
+	const [open, setOpen] = useState(false);
+	const selectedLabel = options.find((o) => o.value === selected)?.label ?? placeholder ?? "Select";
 
 	return (
-		<View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-			<Text style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</Text>
-			{entries.map(([tier, data]) => (
-				<PriceRow
-					key={tier}
-					label={formatTierLabel(tier)}
-					avg={data.avg}
-					low={data.low}
-					high={data.high}
-					saleCount={data.saleCount}
-					currency={currency}
-					colors={colors}
-				/>
-			))}
-		</View>
-	);
-}
-
-function GradedSection({ prices, gradedOptions, currency, colors }: {
-	prices: any;
-	gradedOptions: string[];
-	currency: string;
-	colors: any;
-}) {
-	// Group graded tiers by company
-	const companies: Record<string, { grade: string; data: any }[]> = {};
-
-	for (const tier of gradedOptions) {
-		const { company, grade } = parseGradedTier(tier);
-		// Find price data from ebay first, then tcgplayer
-		const data = prices?.ebay?.[tier] || prices?.tcgplayer?.[tier];
-		if (!data) continue;
-
-		if (!companies[company]) companies[company] = [];
-		companies[company].push({ grade, data });
-	}
-
-	const companyEntries = Object.entries(companies);
-	if (companyEntries.length === 0) return null;
-
-	return (
-		<>
-			{companyEntries.map(([company, grades]) => (
-				<View key={company} style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-					<Text style={[styles.sectionTitle, { color: colors.foreground }]}>{company}</Text>
-					{grades.map(({ grade, data }) => (
-						<PriceRow
-							key={grade}
-							label={grade}
-							avg={data.avg}
-							low={data.low}
-							high={data.high}
-							saleCount={data.saleCount}
-							currency={currency}
-							colors={colors}
-						/>
+		<View>
+			<Pressable
+				style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}
+				onPress={() => setOpen(!open)}
+			>
+				<Text style={[styles.dropdownText, { color: colors.foreground }]}>{selectedLabel}</Text>
+				<Ionicons name={open ? "chevron-up" : "chevron-down"} size={16} color={colors.mutedForeground} />
+			</Pressable>
+			{open && (
+				<View style={[styles.dropdownMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
+					{options.map((opt) => (
+						<Pressable
+							key={opt.value}
+							style={[styles.dropdownItem, selected === opt.value && { backgroundColor: `${colors.primary}20` }]}
+							onPress={() => { onSelect(opt.value); setOpen(false); }}
+						>
+							<Text style={[styles.dropdownItemText, {
+								color: selected === opt.value ? colors.primary : colors.foreground,
+							}]}>
+								{opt.label}
+							</Text>
+						</Pressable>
 					))}
 				</View>
-			))}
-		</>
+			)}
+		</View>
+	);
+}
+
+// --- Period Toggle ---
+
+const PERIODS = ["7d", "30d", "90d", "1y", "all"] as const;
+
+function PeriodToggle({ selected, onSelect, colors }: {
+	selected: string;
+	onSelect: (val: string) => void;
+	colors: any;
+}) {
+	return (
+		<View style={styles.toggleRow}>
+			{PERIODS.map((p) => {
+				const active = p === selected;
+				return (
+					<Pressable
+						key={p}
+						style={[styles.periodPill, {
+							backgroundColor: active ? colors.foreground : "transparent",
+						}]}
+						onPress={() => onSelect(p)}
+					>
+						<Text style={[styles.periodText, {
+							color: active ? colors.background : colors.mutedForeground,
+						}]}>
+							{p.toUpperCase()}
+						</Text>
+					</Pressable>
+				);
+			})}
+		</View>
 	);
 }
 
@@ -304,6 +257,18 @@ export default function CardDetail() {
 	const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
 	const api = useApi();
 
+	// Raw state
+	const [rawSource, setRawSource] = useState<string>("TCGPlayer");
+	const [rawCondition, setRawCondition] = useState("NEAR_MINT");
+
+	// Graded state
+	const [gradedCompany, setGradedCompany] = useState<string | null>(null);
+	const [gradedGrade, setGradedGrade] = useState<string | null>(null);
+
+	// History
+	const [historyPeriod, setHistoryPeriod] = useState("30d");
+
+	// Card data
 	const { data: card, isLoading } = useQuery({
 		queryKey: ["card", id],
 		queryFn: async () => {
@@ -312,6 +277,126 @@ export default function CardDetail() {
 		},
 		enabled: !!id,
 	});
+
+	// Derived: available grading companies and grades
+	const gradedCompanies = useMemo(() => {
+		if (!card?.gradedOptions) return [];
+		const companies = new Set<string>();
+		for (const tier of card.gradedOptions) {
+			const { company } = parseGradedTier(tier);
+			companies.add(company);
+		}
+		const arr = Array.from(companies);
+		// Put PSA first
+		arr.sort((a, b) => (a === "PSA" ? -1 : b === "PSA" ? 1 : 0));
+		return arr;
+	}, [card?.gradedOptions]);
+
+	const gradedGrades = useMemo(() => {
+		if (!card?.gradedOptions || !gradedCompany) return [];
+		return card.gradedOptions
+			.map((tier: string) => parseGradedTier(tier))
+			.filter((p: any) => p.company === gradedCompany)
+			.map((p: any) => p.grade)
+			.sort((a: string, b: string) => parseFloat(b) - parseFloat(a));
+	}, [card?.gradedOptions, gradedCompany]);
+
+	// Auto-select first company and highest grade
+	useEffect(() => {
+		if (gradedCompanies.length > 0 && !gradedCompany) {
+			setGradedCompany(gradedCompanies[0]);
+		}
+	}, [gradedCompanies]);
+
+	useEffect(() => {
+		if (gradedGrades.length > 0) {
+			setGradedGrade(gradedGrades[0]);
+		}
+	}, [gradedGrades]);
+
+	// Condition options
+	const conditionOptions = useMemo(() => {
+		if (!card?.conditionOptions) return [{ label: "Near Mint", value: "NEAR_MINT" }];
+		return card.conditionOptions.map((c: string) => ({
+			label: formatTierLabel(c),
+			value: c,
+		}));
+	}, [card?.conditionOptions]);
+
+	// Get current prices
+	const rawSourceKey = rawSource === "eBay" ? "ebay" : "tcgplayer";
+	const rawPrice = card?.prices?.[rawSourceKey]?.[rawCondition]?.avg;
+
+	const gradedTierKey = gradedCompany && gradedGrade ? buildGradedTierKey(gradedCompany, gradedGrade) : null;
+	const gradedPrice = gradedTierKey ? (card?.prices?.ebay?.[gradedTierKey]?.avg ?? card?.prices?.tcgplayer?.[gradedTierKey]?.avg) : undefined;
+
+	// History queries
+	const { data: rawHistory, isLoading: rawHistoryLoading } = useQuery({
+		queryKey: ["history", id, rawCondition, historyPeriod],
+		queryFn: async () => {
+			const res = await api.get(`/api/pricing/cards/${id}/history/${rawCondition}`, {
+				params: { period: historyPeriod, limit: 365 },
+			});
+			return res.data.data ?? [];
+		},
+		enabled: !!id && !!rawCondition,
+	});
+
+	const { data: gradedHistory, isLoading: gradedHistoryLoading } = useQuery({
+		queryKey: ["history", id, gradedTierKey, historyPeriod],
+		queryFn: async () => {
+			const res = await api.get(`/api/pricing/cards/${id}/history/${gradedTierKey}`, {
+				params: { period: historyPeriod, limit: 365 },
+			});
+			return res.data.data ?? [];
+		},
+		enabled: !!id && !!gradedTierKey,
+	});
+
+	// Filter history by selected source
+	const filteredRawHistory = useMemo(() => {
+		if (!rawHistory) return [];
+		return rawHistory
+			.filter((e: any) => e.source === rawSourceKey)
+			.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+	}, [rawHistory, rawSourceKey]);
+
+	const filteredGradedHistory = useMemo(() => {
+		if (!gradedHistory) return [];
+		return gradedHistory
+			.filter((e: any) => e.source === "ebay")
+			.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+	}, [gradedHistory]);
+
+	// Chart data
+	const chartData = useMemo(() => {
+		const map = new Map<string, { date: string; raw?: number; graded?: number }>();
+		for (const e of filteredRawHistory) {
+			const key = e.date;
+			if (!map.has(key)) map.set(key, { date: key });
+			map.get(key)!.raw = e.avg;
+		}
+		for (const e of filteredGradedHistory) {
+			const key = e.date;
+			if (!map.has(key)) map.set(key, { date: key });
+			map.get(key)!.graded = e.avg;
+		}
+		return Array.from(map.values())
+			.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+			.map((d, i) => ({ ...d, index: i }));
+	}, [filteredRawHistory, filteredGradedHistory]);
+
+	// Combined history list (most recent first)
+	const historyList = useMemo(() => {
+		const items: { date: string; source: string; type: string; avg: number; saleCount?: number }[] = [];
+		for (const e of filteredRawHistory) {
+			items.push({ date: e.date, source: rawSource, type: "Raw", avg: e.avg, saleCount: e.saleCount });
+		}
+		for (const e of filteredGradedHistory) {
+			items.push({ date: e.date, source: "eBay", type: gradedCompany ? `${gradedCompany} ${gradedGrade}` : "Graded", avg: e.avg, saleCount: e.saleCount });
+		}
+		return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+	}, [filteredRawHistory, filteredGradedHistory, rawSource, gradedCompany, gradedGrade]);
 
 	return (
 		<>
@@ -347,85 +432,176 @@ export default function CardDetail() {
 						/>
 					</View>
 
-					{/* Card Info */}
-					<View style={styles.infoContainer}>
-						<Text style={[styles.cardName, { color: colors.foreground }]}>
-							{card.name}
-							{card.cardNumber ? (
-								<Text style={{ color: colors.mutedForeground }}> · {card.cardNumber}</Text>
-							) : null}
-						</Text>
-						<Text style={[styles.setName, { color: colors.mutedForeground }]}>
-							{card.set?.name}
-						</Text>
-						<View style={styles.pillRow}>
-							{card.rarity && (
-								<InfoPill label={card.rarity} color={colors.foreground} bgColor={colors.border} />
-							)}
-							{card.variant && (
-								<InfoPill
-									label={card.variant.replace(/_/g, " ")}
-									color={colors.primary}
-									bgColor={`${colors.primary}20`}
-								/>
+					{/* Card Info + Prices */}
+					<View style={[styles.priceHeader, { borderColor: colors.border }]}>
+						<View style={{ flex: 1 }}>
+							<Text style={[styles.cardName, { color: colors.foreground }]}>
+								{card.name}
+								{card.cardNumber ? (
+									<Text style={{ color: colors.mutedForeground }}> · {card.cardNumber}</Text>
+								) : null}
+							</Text>
+							<Text style={[styles.setName, { color: colors.mutedForeground }]}>
+								{card.set?.name}
+							</Text>
+							<View style={styles.pillRow}>
+								{card.rarity && <InfoPill label={card.rarity} color={colors.foreground} bgColor={colors.border} />}
+								{card.variant && <InfoPill label={card.variant.replace(/_/g, " ")} color={colors.primary} bgColor={`${colors.primary}20`} />}
+							</View>
+						</View>
+						<View style={styles.priceColumn}>
+							<View style={styles.priceTag}>
+								<Text style={[styles.priceTagLabel, { color: colors.mutedForeground }]}>{rawSource} {formatTierLabel(rawCondition)}</Text>
+								<Text style={[styles.priceTagValue, { color: colors.foreground }]}>
+									{formatPrice(rawPrice, card.currency)}
+								</Text>
+							</View>
+							{gradedPrice !== undefined && (
+								<View style={styles.priceTag}>
+									<Text style={[styles.priceTagLabel, { color: colors.mutedForeground }]}>{gradedCompany} {gradedGrade}</Text>
+									<Text style={[styles.priceTagValue, { color: colors.primary }]}>
+										{formatPrice(gradedPrice, card.currency)}
+									</Text>
+								</View>
 							)}
 						</View>
 					</View>
 
-					{/* Top Price / Sale Count */}
-					{(card.topPrice !== undefined || card.totalSaleCount !== undefined) && (
-						<View style={[styles.statsRow, { borderColor: colors.border }]}>
-							{card.topPrice !== undefined && (
-								<View style={styles.statItem}>
-									<Text style={[styles.statValue, { color: colors.foreground }]}>
-										{formatPrice(card.topPrice, card.currency)}
-									</Text>
-									<Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
-										Top Price
-									</Text>
-								</View>
-							)}
-							{card.totalSaleCount !== undefined && (
-								<View style={styles.statItem}>
-									<Text style={[styles.statValue, { color: colors.foreground }]}>
-										{card.totalSaleCount.toLocaleString()}
-									</Text>
-									<Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
-										Total Sales
-									</Text>
+					{/* Raw Section */}
+					<View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+						<Text style={[styles.sectionTitle, { color: colors.foreground }]}>Raw</Text>
+						<PillToggle
+							options={["TCGPlayer", "eBay"]}
+							selected={rawSource}
+							onSelect={setRawSource}
+							colors={colors}
+						/>
+						<View style={{ marginTop: 10 }}>
+							<Dropdown
+								options={conditionOptions}
+								selected={rawCondition}
+								onSelect={setRawCondition}
+								colors={colors}
+								placeholder="Condition"
+							/>
+						</View>
+					</View>
+
+					{/* Graded Section */}
+					{gradedCompanies.length > 0 && (
+						<View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+							<Text style={[styles.sectionTitle, { color: colors.foreground }]}>Graded</Text>
+							<PillToggle
+								options={gradedCompanies}
+								selected={gradedCompany ?? ""}
+								onSelect={(val) => { setGradedCompany(val); setGradedGrade(null); }}
+								colors={colors}
+							/>
+							{gradedGrades.length > 0 && (
+								<View style={{ marginTop: 10 }}>
+									<Dropdown
+										options={gradedGrades.map((g: string) => ({ label: g, value: g }))}
+										selected={gradedGrade}
+										onSelect={setGradedGrade}
+										colors={colors}
+										placeholder="Grade"
+									/>
 								</View>
 							)}
 						</View>
 					)}
 
-					{/* eBay Prices */}
-					{card.prices?.ebay && (
-						<PriceSection
-							title="eBay"
-							tiers={card.prices.ebay}
-							currency={card.currency}
-							colors={colors}
-						/>
-					)}
+					{/* Price History Chart */}
+					<View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+						<Text style={[styles.sectionTitle, { color: colors.foreground }]}>Price History</Text>
+						<PeriodToggle selected={historyPeriod} onSelect={setHistoryPeriod} colors={colors} />
 
-					{/* TCGPlayer Prices */}
-					{card.prices?.tcgplayer && (
-						<PriceSection
-							title="TCGPlayer"
-							tiers={card.prices.tcgplayer}
-							currency={card.currency}
-							colors={colors}
-						/>
-					)}
+						{(rawHistoryLoading || gradedHistoryLoading) ? (
+							<View style={styles.chartPlaceholder}>
+								<Skeleton width="100%" height={200} color={colors.border} />
+							</View>
+						) : chartData.length > 0 ? (
+							<View style={styles.chartContainer}>
+								<CartesianChart
+									data={chartData}
+									xKey="index"
+									yKeys={["raw", "graded"]}
+									domainPadding={{ top: 20, bottom: 10 }}
+								>
+									{({ points }) => (
+										<>
+											{points.raw && (
+												<Line
+													points={points.raw.filter((p: any) => p.y !== undefined)}
+													color={colors.foreground}
+													strokeWidth={2}
+													curveType="natural"
+												/>
+											)}
+											{points.graded && (
+												<Line
+													points={points.graded.filter((p: any) => p.y !== undefined)}
+													color={colors.primary}
+													strokeWidth={2}
+													curveType="natural"
+												/>
+											)}
+										</>
+									)}
+								</CartesianChart>
+							</View>
+						) : (
+							<View style={styles.chartPlaceholder}>
+								<Text style={{ color: colors.mutedForeground, fontSize: 13 }}>No history data available</Text>
+							</View>
+						)}
 
-					{/* Graded Prices */}
-					{card.gradedOptions && card.gradedOptions.length > 0 && (
-						<GradedSection
-							prices={card.prices}
-							gradedOptions={card.gradedOptions}
-							currency={card.currency}
-							colors={colors}
-						/>
+						{/* Legend */}
+						<View style={styles.legendRow}>
+							<View style={styles.legendItem}>
+								<View style={[styles.legendDot, { backgroundColor: colors.foreground }]} />
+								<Text style={[styles.legendText, { color: colors.mutedForeground }]}>
+									{rawSource} · {formatTierLabel(rawCondition)}
+								</Text>
+							</View>
+							{gradedTierKey && (
+								<View style={styles.legendItem}>
+									<View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
+									<Text style={[styles.legendText, { color: colors.mutedForeground }]}>
+										{gradedCompany} {gradedGrade}
+									</Text>
+								</View>
+							)}
+						</View>
+					</View>
+
+					{/* History List */}
+					{historyList.length > 0 && (
+						<View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+							<Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent Sales</Text>
+							{historyList.slice(0, 20).map((item, i) => (
+								<View key={`${item.date}-${item.type}-${i}`} style={styles.historyRow}>
+									<View style={{ flex: 1 }}>
+										<Text style={[styles.historyDate, { color: colors.foreground }]}>
+											{new Date(item.date).toLocaleDateString()}
+										</Text>
+										<Text style={[styles.historyMeta, { color: colors.mutedForeground }]}>
+											{item.type} · {item.source}
+										</Text>
+									</View>
+									<View style={{ alignItems: "flex-end" }}>
+										<Text style={[styles.historyPrice, { color: colors.foreground }]}>
+											{formatPrice(item.avg, card.currency)}
+										</Text>
+										{item.saleCount !== undefined && item.saleCount > 0 && (
+											<Text style={[styles.historyMeta, { color: colors.mutedForeground }]}>
+												{item.saleCount} sale{item.saleCount !== 1 ? "s" : ""}
+											</Text>
+										)}
+									</View>
+								</View>
+							))}
+						</View>
 					)}
 
 					{/* Last Updated */}
@@ -458,21 +634,16 @@ const styles = StyleSheet.create({
 		paddingTop: 16,
 		paddingBottom: 40,
 	},
-	skeletonContainer: {
-		paddingTop: 16,
-	},
 	imageContainer: {
 		alignItems: "center",
 		marginBottom: 20,
 	},
-	imagePlaceholder: {
-		borderRadius: 12,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	infoContainer: {
+	priceHeader: {
+		flexDirection: "row",
 		paddingHorizontal: 20,
-		marginBottom: 16,
+		paddingBottom: 16,
+		marginBottom: 12,
+		borderBottomWidth: StyleSheet.hairlineWidth,
 	},
 	cardName: {
 		fontSize: 22,
@@ -497,25 +668,21 @@ const styles = StyleSheet.create({
 		fontSize: 12,
 		fontWeight: "600",
 	},
-	statsRow: {
-		flexDirection: "row",
-		marginHorizontal: 20,
-		paddingVertical: 14,
-		borderTopWidth: StyleSheet.hairlineWidth,
-		borderBottomWidth: StyleSheet.hairlineWidth,
-		marginBottom: 16,
-		gap: 32,
+	priceColumn: {
+		alignItems: "flex-end",
+		justifyContent: "center",
+		gap: 6,
 	},
-	statItem: {
-		alignItems: "center",
+	priceTag: {
+		alignItems: "flex-end",
 	},
-	statValue: {
-		fontSize: 18,
+	priceTagLabel: {
+		fontSize: 11,
+		fontWeight: "500",
+	},
+	priceTagValue: {
+		fontSize: 20,
 		fontWeight: "700",
-	},
-	statLabel: {
-		fontSize: 12,
-		marginTop: 2,
 	},
 	section: {
 		marginHorizontal: 20,
@@ -529,30 +696,101 @@ const styles = StyleSheet.create({
 		fontWeight: "700",
 		marginBottom: 12,
 	},
-	priceRow: {
+	toggleRow: {
+		flexDirection: "row",
+		gap: 8,
+		flexWrap: "wrap",
+	},
+	togglePill: {
+		paddingHorizontal: 14,
+		paddingVertical: 7,
+		borderRadius: 8,
+		borderWidth: StyleSheet.hairlineWidth,
+	},
+	toggleText: {
+		fontSize: 13,
+		fontWeight: "600",
+	},
+	dropdown: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		paddingHorizontal: 14,
+		paddingVertical: 10,
+		borderRadius: 8,
+		borderWidth: StyleSheet.hairlineWidth,
+	},
+	dropdownText: {
+		fontSize: 14,
+		fontWeight: "500",
+	},
+	dropdownMenu: {
+		marginTop: 4,
+		borderRadius: 8,
+		borderWidth: StyleSheet.hairlineWidth,
+		overflow: "hidden",
+	},
+	dropdownItem: {
+		paddingHorizontal: 14,
+		paddingVertical: 10,
+	},
+	dropdownItemText: {
+		fontSize: 14,
+	},
+	periodPill: {
+		paddingHorizontal: 12,
+		paddingVertical: 5,
+		borderRadius: 6,
+	},
+	periodText: {
+		fontSize: 12,
+		fontWeight: "600",
+	},
+	chartContainer: {
+		height: 200,
+		marginTop: 12,
+	},
+	chartPlaceholder: {
+		height: 200,
+		marginTop: 12,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	legendRow: {
+		flexDirection: "row",
+		gap: 16,
+		marginTop: 12,
+	},
+	legendItem: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
+	},
+	legendDot: {
+		width: 8,
+		height: 8,
+		borderRadius: 4,
+	},
+	legendText: {
+		fontSize: 12,
+	},
+	historyRow: {
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-		paddingVertical: 8,
+		paddingVertical: 10,
 	},
-	priceLabel: {
-		fontSize: 13,
-		flex: 1,
+	historyDate: {
+		fontSize: 14,
+		fontWeight: "500",
 	},
-	priceValues: {
-		alignItems: "flex-end",
-	},
-	priceAvg: {
-		fontSize: 15,
-		fontWeight: "600",
-	},
-	priceRange: {
-		fontSize: 11,
+	historyMeta: {
+		fontSize: 12,
 		marginTop: 2,
 	},
-	saleBadge: {
-		fontSize: 11,
-		marginTop: 1,
+	historyPrice: {
+		fontSize: 15,
+		fontWeight: "600",
 	},
 	lastUpdated: {
 		fontSize: 12,
