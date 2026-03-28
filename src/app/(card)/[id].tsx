@@ -277,9 +277,11 @@ function GradedSection({ prices, gradedOptions, currency, colors }: {
 
 function LoadingSkeleton({ colors }: { colors: any }) {
 	return (
-		<View style={styles.skeletonContainer}>
-			<Skeleton width={IMAGE_WIDTH} height={IMAGE_HEIGHT} color={colors.border} style={{ alignSelf: "center" }} />
-			<View style={{ gap: 8, marginTop: 20, paddingHorizontal: 20 }}>
+		<>
+			<View style={styles.imageContainer}>
+				<Skeleton width={IMAGE_WIDTH} height={IMAGE_HEIGHT} color={colors.border} style={{ borderRadius: 12 }} />
+			</View>
+			<View style={{ gap: 8, paddingHorizontal: 20, marginBottom: 16 }}>
 				<Skeleton width="60%" height={24} color={colors.border} />
 				<Skeleton width="40%" height={18} color={colors.border} />
 				<View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
@@ -287,11 +289,11 @@ function LoadingSkeleton({ colors }: { colors: any }) {
 					<Skeleton width={90} height={28} color={colors.border} />
 				</View>
 			</View>
-			<View style={{ gap: 8, marginTop: 24, paddingHorizontal: 20 }}>
+			<View style={{ gap: 8, paddingHorizontal: 20 }}>
 				<Skeleton width="100%" height={120} color={colors.border} />
 				<Skeleton width="100%" height={120} color={colors.border} />
 			</View>
-		</View>
+		</>
 	);
 }
 
