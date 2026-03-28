@@ -87,7 +87,7 @@ function FadeImage({ uri, name, cardNumber, style, backgroundColor, shimmerColor
 
 	if (failed) {
 		return (
-			<View style={[style, { backgroundColor, borderRadius: 12, alignItems: "center", justifyContent: "center", gap: 8 }]}>
+			<View style={[style, { backgroundColor, borderRadius: 19, alignItems: "center", justifyContent: "center", gap: 8 }]}>
 				<Ionicons name="image-outline" size={40} color={mutedColor} />
 				{name && <Text style={{ color: foregroundColor, fontSize: 16, fontWeight: "600", textAlign: "center", paddingHorizontal: 16 }}>{name}</Text>}
 				{cardNumber && <Text style={{ color: mutedColor, fontSize: 13 }}>#{cardNumber}</Text>}
@@ -96,7 +96,7 @@ function FadeImage({ uri, name, cardNumber, style, backgroundColor, shimmerColor
 	}
 
 	return (
-		<View style={[style, { backgroundColor, overflow: "hidden", borderRadius: 12 }]}>
+		<View style={[style, { backgroundColor, overflow: "hidden", borderRadius: 19 }]}>
 			{!loaded && <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: shimmerColor }, shimmerStyle]} />}
 			<Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
 				<Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" onLoad={() => { setLoaded(true); opacity.value = withTiming(1, { duration: 200 }); }} onError={() => setFailed(true)} />
@@ -307,7 +307,7 @@ function LoadingSkeleton({ colors }: { colors: any }) {
 	return (
 		<>
 			<View style={styles.imageContainer}>
-				<Skeleton width={IMAGE_WIDTH} height={IMAGE_HEIGHT} color={colors.border} style={{ borderRadius: 12 }} />
+				<Skeleton width={IMAGE_WIDTH} height={IMAGE_HEIGHT} color={colors.border} style={{ borderRadius: 19 }} />
 			</View>
 			<View style={{ gap: 8, paddingHorizontal: 20, marginBottom: 16 }}>
 				<Skeleton width="60%" height={24} color={colors.border} />
