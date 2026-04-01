@@ -3,6 +3,7 @@ import {
 	Dimensions,
 	FlatList,
 	Image,
+	Platform,
 	Pressable,
 	StyleSheet,
 	Text,
@@ -22,6 +23,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/context/ThemeContext";
 import { useApi } from "@/lib/axios";
 
@@ -201,6 +203,7 @@ function LoadingSpinner({ color }: { color: string }) {
 
 export default function Search() {
 	const { colors } = useTheme();
+	const insets = useSafeAreaInsets();
 	const api = useApi();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -327,7 +330,7 @@ export default function Search() {
 						keyExtractor={(item) => item.id}
 						numColumns={COLUMNS}
 						renderItem={() => <SkeletonCard color={colors.border} />}
-						contentContainerStyle={styles.grid}
+						contentContainerStyle={[styles.grid, { paddingTop: insets.top + PADDING }]}
 						columnWrapperStyle={styles.row}
 						scrollEnabled={false}
 					/>
@@ -343,7 +346,7 @@ export default function Search() {
 						keyExtractor={(item) => item.id}
 						numColumns={COLUMNS}
 						renderItem={renderItem}
-						contentContainerStyle={styles.grid}
+						contentContainerStyle={[styles.grid, { paddingTop: insets.top + PADDING }]}
 						columnWrapperStyle={styles.row}
 						showsVerticalScrollIndicator={false}
 						onEndReached={handleEndReached}

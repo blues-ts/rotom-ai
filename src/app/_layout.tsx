@@ -59,7 +59,7 @@ function AppContent() {
 				<Stack.Screen
 					name="(search)"
 					options={{
-						presentation: "modal",
+						presentation: "fullScreenModal",
 						headerShown: false,
 					}}
 				/>
