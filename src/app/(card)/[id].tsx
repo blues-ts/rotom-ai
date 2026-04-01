@@ -15,12 +15,14 @@ import Animated, {
 	withSequence,
 	withTiming,
 } from "react-native-reanimated";
+import MaskedView from "@react-native-masked-view/masked-view";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { CartesianChart, Line } from "victory-native";
 import { useApi } from "@/lib/axios";
 import { useTheme } from "@/context/ThemeContext";
+import { opacity } from "react-native-reanimated/lib/typescript/Colors";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const IMAGE_WIDTH = SCREEN_WIDTH * 0.9;
@@ -96,12 +98,19 @@ function FadeImage({ uri, name, cardNumber, style, backgroundColor, shimmerColor
 	}
 
 	return (
-		<View style={[style, { backgroundColor, overflow: "hidden", borderRadius: 19 }]}>
-			{!loaded && <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: shimmerColor }, shimmerStyle]} />}
-			<Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
-				<Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" onLoad={() => { setLoaded(true); opacity.value = withTiming(1, { duration: 200 }); }} onError={() => setFailed(true)} />
-			</Animated.View>
-		</View>
+		<MaskedView
+			style={style}
+			maskElement={
+				<View style={{ flex: 1, borderRadius: 19, backgroundColor: "black" }} />
+			}
+		>
+			<View style={[{ flex: 1 }, { backgroundColor }]}>
+				{!loaded && <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: shimmerColor }, shimmerStyle]} />}
+				<Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
+					<Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" onLoad={() => { setLoaded(true); opacity.value = withTiming(1, { duration: 200 }); }} onError={() => setFailed(true)} />
+				</Animated.View>
+			</View>
+		</MaskedView>
 	);
 }
 
@@ -195,78 +204,36 @@ function PillToggle({ options, selected, onSelect, colors }: {
 	);
 }
 
-function Dropdown({ options, selected, onSelect, colors, placeholder }: {
+function LabeledPillToggle({ options, selected, onSelect, colors }: {
 	options: { label: string; value: string }[];
 	selected: string | null;
 	onSelect: (val: string) => void;
 	colors: any;
-	placeholder?: string;
 }) {
-	const [open, setOpen] = useState(false);
-	const [showMenu, setShowMenu] = useState(false);
-	const menuHeight = useSharedValue(0);
-	const menuOpacity = useSharedValue(0);
-	const chevronRotation = useSharedValue(0);
-	const selectedLabel = options.find((o) => o.value === selected)?.label ?? placeholder ?? "Select";
-
-	const ITEM_HEIGHT = 40;
-	const fullHeight = options.length * ITEM_HEIGHT;
-
-	useEffect(() => {
-		if (open) {
-			setShowMenu(true);
-			menuHeight.value = withTiming(fullHeight, { duration: 200 });
-			menuOpacity.value = withTiming(1, { duration: 150 });
-			chevronRotation.value = withTiming(180, { duration: 200 });
-		} else {
-			menuHeight.value = withTiming(0, { duration: 200 });
-			menuOpacity.value = withTiming(0, { duration: 150 });
-			chevronRotation.value = withTiming(0, { duration: 200 });
-			const timeout = setTimeout(() => setShowMenu(false), 210);
-			return () => clearTimeout(timeout);
-		}
-	}, [open]);
-
-	const menuAnimatedStyle = useAnimatedStyle(() => ({
-		height: menuHeight.value,
-		opacity: menuOpacity.value,
-	}));
-
-	const chevronStyle = useAnimatedStyle(() => ({
-		transform: [{ rotate: `${chevronRotation.value}deg` }],
-	}));
-
 	return (
-		<View>
-			<Pressable
-				style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}
-				onPress={() => setOpen(!open)}
-			>
-				<Text style={[styles.dropdownText, { color: colors.foreground }]}>{selectedLabel}</Text>
-				<Animated.View style={chevronStyle}>
-					<Ionicons name="chevron-down" size={16} color={colors.mutedForeground} />
-				</Animated.View>
-			</Pressable>
-			{showMenu && (
-				<Animated.View style={[styles.dropdownMenu, { backgroundColor: colors.card, borderColor: colors.border, overflow: "hidden" }, menuAnimatedStyle]}>
-					{options.map((opt) => (
-						<Pressable
-							key={opt.value}
-							style={[styles.dropdownItem, { height: ITEM_HEIGHT, justifyContent: "center" }, selected === opt.value && { backgroundColor: `${colors.primary}20` }]}
-							onPress={() => { onSelect(opt.value); setOpen(false); }}
-						>
-							<Text style={[styles.dropdownItemText, {
-								color: selected === opt.value ? colors.primary : colors.foreground,
-							}]}>
-								{opt.label}
-							</Text>
-						</Pressable>
-					))}
-				</Animated.View>
-			)}
+		<View style={[styles.toggleRow, { flexWrap: "wrap" }]}>
+			{options.map((opt) => {
+				const active = opt.value === selected;
+				return (
+					<Pressable
+						key={opt.value}
+						style={[styles.togglePill, {
+							backgroundColor: active ? colors.foreground : colors.card,
+							borderColor: active ? colors.foreground : colors.border,
+						}]}
+						onPress={() => onSelect(opt.value)}
+					>
+						<Text style={[styles.toggleText, { color: active ? colors.background : colors.mutedForeground }]}>
+							{opt.label}
+						</Text>
+					</Pressable>
+				);
+			})}
 		</View>
 	);
 }
+
+
 
 // --- Period Toggle ---
 
@@ -353,7 +320,7 @@ export default function CardDetail() {
 	const [gradedGrade, setGradedGrade] = useState<string | null>(null);
 
 	// History
-	const [historyPeriod, setHistoryPeriod] = useState("30d");
+	const [historyPeriod, setHistoryPeriod] = useState("all");
 
 	// Card data
 	const { data: card, isLoading } = useQuery({
@@ -499,12 +466,22 @@ export default function CardDetail() {
 					<LoadingSkeleton colors={colors} />
 				</ScrollView>
 			) : card ? (
-				<ScrollView
-					style={[styles.container, { backgroundColor: colors.background }]}
-					contentContainerStyle={styles.content}
-					contentInsetAdjustmentBehavior="automatic"
-					showsVerticalScrollIndicator={false}
-				>
+				<View style={[styles.container, { backgroundColor: colors.background }]}>
+					{card.image && (
+						<Image
+							source={{ uri: card.image }}
+							style={StyleSheet.absoluteFill}
+							resizeMode="cover"
+							blurRadius={30}
+						/>
+					)}
+					<View style={[StyleSheet.absoluteFill, { backgroundColor: `${colors.background}B3` }]} />
+					<ScrollView
+						style={styles.container}
+						contentContainerStyle={styles.content}
+						contentInsetAdjustmentBehavior="automatic"
+						showsVerticalScrollIndicator={false}
+					>
 					{/* Card Image */}
 					<View style={styles.imageContainer}>
 						<FadeImage
@@ -531,8 +508,8 @@ export default function CardDetail() {
 							{card.set?.name}
 						</Text>
 						<View style={styles.pillRow}>
-							{card.rarity && <InfoPill label={card.rarity} color={colors.foreground} bgColor={colors.border} />}
-							{card.variant && <InfoPill label={card.variant.replace(/_/g, " ")} color={colors.primary} bgColor={`${colors.primary}20`} />}
+							{card.rarity && <InfoPill label={card.rarity} color={colors.foreground} bgColor={`${colors.foreground}20`} />}
+							{card.variant && <InfoPill label={card.variant.replace(/_/g, " ")} color={colors.foreground} bgColor={`${colors.foreground}20`} />}
 						</View>
 					</View>
 
@@ -556,7 +533,7 @@ export default function CardDetail() {
 								/>
 								<TickerText
 									value={formatPrice(gradedPrice, card.currency)}
-									style={[styles.priceTagValue, { color: colors.primary }]}
+									style={[styles.priceTagValue, { color: colors.foreground }]}
 								/>
 							</View>
 						)}
@@ -572,12 +549,11 @@ export default function CardDetail() {
 							colors={colors}
 						/>
 						<View style={{ marginTop: 10 }}>
-							<Dropdown
+							<LabeledPillToggle
 								options={conditionOptions}
 								selected={rawCondition}
 								onSelect={setRawCondition}
 								colors={colors}
-								placeholder="Condition"
 							/>
 						</View>
 					</View>
@@ -603,12 +579,11 @@ export default function CardDetail() {
 							/>
 							{gradedGrades.length > 0 && (
 								<View style={{ marginTop: 10 }}>
-									<Dropdown
+									<LabeledPillToggle
 										options={gradedGrades.map((g: string) => ({ label: g, value: g }))}
 										selected={gradedGrade}
 										onSelect={setGradedGrade}
 										colors={colors}
-										placeholder="Grade"
 									/>
 								</View>
 							)}
@@ -717,6 +692,7 @@ export default function CardDetail() {
 
 					<View style={{ height: 40 }} />
 				</ScrollView>
+				</View>
 			) : (
 				<View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
 					<Text style={{ color: colors.mutedForeground }}>Card not found</Text>
@@ -735,7 +711,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	content: {
-		paddingTop: 16,
+		paddingTop: 4,
 		paddingBottom: 40,
 	},
 	imageContainer: {
@@ -751,8 +727,6 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 20,
 		paddingVertical: 14,
 		marginBottom: 12,
-		borderTopWidth: 1,
-		borderBottomWidth: 1,
 	},
 	cardName: {
 		fontSize: 22,
@@ -819,32 +793,6 @@ const styles = StyleSheet.create({
 	toggleText: {
 		fontSize: 13,
 		fontWeight: "600",
-	},
-	dropdown: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		paddingHorizontal: 14,
-		paddingVertical: 10,
-		borderRadius: 8,
-		borderWidth: 1,
-	},
-	dropdownText: {
-		fontSize: 14,
-		fontWeight: "500",
-	},
-	dropdownMenu: {
-		marginTop: 4,
-		borderRadius: 8,
-		borderWidth: 1,
-		overflow: "hidden",
-	},
-	dropdownItem: {
-		paddingHorizontal: 14,
-		paddingVertical: 10,
-	},
-	dropdownItemText: {
-		fontSize: 14,
 	},
 	periodPill: {
 		paddingHorizontal: 12,
