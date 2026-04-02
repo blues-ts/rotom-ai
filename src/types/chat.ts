@@ -3,4 +3,9 @@ export interface Message {
 	role: "user" | "assistant";
 	content: string;
 	createdAt: string;
+	status?: "streaming" | "complete";
+	tool?: {
+		name: string;
+		status: "loading" | "done";
+	};
 }

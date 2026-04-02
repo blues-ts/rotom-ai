@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/clerk-expo";
 
 import type { Message } from "@/types/chat";
+import { parseSSE } from "@/lib/parseSSE";
+import type { ParsedEvent } from "@/lib/parseSSE";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const DRAIN_INTERVAL_MS = 16;
@@ -13,10 +15,16 @@ export function useChat() {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [streamingContent, setStreamingContent] = useState("");
 	const [isStreaming, setIsStreaming] = useState(false);
+	const [activeTool, setActiveTool] = useState<{
+		name: string;
+		status: "loading" | "done";
+	} | null>(null);
+
 	const abortRef = useRef<{ abort: () => void } | null>(null);
 	const bufferRef = useRef("");
 	const displayedLenRef = useRef(0);
 	const drainIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+	const lastIndexRef = useRef(0);
 
 	const clearDrainInterval = useCallback(() => {
 		if (drainIntervalRef.current) {
@@ -50,13 +58,43 @@ export function useChat() {
 		clearDrainInterval();
 		bufferRef.current = "";
 		displayedLenRef.current = 0;
+		lastIndexRef.current = 0;
 		setIsStreaming(false);
 		setStreamingContent("");
+		setActiveTool(null);
 		abortRef.current = null;
 	}, [clearDrainInterval]);
 
 	// Clean up on unmount
 	useEffect(() => clearDrainInterval, [clearDrainInterval]);
+
+	const handleEvent = useCallback(
+		(event: ParsedEvent) => {
+			switch (event.type) {
+				case "text":
+					bufferRef.current += event.content;
+					if (!drainIntervalRef.current) {
+						startDrainInterval();
+					}
+					break;
+
+				case "tool_call":
+					setActiveTool({ name: event.name, status: "loading" });
+					break;
+
+				case "tool_result":
+					setActiveTool((prev) =>
+						prev ? { ...prev, status: "done" } : null,
+					);
+					break;
+
+				case "done":
+					// Finalization handled in onload
+					break;
+			}
+		},
+		[startDrainInterval],
+	);
 
 	const sendMessage = useCallback(
 		async (text: string) => {
@@ -72,73 +110,89 @@ export function useChat() {
 			setMessages((prev) => [...prev, userMessage]);
 			setIsStreaming(true);
 			setStreamingContent("");
+			setActiveTool(null);
 			bufferRef.current = "";
 			displayedLenRef.current = 0;
+			lastIndexRef.current = 0;
 
 			try {
 				const token = await getToken();
 
-				const responseText = await new Promise<string>(
-					(resolve, reject) => {
-						const xhr = new XMLHttpRequest();
-						xhr.open("POST", `${API_URL}/api/chat`);
-						xhr.setRequestHeader("Content-Type", "application/json");
-						if (token) {
-							xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-						}
-						xhr.timeout = 60000;
+				await new Promise<void>((resolve, reject) => {
+					const xhr = new XMLHttpRequest();
+					xhr.open("POST", `${API_URL}/api/chat`);
+					xhr.setRequestHeader("Content-Type", "application/json");
+					if (token) {
+						xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+					}
+					xhr.timeout = 60000;
 
-						xhr.onprogress = () => {
-							bufferRef.current = xhr.responseText;
-							// Start drain interval on first chunk
-							if (!drainIntervalRef.current) {
-								startDrainInterval();
-							}
-						};
-
-						xhr.onload = () => {
-							if (xhr.status >= 200 && xhr.status < 300) {
-								resolve(xhr.responseText);
-							} else {
-								reject(new Error(`HTTP ${xhr.status}`));
-							}
-						};
-
-						xhr.onabort = () => {
-							const err = new Error("Aborted");
-							err.name = "AbortError";
-							reject(err);
-						};
-
-						xhr.onerror = () => reject(new Error("Network error"));
-						xhr.ontimeout = () => reject(new Error("Request timed out"));
-
-						xhr.send(
-							JSON.stringify({
-								messages: [...messages, userMessage].map((m) => ({
-									role: m.role,
-									content: m.content,
-								})),
-							}),
+					xhr.onprogress = () => {
+						// Extract only the new chunk since last read
+						const newChunk = xhr.responseText.slice(
+							lastIndexRef.current,
 						);
+						lastIndexRef.current = xhr.responseText.length;
 
-						abortRef.current = { abort: () => xhr.abort() };
-					},
-				);
+						const events = parseSSE(newChunk);
+						for (const event of events) {
+							handleEvent(event);
+						}
+					};
 
-				// Flush any remaining buffered text before creating final message
-				flushBuffer();
+					xhr.onload = () => {
+						if (xhr.status >= 200 && xhr.status < 300) {
+							// Process any remaining data
+							const remaining = xhr.responseText.slice(
+								lastIndexRef.current,
+							);
+							if (remaining) {
+								const events = parseSSE(remaining);
+								for (const event of events) {
+									handleEvent(event);
+								}
+							}
 
-				const assistantMessage: Message = {
-					id: (Date.now() + 1).toString(),
-					role: "assistant",
-					content:
-						responseText.trim() ||
-						"Sorry, I wasn't able to generate a response. Please try again.",
-					createdAt: new Date().toISOString(),
-				};
+							flushBuffer();
 
-				setMessages((prev) => [...prev, assistantMessage]);
+							const assistantMessage: Message = {
+								id: (Date.now() + 1).toString(),
+								role: "assistant",
+								content:
+									bufferRef.current.trim() ||
+									"Sorry, I wasn't able to generate a response. Please try again.",
+								createdAt: new Date().toISOString(),
+								status: "complete",
+							};
+
+							setMessages((prev) => [...prev, assistantMessage]);
+							resolve();
+						} else {
+							reject(new Error(`HTTP ${xhr.status}`));
+						}
+					};
+
+					xhr.onabort = () => {
+						const err = new Error("Aborted");
+						err.name = "AbortError";
+						reject(err);
+					};
+
+					xhr.onerror = () => reject(new Error("Network error"));
+					xhr.ontimeout = () =>
+						reject(new Error("Request timed out"));
+
+					xhr.send(
+						JSON.stringify({
+							messages: [...messages, userMessage].map((m) => ({
+								role: m.role,
+								content: m.content,
+							})),
+						}),
+					);
+
+					abortRef.current = { abort: () => xhr.abort() };
+				});
 			} catch (error) {
 				if ((error as Error).name === "AbortError") return;
 
@@ -147,13 +201,21 @@ export function useChat() {
 					role: "assistant",
 					content: "Sorry, something went wrong. Please try again.",
 					createdAt: new Date().toISOString(),
+					status: "complete",
 				};
 				setMessages((prev) => [...prev, errorMessage]);
 			} finally {
 				resetStreamingState();
 			}
 		},
-		[isStreaming, messages, getToken, startDrainInterval, flushBuffer, resetStreamingState],
+		[
+			isStreaming,
+			messages,
+			getToken,
+			handleEvent,
+			flushBuffer,
+			resetStreamingState,
+		],
 	);
 
 	const startNewChat = useCallback(() => {
@@ -168,6 +230,7 @@ export function useChat() {
 		messages,
 		streamingContent,
 		isStreaming,
+		activeTool,
 		sendMessage,
 		startNewChat,
 	};
