@@ -21,9 +21,10 @@ export default function SearchLayout() {
 		<Stack
 			screenOptions={{
 				headerShown: true,
-				headerTitle: "Search",
+				headerTitle: "",
 				headerShadowVisible: false,
-				headerStyle: { backgroundColor: colors.background },
+				headerTransparent: true,
+				headerStyle: { backgroundColor: "transparent" },
 				headerTintColor: colors.foreground,
 				headerLeft: () => (
 					<Pressable

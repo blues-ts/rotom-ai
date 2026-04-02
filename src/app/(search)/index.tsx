@@ -3,6 +3,7 @@ import {
 	Dimensions,
 	FlatList,
 	Image,
+	Keyboard,
 	Platform,
 	Pressable,
 	StyleSheet,
@@ -12,6 +13,7 @@ import {
 import Animated, {
 	FadeIn,
 	FadeOut,
+	runOnJS,
 	useAnimatedStyle,
 	useSharedValue,
 	withRepeat,
@@ -65,10 +67,10 @@ function CardPressable({ children, onPress }: { children: React.ReactNode; onPre
 		<AnimatedPressable
 			style={animatedStyle}
 			onPressIn={() => {
-				scale.value = withSpring(0.95, { damping: 20, stiffness: 300 });
+				scale.value = withTiming(0.96, { duration: 80 });
 			}}
 			onPressOut={() => {
-				scale.value = withSpring(1, { damping: 15, stiffness: 200 });
+				scale.value = withTiming(1, { duration: 120 });
 			}}
 			onPress={onPress}
 		>
@@ -247,6 +249,34 @@ export default function Search() {
 		[data],
 	);
 
+	// Keep a snapshot of the last non-empty results so we can fade them out
+	const [displayCards, setDisplayCards] = useState<CardResult[]>([]);
+	const [isClearing, setIsClearing] = useState(false);
+	const clearOpacity = useSharedValue(1);
+
+	useEffect(() => {
+		if (cards.length > 0) {
+			setDisplayCards(cards);
+			setIsClearing(false);
+			clearOpacity.value = 1;
+		} else if (displayCards.length > 0 && !searchQuery.trim()) {
+			// Search was cleared — fade out
+			setIsClearing(true);
+			clearOpacity.value = withTiming(0, { duration: 150 }, (finished) => {
+				if (finished) {
+					runOnJS(setDisplayCards)([]);
+					runOnJS(setIsClearing)(false);
+				}
+			});
+		} else if (!isClearing) {
+			setDisplayCards([]);
+		}
+	}, [cards, searchQuery]);
+
+	const clearAnimatedStyle = useAnimatedStyle(() => ({
+		opacity: clearOpacity.value,
+	}));
+
 	const handleEndReached = useCallback(() => {
 		if (hasNextPage && !isFetchingNextPage) {
 			fetchNextPage();
@@ -263,6 +293,7 @@ export default function Search() {
 				>
 					<CardPressable
 						onPress={() => {
+							Keyboard.dismiss();
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 							router.push(`/(card)/${item.id}?name=${encodeURIComponent(item.name)}`);
 						}}
@@ -298,9 +329,9 @@ export default function Search() {
 	);
 
 	const isSearching = debouncedQuery.trim().length > 0;
-	const showHint = !searchQuery.trim() && !isSearching;
-	const showSkeleton = isSearching && isLoading;
-	const showNoResults = isSearching && !isLoading && cards.length === 0;
+	const showHint = !searchQuery.trim() && !isSearching && displayCards.length === 0;
+	const showSkeleton = isSearching && isLoading && displayCards.length === 0;
+	const showNoResults = isSearching && !isLoading && cards.length === 0 && displayCards.length === 0;
 
 	return (
 		<>
@@ -317,12 +348,12 @@ export default function Search() {
 				style={[styles.container, { backgroundColor: colors.background }]}
 			>
 				{showHint && (
-					<View style={styles.hint}>
+					<Animated.View entering={FadeIn.duration(200)} style={styles.hint}>
 						<Ionicons name="search" size={40} color={colors.mutedForeground} />
 						<Text style={[styles.hintText, { color: colors.mutedForeground }]}>
 							Search over 27,000 Pokemon cards
 						</Text>
-					</View>
+					</Animated.View>
 				)}
 				{showSkeleton && (
 					<FlatList
@@ -340,15 +371,20 @@ export default function Search() {
 						No cards found
 					</Text>
 				)}
-				{cards.length > 0 && (
+				{displayCards.length > 0 && (
+					<Animated.View
+						style={[{ flex: 1 }, clearAnimatedStyle]}
+					>
 					<FlatList
-						data={cards}
+						data={displayCards}
 						keyExtractor={(item) => item.id}
 						numColumns={COLUMNS}
 						renderItem={renderItem}
 						contentContainerStyle={[styles.grid, { paddingTop: insets.top + PADDING }]}
 						columnWrapperStyle={styles.row}
 						showsVerticalScrollIndicator={false}
+						keyboardDismissMode="on-drag"
+						keyboardShouldPersistTaps="handled"
 						onEndReached={handleEndReached}
 						onEndReachedThreshold={0.5}
 						ListFooterComponent={
@@ -363,6 +399,7 @@ export default function Search() {
 							) : null
 						}
 					/>
+					</Animated.View>
 				)}
 			</View>
 		</>

@@ -149,7 +149,7 @@ function FadeImage({
 				<View
 					style={{
 						flex: 1,
-						borderRadius: 14,
+						borderRadius: 20.5,
 						backgroundColor: "black",
 					}}
 				/>
