@@ -12,6 +12,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { SplashScreen, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
 SplashScreen.preventAutoHideAsync();
@@ -97,19 +98,21 @@ export default function RootLayout() {
 	}
 
 	return (
-		<ThemeProvider>
-			<KeyboardProvider>
-				<QueryClientProvider client={queryClient}>
-					<ClerkProvider
-						publishableKey={publishableKey}
-						tokenCache={tokenCache}
-					>
-						<ClerkLoaded>
-							<AppContent />
-						</ClerkLoaded>
-					</ClerkProvider>
-				</QueryClientProvider>
-			</KeyboardProvider>
-		</ThemeProvider>
+		<GestureHandlerRootView style={{ flex: 1 }}>
+			<ThemeProvider>
+				<KeyboardProvider>
+					<QueryClientProvider client={queryClient}>
+						<ClerkProvider
+							publishableKey={publishableKey}
+							tokenCache={tokenCache}
+						>
+							<ClerkLoaded>
+								<AppContent />
+							</ClerkLoaded>
+						</ClerkProvider>
+					</QueryClientProvider>
+				</KeyboardProvider>
+			</ThemeProvider>
+		</GestureHandlerRootView>
 	);
 }
