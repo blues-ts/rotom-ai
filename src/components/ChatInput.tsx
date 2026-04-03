@@ -50,7 +50,7 @@ export default function ChatInput({
 					onSubmitEditing={handleSend}
 					returnKeyType="send"
 					blurOnSubmit={false}
-					maxLength={2000}
+					maxLength={250}
 					editable={!disabled}
 					accessibilityLabel="Message input"
 					accessibilityHint="Type your message to River"

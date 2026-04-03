@@ -95,14 +95,14 @@ export default function Home() {
 			</Animated.View>
 
 			{/* Toolbar */}
-			<Stack.Toolbar placement="right">
+			<Stack.Toolbar placement="left">
 				<Stack.Toolbar.Button
 					icon={"square.and.pencil"}
 					onPress={handleNewChat}
 				/>
 			</Stack.Toolbar>
 
-			<Stack.Toolbar placement="left">
+			<Stack.Toolbar placement="right">
 				<Stack.Toolbar.Button
 					icon="gearshape"
 					onPress={() => {
@@ -114,7 +114,7 @@ export default function Home() {
 					icon={"folder"}
 					onPress={() => {
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-						Alert.alert("Collections");
+						router.push("/(collections)");
 					}}
 				/>
 				<Stack.Toolbar.Button

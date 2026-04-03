@@ -1,5 +1,5 @@
 import React, { type ReactNode } from "react";
-import { Text, type TextStyle, type ViewStyle } from "react-native";
+import { Image, type ImageStyle, Text, type TextStyle, View, type ViewStyle } from "react-native";
 import { Renderer } from "react-native-marked";
 
 import CodeBlock from "./CodeBlock";
@@ -11,6 +11,23 @@ const PERCENT_REGEX = /(\([+-][\d.]+%\))/g;
  * and renders syntax-highlighted code blocks.
  */
 export class ColoredRenderer extends Renderer {
+	image(
+		uri: string,
+		alt?: string,
+		style?: ImageStyle,
+		_title?: string,
+	): ReactNode {
+		return (
+			<Image
+				key={this.getKey()}
+				source={{ uri }}
+				style={{ width: "100%", aspectRatio: 63 / 88, borderRadius: 20.5 }}
+				resizeMode="contain"
+				accessibilityLabel={alt}
+			/>
+		);
+	}
+
 	code(
 		text: string,
 		language?: string,

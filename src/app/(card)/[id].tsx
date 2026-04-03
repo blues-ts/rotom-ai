@@ -628,10 +628,8 @@ function SlidingTabs({
 	const gradedHeight = useSharedValue(0);
 
 	useEffect(() => {
-		slideAnim.value = withSpring(activeTab === "Graded" ? 1 : 0, {
-			damping: 22,
-			stiffness: 220,
-			mass: 0.8,
+		slideAnim.value = withTiming(activeTab === "Graded" ? 1 : 0, {
+			duration: 250,
 		});
 	}, [activeTab]);
 
@@ -863,7 +861,8 @@ function AnimatedCollapsible({
 function LoadingSkeleton({ colors }: { colors: any }) {
 	return (
 		<>
-			<View style={{ alignItems: "center", marginBottom: 20 }}>
+			{/* Card Image */}
+			<View style={styles.imageContainer}>
 				<Skeleton
 					width={IMAGE_WIDTH}
 					height={IMAGE_HEIGHT}
@@ -871,22 +870,59 @@ function LoadingSkeleton({ colors }: { colors: any }) {
 					style={{ borderRadius: 19 }}
 				/>
 			</View>
-			<View style={{ alignItems: "center", marginBottom: 16, gap: 6 }}>
-				<Skeleton width={160} height={40} color={colors.border} />
-				<Skeleton width={120} height={14} color={colors.border} />
-			</View>
-			<View style={{ gap: 8, paddingHorizontal: 20 }}>
-				<Skeleton width="60%" height={20} color={colors.border} />
-				<Skeleton width="40%" height={16} color={colors.border} />
-				<View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
-					<Skeleton width={70} height={28} color={colors.border} />
-					<Skeleton width={90} height={28} color={colors.border} />
+
+			{/* Estimate Block */}
+			<View
+				style={[
+					styles.estimateBlock,
+					{ backgroundColor: colors.card, borderColor: colors.border },
+				]}
+			>
+				<Skeleton width={100} height={11} color={colors.border} />
+				<Skeleton width={180} height={44} color={colors.border} style={{ marginTop: 6 }} />
+				<View style={{ flexDirection: "row", gap: 6, marginTop: 12 }}>
+					<Skeleton width={70} height={26} color={colors.border} style={{ borderRadius: 20 }} />
+					<Skeleton width={90} height={26} color={colors.border} style={{ borderRadius: 20 }} />
 				</View>
 			</View>
-			<View style={{ gap: 8, paddingHorizontal: 20, marginTop: 16 }}>
-				<Skeleton width="100%" height={48} color={colors.border} />
-				<Skeleton width="100%" height={180} color={colors.border} />
-				<Skeleton width="100%" height={120} color={colors.border} />
+
+			{/* Meta Strip */}
+			<View style={styles.metaStrip}>
+				<View style={{ flex: 1, gap: 4 }}>
+					<Skeleton width="65%" height={17} color={colors.border} />
+					<Skeleton width="45%" height={13} color={colors.border} />
+					<View style={{ flexDirection: "row", gap: 6, marginTop: 4 }}>
+						<Skeleton width={60} height={22} color={colors.border} style={{ borderRadius: 6 }} />
+						<Skeleton width={80} height={22} color={colors.border} style={{ borderRadius: 6 }} />
+					</View>
+				</View>
+			</View>
+
+			{/* Pricing Options Section */}
+			<View
+				style={[
+					styles.section,
+					{ backgroundColor: colors.card, borderColor: colors.border },
+				]}
+			>
+				<Skeleton width={130} height={16} color={colors.border} style={{ marginBottom: 12 }} />
+				<Skeleton width="100%" height={36} color={colors.border} style={{ borderRadius: 8 }} />
+				<Skeleton width={60} height={11} color={colors.border} style={{ marginTop: 14 }} />
+				<View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+					<Skeleton width={80} height={32} color={colors.border} style={{ borderRadius: 8 }} />
+					<Skeleton width={80} height={32} color={colors.border} style={{ borderRadius: 8 }} />
+				</View>
+			</View>
+
+			{/* Price History Section */}
+			<View
+				style={[
+					styles.section,
+					{ backgroundColor: colors.card, borderColor: colors.border },
+				]}
+			>
+				<Skeleton width={110} height={16} color={colors.border} style={{ marginBottom: 12 }} />
+				<Skeleton width="100%" height={180} color={colors.border} style={{ borderRadius: 8 }} />
 			</View>
 		</>
 	);
@@ -1397,7 +1433,7 @@ export default function CardDetail() {
 									{ color: colors.foreground },
 								]}
 							>
-								Configure Estimate
+								Pricing Options
 							</Text>
 							{hasGraded && (
 								<TabBar
@@ -1483,7 +1519,7 @@ export default function CardDetail() {
 										color={colors.border}
 									/>
 								</View>
-							) : chartData.length > 0 ? (
+							) : chartData.length > 1 ? (
 								<View style={styles.chartContainer}>
 									<CartesianChart
 										data={chartData}
@@ -1515,7 +1551,7 @@ export default function CardDetail() {
 											fontSize: 13,
 										}}
 									>
-										No history data available
+										Price History Unavailable
 									</Text>
 								</View>
 							)}

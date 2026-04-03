@@ -12,6 +12,9 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { SplashScreen, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
+import { Pressable } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
@@ -56,7 +59,28 @@ function AppContent() {
 						headerShown: false,
 					}}
 				/>
-				<Stack.Screen name="(collections)" />
+				<Stack.Screen
+					name="(collections)"
+					options={{
+							animation: "slide_from_right",
+							headerShown: true,
+							headerTitle: "Collections",
+							headerBackButtonDisplayMode: "minimal",
+							headerStyle: { backgroundColor: colors.background },
+							headerTintColor: colors.foreground,
+							headerShadowVisible: false,
+							headerRight: () => (
+								<Pressable
+									onPress={() => {
+										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+										// TODO: add to collection action
+									}}
+								>
+									<Ionicons name="add" size={26} color={colors.foreground} />
+								</Pressable>
+							),
+					}}
+				/>
 				<Stack.Screen
 					name="(search)"
 					options={{
