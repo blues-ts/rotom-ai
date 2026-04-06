@@ -9,7 +9,7 @@ import {
 	ThemeProvider as NavigationThemeProvider,
 } from "@react-navigation/native";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { SplashScreen, Stack } from "expo-router";
+import { router, SplashScreen, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
 import { Pressable } from "react-native";
@@ -73,12 +73,21 @@ function AppContent() {
 								<Pressable
 									onPress={() => {
 										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-										// TODO: add to collection action
+										router.push("/create-collection");
 									}}
 								>
 									<Ionicons name="add" size={26} color={colors.foreground} />
 								</Pressable>
 							),
+					}}
+				/>
+				<Stack.Screen
+					name="create-collection"
+					options={{
+						presentation: "transparentModal",
+						animation: "fade",
+						headerShown: false,
+						contentStyle: { backgroundColor: "transparent" },
 					}}
 				/>
 				<Stack.Screen

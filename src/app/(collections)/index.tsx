@@ -1,24 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
 import CollectionCard from "@/components/CollectionCard";
+import { useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const MOCK_COLLECTIONS = [
-	{
-		id: "1",
-		name: "My collection",
-		cardCount: 1,
-		totalValue: 505.0,
-		cardImages: [
-			"https://images.pokemontcg.io/sv7/1_hires.png",
-		],
-	},
-];
-
 export default function Collections() {
 	const { colors } = useTheme();
-	const collections = MOCK_COLLECTIONS;
+
+	const [collections] = useState([
+		{
+			id: "1",
+			name: "My collection",
+			cardCount: 1,
+			totalValue: 505.0,
+			cardImages: ["https://images.pokemontcg.io/sv7/1_hires.png"],
+		},
+	]);
 
 	return (
 		<SafeAreaView
