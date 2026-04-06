@@ -22,6 +22,7 @@ export function useChat() {
 
 	const abortRef = useRef<{ abort: () => void } | null>(null);
 	const bufferRef = useRef("");
+	const fullMarkdownRef = useRef("");
 	const displayedLenRef = useRef(0);
 	const drainIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 	const lastIndexRef = useRef(0);
@@ -57,6 +58,7 @@ export function useChat() {
 	const resetStreamingState = useCallback(() => {
 		clearDrainInterval();
 		bufferRef.current = "";
+		fullMarkdownRef.current = "";
 		displayedLenRef.current = 0;
 		lastIndexRef.current = 0;
 		setIsStreaming(false);
@@ -89,7 +91,9 @@ export function useChat() {
 					break;
 
 				case "done":
-					// Finalization handled in onload
+					if (event.content) {
+						fullMarkdownRef.current = event.content;
+					}
 					break;
 			}
 		},
@@ -112,6 +116,7 @@ export function useChat() {
 			setStreamingContent("");
 			setActiveTool(null);
 			bufferRef.current = "";
+			fullMarkdownRef.current = "";
 			displayedLenRef.current = 0;
 			lastIndexRef.current = 0;
 
@@ -159,6 +164,7 @@ export function useChat() {
 								id: (Date.now() + 1).toString(),
 								role: "assistant",
 								content:
+									fullMarkdownRef.current.trim() ||
 									bufferRef.current.trim() ||
 									"Sorry, I wasn't able to generate a response. Please try again.",
 								createdAt: new Date().toISOString(),

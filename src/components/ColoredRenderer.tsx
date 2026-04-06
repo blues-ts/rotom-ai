@@ -21,7 +21,7 @@ export class ColoredRenderer extends Renderer {
 			<Image
 				key={this.getKey()}
 				source={{ uri }}
-				style={{ width: "100%", aspectRatio: 63 / 88, borderRadius: 20.5 }}
+				style={{ width: "100%", aspectRatio: 63 / 88, borderRadius: 23 }}
 				resizeMode="contain"
 				accessibilityLabel={alt}
 			/>

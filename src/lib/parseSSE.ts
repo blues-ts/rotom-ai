@@ -2,7 +2,7 @@ export type ParsedEvent =
 	| { type: "text"; content: string }
 	| { type: "tool_call"; name: string }
 	| { type: "tool_result"; name?: string }
-	| { type: "done" };
+	| { type: "done"; content?: string };
 
 /**
  * Parse a raw SSE chunk into structured events.
