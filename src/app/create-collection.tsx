@@ -9,9 +9,11 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 
 import { useTheme } from "@/context/ThemeContext";
+import { useCollections } from "@/hooks/useCollections";
 
 export default function CreateCollection() {
 	const { colors } = useTheme();
+	const { createCollection } = useCollections();
 	const bottomSheetRef = useRef<BottomSheet>(null);
 	const [name, setName] = useState("");
 	const canCreate = name.trim().length > 0;
@@ -23,9 +25,9 @@ export default function CreateCollection() {
 	const handleCreate = useCallback(() => {
 		if (!name.trim()) return;
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-		// TODO: persist collection
+		createCollection.mutate(name.trim());
 		bottomSheetRef.current?.close();
-	}, [name]);
+	}, [name, createCollection]);
 
 	const renderBackdrop = useCallback(
 		(props: any) => (
