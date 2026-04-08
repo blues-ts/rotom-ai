@@ -20,7 +20,7 @@ import Animated, {
 } from "react-native-reanimated";
 import MaskedView from "@react-native-masked-view/masked-view";
 import { Ionicons } from "@expo/vector-icons";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useQuery } from "@tanstack/react-query";
@@ -1135,7 +1135,33 @@ export default function CardDetail() {
 
 	return (
 		<>
-			<Stack.Screen options={{ headerTitle: name ?? "Card" }} />
+			<Stack.Screen
+				options={{
+					headerTitle: name ?? "Card",
+					headerRight: () => (
+						<Pressable
+							onPress={() => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								router.push({
+									pathname: "/add-to-collection",
+									params: {
+										cardId: id,
+										cardName: name ?? "",
+										cardImageUrl: card?.image ?? "",
+										cardValue: String(heroPrice ?? 0),
+									},
+								});
+							}}
+						>
+							<Ionicons
+								name="add"
+								size={26}
+								color={colors.foreground}
+							/>
+						</Pressable>
+					),
+				}}
+			/>
 
 			{isLoading ? (
 				<ScrollView

@@ -26,16 +26,7 @@ export default function CardLayout() {
 						<Ionicons name="close" size={24} color={colors.foreground} />
 					</Pressable>
 				),
-				headerRight: () => (
-					<Pressable
-						onPress={() => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-							// TODO: add to collection action
-						}}
-					>
-						<Ionicons name="add" size={26} color={colors.foreground} />
-					</Pressable>
-				),
+				headerRight: () => null,
 			}}
 		/>
 	);

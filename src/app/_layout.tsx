@@ -82,7 +82,28 @@ function AppContent() {
 					}}
 				/>
 				<Stack.Screen
+					name="collection-detail"
+					options={{
+						animation: "slide_from_right",
+						headerShown: true,
+						headerTitle: "",
+						headerBackButtonDisplayMode: "minimal",
+						headerStyle: { backgroundColor: colors.background },
+						headerTintColor: colors.foreground,
+						headerShadowVisible: false,
+					}}
+				/>
+				<Stack.Screen
 					name="create-collection"
+					options={{
+						presentation: "transparentModal",
+						animation: "fade",
+						headerShown: false,
+						contentStyle: { backgroundColor: "transparent" },
+					}}
+				/>
+				<Stack.Screen
+					name="add-to-collection"
 					options={{
 						presentation: "transparentModal",
 						animation: "fade",

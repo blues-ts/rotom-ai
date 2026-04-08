@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useTheme } from "@/context/ThemeContext";
 import { useCollections } from "@/hooks/useCollections";
 import CollectionCard from "@/components/CollectionCard";
@@ -49,6 +50,7 @@ export default function Collections() {
 								cardCount={c.cardCount}
 								totalValue={c.totalValue}
 								cardImages={c.cardImages}
+								onPress={() => router.push(`/collection-detail?id=${c.id}`)}
 								onAddCards={() => {}}
 								onMenuPress={() => {}}
 							/>
