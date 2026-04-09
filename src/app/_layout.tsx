@@ -107,12 +107,11 @@ function AppContent() {
 				<Stack.Screen
 					name="add-to-collection"
 					options={{
-						presentation: "modal",
-						headerShown: true,
-						headerTitle: "Add to Collection",
-						headerStyle: { backgroundColor: colors.card },
-						headerTintColor: colors.foreground,
-						headerShadowVisible: false,
+						presentation: "formSheet",
+						sheetAllowedDetents: [0.55],
+						sheetGrabberVisible: true,
+						sheetCornerRadius: 20,
+						headerShown: false,
 						contentStyle: { backgroundColor: colors.card },
 					}}
 				/>

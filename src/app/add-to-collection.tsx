@@ -55,6 +55,9 @@ export default function AddToCollection() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.card }]}>
+      <Text style={[styles.title, { color: colors.foreground }]}>
+        Add to Collection
+      </Text>
       {collections.length === 0 ? (
         <View style={styles.empty}>
           <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
@@ -104,7 +107,13 @@ export default function AddToCollection() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    padding: 20,
+    paddingTop: 24,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 16,
   },
   empty: {
     paddingVertical: 24,
@@ -115,8 +124,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   list: {
-    paddingHorizontal: 12,
-    paddingBottom: 12,
+    gap: 8,
   },
   collectionRow: {
     flexDirection: "row",
