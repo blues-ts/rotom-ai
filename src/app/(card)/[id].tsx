@@ -918,19 +918,27 @@ function LoadingSkeleton({ colors }: { colors: any }) {
 
 export default function CardDetail() {
 	const { colors } = useTheme();
-	const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
+	const { id, name, pricingType, source, condition, gradedCompany: initGradedCompany, gradedGrade: initGradedGrade } = useLocalSearchParams<{
+		id: string;
+		name: string;
+		pricingType?: string;
+		source?: string;
+		condition?: string;
+		gradedCompany?: string;
+		gradedGrade?: string;
+	}>();
 	const api = useApi();
 
 	// Tab state
-	const [pricingTab, setPricingTab] = useState("Raw");
+	const [pricingTab, setPricingTab] = useState(pricingType || "Raw");
 
 	// Raw state
-	const [rawSource, setRawSource] = useState<string>("TCGPlayer");
-	const [rawCondition, setRawCondition] = useState("NEAR_MINT");
+	const [rawSource, setRawSource] = useState<string>(source || "TCGPlayer");
+	const [rawCondition, setRawCondition] = useState(condition || "NEAR_MINT");
 
 	// Graded state
-	const [gradedCompany, setGradedCompany] = useState<string | null>(null);
-	const [gradedGrade, setGradedGrade] = useState<string | null>(null);
+	const [gradedCompany, setGradedCompany] = useState<string | null>(initGradedCompany || null);
+	const [gradedGrade, setGradedGrade] = useState<string | null>(initGradedGrade || null);
 
 	// History
 	const [historyPeriod, setHistoryPeriod] = useState("all");
@@ -976,7 +984,7 @@ export default function CardDetail() {
 	}, [gradedCompanies]);
 
 	useEffect(() => {
-		if (gradedGrades.length > 0) {
+		if (gradedGrades.length > 0 && !gradedGrade) {
 			setGradedGrade(gradedGrades[0]);
 		}
 	}, [gradedGrades]);
@@ -1135,6 +1143,11 @@ export default function CardDetail() {
 										cardName: name ?? "",
 										cardImageUrl: card?.image ?? "",
 										cardValue: String(heroPrice ?? 0),
+										pricingType: pricingTab,
+										source: rawSource,
+										condition: rawCondition,
+										gradedCompany: gradedCompany ?? "",
+										gradedGrade: gradedGrade ?? "",
 									},
 								});
 							}}

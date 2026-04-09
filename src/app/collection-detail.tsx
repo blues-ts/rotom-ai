@@ -175,9 +175,17 @@ export default function CollectionDetail() {
 					onPress={() => {
 						Keyboard.dismiss();
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-						router.push(
-							`/(card)/${item.cardId}?name=${encodeURIComponent(item.cardName)}`,
-						);
+						router.push({
+							pathname: `/(card)/${item.cardId}`,
+							params: {
+								name: item.cardName,
+								pricingType: item.pricingType,
+								source: item.source,
+								condition: item.condition,
+								gradedCompany: item.gradedCompany ?? "",
+								gradedGrade: item.gradedGrade ?? "",
+							},
+						});
 					}}
 				>
 					{item.cardImageUrl ? (
@@ -289,6 +297,18 @@ export default function CollectionDetail() {
 							onChangeText={setFilterQuery}
 							returnKeyType="search"
 						/>
+						{filterQuery.length > 0 && (
+							<Pressable
+								onPress={() => setFilterQuery("")}
+								hitSlop={8}
+							>
+								<Ionicons
+									name="close-circle"
+									size={18}
+									color={colors.mutedForeground}
+								/>
+							</Pressable>
+						)}
 					</View>
 				</View>
 

@@ -28,6 +28,18 @@ export function getDatabase(): SQLite.SQLiteDatabase {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_card
         ON collection_cards(collection_id, card_id);
     `);
+
+    // Add configuration columns if they don't exist
+    const columns = db.getAllSync<{ name: string }>("PRAGMA table_info(collection_cards)").map(c => c.name);
+    if (!columns.includes("pricing_type")) {
+      db.execSync(`
+        ALTER TABLE collection_cards ADD COLUMN pricing_type TEXT NOT NULL DEFAULT 'Raw';
+        ALTER TABLE collection_cards ADD COLUMN source TEXT NOT NULL DEFAULT 'TCGPlayer';
+        ALTER TABLE collection_cards ADD COLUMN condition TEXT NOT NULL DEFAULT 'NEAR_MINT';
+        ALTER TABLE collection_cards ADD COLUMN graded_company TEXT;
+        ALTER TABLE collection_cards ADD COLUMN graded_grade TEXT;
+      `);
+    }
   }
   return db;
 }

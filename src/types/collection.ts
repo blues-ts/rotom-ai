@@ -15,4 +15,9 @@ export interface CollectionCard {
   cardImageUrl: string;
   cardValue: number;
   addedAt: string;
+  pricingType: string;
+  source: string;
+  condition: string;
+  gradedCompany?: string;
+  gradedGrade?: string;
 }

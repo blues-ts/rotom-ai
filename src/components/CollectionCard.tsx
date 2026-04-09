@@ -4,7 +4,6 @@ import * as Haptics from "expo-haptics";
 import {
 	Image,
 	Pressable,
-	ScrollView,
 	StyleSheet,
 	Text,
 	View,
@@ -72,13 +71,8 @@ export default function CollectionCard({
 
 			{/* Card Images */}
 			{cardImages.length > 0 && (
-				<ScrollView
-					horizontal
-					showsHorizontalScrollIndicator={false}
-					contentContainerStyle={styles.imageRow}
-					style={styles.imageScroll}
-				>
-					{cardImages.map((uri, i) => (
+				<View style={[styles.imageScroll, styles.imageRow]}>
+					{cardImages.slice(0, 4).map((uri, i) => (
 						<View key={i} style={styles.cardImageWrapper}>
 							<Image
 								source={{ uri }}
@@ -87,7 +81,7 @@ export default function CollectionCard({
 							/>
 						</View>
 					))}
-				</ScrollView>
+				</View>
 			)}
 
 			{/* Footer */}
@@ -158,6 +152,7 @@ const styles = StyleSheet.create({
 		marginTop: 12,
 	},
 	imageRow: {
+		flexDirection: "row",
 		gap: 8,
 	},
 	cardImageWrapper: {

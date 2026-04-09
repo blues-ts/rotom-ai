@@ -55,6 +55,19 @@ export default function ChatInput({
 					accessibilityLabel="Message input"
 					accessibilityHint="Type your message to River"
 				/>
+				{text.length > 0 && (
+					<Pressable
+						onPress={() => setText("")}
+						hitSlop={8}
+						style={styles.clearButton}
+					>
+						<Ionicons
+							name="close-circle"
+							size={18}
+							color={colors.mutedForeground}
+						/>
+					</Pressable>
+				)}
 				<Pressable
 					onPress={handleSend}
 					disabled={!canSend}
@@ -109,6 +122,9 @@ const styles = StyleSheet.create({
 		minHeight: 34,
 		maxHeight: 100,
 		marginRight: 8,
+	},
+	clearButton: {
+		marginRight: 4,
 	},
 	sendButton: {
 		width: 32,

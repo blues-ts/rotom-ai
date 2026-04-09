@@ -38,7 +38,11 @@ export function useCollections() {
           c.created_at,
           COUNT(cc.id) as card_count,
           COALESCE(SUM(cc.card_value), 0) as total_value,
-          GROUP_CONCAT(cc.card_image_url) as card_images
+          (SELECT GROUP_CONCAT(card_image_url) FROM (
+            SELECT card_image_url FROM collection_cards
+            WHERE collection_id = c.id
+            ORDER BY card_value DESC
+          )) as card_images
         FROM collections c
         LEFT JOIN collection_cards cc ON cc.collection_id = c.id
         GROUP BY c.id
@@ -91,17 +95,27 @@ export function useCollections() {
       cardName,
       cardImageUrl,
       cardValue,
+      pricingType = "Raw",
+      source = "TCGPlayer",
+      condition = "NEAR_MINT",
+      gradedCompany,
+      gradedGrade,
     }: {
       collectionId: string;
       cardId: string;
       cardName: string;
       cardImageUrl: string;
       cardValue: number;
+      pricingType?: string;
+      source?: string;
+      condition?: string;
+      gradedCompany?: string;
+      gradedGrade?: string;
     }) => {
       const id = Date.now().toString();
       db.runSync(
-        "INSERT OR IGNORE INTO collection_cards (id, collection_id, card_id, card_name, card_image_url, card_value) VALUES (?, ?, ?, ?, ?, ?)",
-        [id, collectionId, cardId, cardName, cardImageUrl, cardValue],
+        "INSERT OR IGNORE INTO collection_cards (id, collection_id, card_id, card_name, card_image_url, card_value, pricing_type, source, condition, graded_company, graded_grade) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [id, collectionId, cardId, cardName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany ?? null, gradedGrade ?? null],
       );
       return Promise.resolve();
     },
@@ -170,6 +184,11 @@ interface CollectionCardRow {
   card_image_url: string;
   card_value: number;
   added_at: string;
+  pricing_type: string;
+  source: string;
+  condition: string;
+  graded_company: string | null;
+  graded_grade: string | null;
 }
 
 export function useCollectionCards(collectionId: string) {
@@ -190,6 +209,11 @@ export function useCollectionCards(collectionId: string) {
         cardImageUrl: row.card_image_url,
         cardValue: row.card_value,
         addedAt: row.added_at,
+        pricingType: row.pricing_type,
+        source: row.source,
+        condition: row.condition,
+        gradedCompany: row.graded_company ?? undefined,
+        gradedGrade: row.graded_grade ?? undefined,
       }));
     },
     enabled: !!collectionId,
