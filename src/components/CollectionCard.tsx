@@ -79,15 +79,13 @@ export default function CollectionCard({
 					style={styles.imageScroll}
 				>
 					{cardImages.map((uri, i) => (
-						<Image
-							key={i}
-							source={{ uri }}
-							style={[
-								styles.cardImage,
-								{ backgroundColor: colors.border },
-							]}
-							resizeMode="contain"
-						/>
+						<View key={i} style={styles.cardImageWrapper}>
+							<Image
+								source={{ uri }}
+								style={styles.cardImage}
+								resizeMode="contain"
+							/>
+						</View>
 					))}
 				</ScrollView>
 			)}
@@ -162,10 +160,13 @@ const styles = StyleSheet.create({
 	imageRow: {
 		gap: 8,
 	},
+	cardImageWrapper: {
+		borderRadius: Math.round(80 * 0.05),
+		overflow: "hidden",
+	},
 	cardImage: {
 		width: 80,
 		height: 112,
-		borderRadius: 8,
 	},
 	footer: {
 		flexDirection: "row",

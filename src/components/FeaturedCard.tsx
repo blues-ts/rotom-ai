@@ -48,6 +48,7 @@ const styles = StyleSheet.create({
 	image: {
 		width: 80,
 		height: 112,
+		borderRadius: 8,
 	},
 	info: {
 		flex: 1,

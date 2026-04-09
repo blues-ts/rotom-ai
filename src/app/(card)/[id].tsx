@@ -18,7 +18,6 @@ import Animated, {
 	withSpring,
 	withTiming,
 } from "react-native-reanimated";
-import MaskedView from "@react-native-masked-view/masked-view";
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -143,42 +142,29 @@ function FadeImage({
 	}
 
 	return (
-		<MaskedView
-			style={style}
-			maskElement={
-				<View
-					style={{
-						flex: 1,
-						borderRadius: 20.5,
-						backgroundColor: "black",
-					}}
+		<View style={[style, { overflow: "hidden" }]}>
+			{!loaded && (
+				<Animated.View
+					style={[
+						StyleSheet.absoluteFill,
+						{ backgroundColor: shimmerColor },
+						shimmerStyle,
+					]}
 				/>
-			}
-		>
-			<View style={[{ flex: 1 }, { backgroundColor }]}>
-				{!loaded && (
-					<Animated.View
-						style={[
-							StyleSheet.absoluteFill,
-							{ backgroundColor: shimmerColor },
-							shimmerStyle,
-						]}
-					/>
-				)}
-				<Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
-					<Image
-						source={{ uri }}
-						style={StyleSheet.absoluteFill}
-						resizeMode="cover"
-						onLoad={() => {
-							setLoaded(true);
-							opacity.value = withTiming(1, { duration: 200 });
-						}}
-						onError={() => setFailed(true)}
-					/>
-				</Animated.View>
-			</View>
-		</MaskedView>
+			)}
+			<Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
+				<Image
+					source={{ uri }}
+					style={StyleSheet.absoluteFill}
+					resizeMode="contain"
+					onLoad={() => {
+						setLoaded(true);
+						opacity.value = withTiming(1, { duration: 200 });
+					}}
+					onError={() => setFailed(true)}
+				/>
+			</Animated.View>
+		</View>
 	);
 }
 
@@ -1216,7 +1202,7 @@ export default function CardDetail() {
 										width: IMAGE_WIDTH,
 										height: IMAGE_HEIGHT,
 									}}
-									backgroundColor={colors.card}
+									backgroundColor={colors.background}
 									shimmerColor={colors.border}
 									foregroundColor={colors.foreground}
 									mutedColor={colors.mutedForeground}
@@ -1718,7 +1704,10 @@ const styles = StyleSheet.create({
 	imageContainer: {
 		alignItems: "center",
 		marginBottom: 20,
+		borderRadius: Math.round(IMAGE_WIDTH * 0.05),
 		overflow: "hidden",
+		alignSelf: "center",
+		width: IMAGE_WIDTH,
 	},
 
 	// Estimate block — most prominent element
