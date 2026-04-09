@@ -108,9 +108,10 @@ function AppContent() {
 					name="add-to-collection"
 					options={{
 						presentation: "formSheet",
-						sheetAllowedDetents: [0.55],
+						sheetAllowedDetents: [0.55, 1.0],
 						sheetGrabberVisible: true,
 						sheetCornerRadius: 20,
+						sheetExpandsWhenScrolledToEdge: true,
 						headerShown: false,
 						contentStyle: { backgroundColor: colors.card },
 					}}

@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -54,7 +54,10 @@ export default function AddToCollection() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.card }]}>
+    <ScrollView
+      style={{ backgroundColor: colors.card }}
+      contentContainerStyle={styles.container}
+    >
       <Text style={[styles.title, { color: colors.foreground }]}>
         Add to Collection
       </Text>
@@ -101,7 +104,7 @@ export default function AddToCollection() {
           ))}
         </View>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
