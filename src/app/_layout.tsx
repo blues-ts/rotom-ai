@@ -96,19 +96,24 @@ function AppContent() {
 				<Stack.Screen
 					name="create-collection"
 					options={{
-						presentation: "transparentModal",
-						animation: "fade",
+						presentation: "formSheet",
+						sheetAllowedDetents: [0.35],
+						sheetGrabberVisible: true,
+						sheetCornerRadius: 20,
 						headerShown: false,
-						contentStyle: { backgroundColor: "transparent" },
+						contentStyle: { backgroundColor: colors.card },
 					}}
 				/>
 				<Stack.Screen
 					name="add-to-collection"
 					options={{
-						presentation: "transparentModal",
-						animation: "fade",
-						headerShown: false,
-						contentStyle: { backgroundColor: "transparent" },
+						presentation: "modal",
+						headerShown: true,
+						headerTitle: "Add to Collection",
+						headerStyle: { backgroundColor: colors.card },
+						headerTintColor: colors.foreground,
+						headerShadowVisible: false,
+						contentStyle: { backgroundColor: colors.card },
 					}}
 				/>
 				<Stack.Screen

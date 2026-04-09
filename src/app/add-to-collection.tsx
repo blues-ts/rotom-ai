@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,15 +20,13 @@ export default function AddToCollection() {
 
   const { collections, addCardToCollection } = useCollections();
 
-  const handleClose = useCallback(() => {
-    router.back();
-  }, []);
-
   const handleSelect = useCallback(
     (collectionId: string) => {
       if (!cardId || !cardName) return;
 
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const collection = collections.find((c) => c.id === collectionId);
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       addCardToCollection.mutate(
         {
@@ -40,7 +38,11 @@ export default function AddToCollection() {
         },
         {
           onSuccess: () => {
-            router.back();
+            Alert.alert(
+              "Added!",
+              `${cardName} was added to ${collection?.name ?? "collection"}.`,
+              [{ text: "OK", onPress: () => router.back() }],
+            );
           },
           onError: () => {
             Alert.alert("Error", "This card is already in that collection.");
@@ -48,103 +50,61 @@ export default function AddToCollection() {
         },
       );
     },
-    [cardId, cardName, cardImageUrl, cardValue, addCardToCollection],
+    [cardId, cardName, cardImageUrl, cardValue, addCardToCollection, collections],
   );
 
   return (
-    <Pressable style={styles.backdrop} onPress={handleClose}>
-      <Pressable
-        style={[
-          styles.popup,
-          {
-            backgroundColor: colors.card,
-            borderColor: colors.border,
-          },
-        ]}
-        onPress={(e) => e.stopPropagation()}
-      >
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.foreground }]}>
-            Add to Collection
+    <View style={[styles.container, { backgroundColor: colors.card }]}>
+      {collections.length === 0 ? (
+        <View style={styles.empty}>
+          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+            No collections yet. Create one first!
           </Text>
-          <Pressable onPress={handleClose} hitSlop={8}>
-            <Ionicons name="close" size={22} color={colors.mutedForeground} />
-          </Pressable>
         </View>
-
-        {collections.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              No collections yet. Create one first!
-            </Text>
-          </View>
-        ) : (
-          <ScrollView style={styles.list} bounces={false}>
-            {collections.map((collection) => (
-              <Pressable
-                key={collection.id}
-                onPress={() => handleSelect(collection.id)}
-                style={({ pressed }) => [
-                  styles.collectionRow,
-                  {
-                    backgroundColor: pressed ? colors.muted : "transparent",
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <View style={styles.collectionInfo}>
-                  <Text
-                    style={[styles.collectionName, { color: colors.foreground }]}
-                    numberOfLines={1}
-                  >
-                    {collection.name}
-                  </Text>
-                  <Text
-                    style={[styles.collectionCount, { color: colors.mutedForeground }]}
-                  >
-                    {collection.cardCount}{" "}
-                    {collection.cardCount === 1 ? "card" : "cards"}
-                  </Text>
-                </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={18}
-                  color={colors.mutedForeground}
-                />
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
-      </Pressable>
-    </Pressable>
+      ) : (
+        <View style={styles.list}>
+          {collections.map((collection) => (
+            <Pressable
+              key={collection.id}
+              onPress={() => handleSelect(collection.id)}
+              style={({ pressed }) => [
+                styles.collectionRow,
+                {
+                  backgroundColor: pressed ? colors.muted : "transparent",
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <View style={styles.collectionInfo}>
+                <Text
+                  style={[styles.collectionName, { color: colors.foreground }]}
+                  numberOfLines={1}
+                >
+                  {collection.name}
+                </Text>
+                <Text
+                  style={[styles.collectionCount, { color: colors.mutedForeground }]}
+                >
+                  {collection.cardCount}{" "}
+                  {collection.cardCount === 1 ? "card" : "cards"}
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.mutedForeground}
+              />
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
+  container: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  popup: {
-    width: "100%",
-    maxHeight: "60%",
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    paddingBottom: 12,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
   },
   empty: {
     paddingVertical: 24,

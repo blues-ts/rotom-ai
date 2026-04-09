@@ -338,6 +338,7 @@ export default function Search() {
 			<Stack.SearchBar
 				placeholder="Search cards..."
 				onChangeText={(e) => setSearchQuery(e.nativeEvent.text)}
+				onCancelButtonPress={() => router.back()}
 			/>
 
 			<Stack.Toolbar placement="bottom">

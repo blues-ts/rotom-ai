@@ -1,10 +1,5 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import BottomSheet, {
-	BottomSheetBackdrop,
-	BottomSheetTextInput,
-	BottomSheetView,
-} from "@gorhom/bottom-sheet";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 
@@ -14,111 +9,76 @@ import { useCollections } from "@/hooks/useCollections";
 export default function CreateCollection() {
 	const { colors } = useTheme();
 	const { createCollection } = useCollections();
-	const bottomSheetRef = useRef<BottomSheet>(null);
 	const [name, setName] = useState("");
 	const canCreate = name.trim().length > 0;
-
-	const handleClose = useCallback(() => {
-		router.back();
-	}, []);
 
 	const handleCreate = useCallback(() => {
 		if (!name.trim()) return;
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 		createCollection.mutate(name.trim());
-		bottomSheetRef.current?.close();
+		router.back();
 	}, [name, createCollection]);
 
-	const renderBackdrop = useCallback(
-		(props: any) => (
-			<BottomSheetBackdrop
-				{...props}
-				disappearsOnIndex={-1}
-				appearsOnIndex={0}
-				pressBehavior="close"
-			/>
-		),
-		[],
-	);
-
 	return (
-		<BottomSheet
-			ref={bottomSheetRef}
-			enableDynamicSizing
-			enablePanDownToClose
-			onClose={handleClose}
-			backdropComponent={renderBackdrop}
-			backgroundStyle={{
-				backgroundColor: colors.card,
-				borderColor: colors.border,
-				borderWidth: 1,
-				borderTopLeftRadius: 20,
-				borderTopRightRadius: 20,
-			}}
-			handleIndicatorStyle={{ backgroundColor: colors.mutedForeground }}
-			keyboardBehavior="interactive"
-			keyboardBlurBehavior="restore"
-			android_keyboardInputMode="adjustResize"
-		>
-			<BottomSheetView style={styles.content}>
-				<Text style={[styles.title, { color: colors.foreground }]}>
-					New Collection
-				</Text>
-				<Text style={[styles.label, { color: colors.mutedForeground }]}>
-					COLLECTION NAME
-				</Text>
-				<BottomSheetTextInput
+		<View style={[styles.content, { backgroundColor: colors.card }]}>
+			<Text style={[styles.title, { color: colors.foreground }]}>
+				New Collection
+			</Text>
+			<Text style={[styles.label, { color: colors.mutedForeground }]}>
+				COLLECTION NAME
+			</Text>
+			<TextInput
+				style={[
+					styles.input,
+					{
+						backgroundColor: colors.input,
+						color: colors.foreground,
+						borderColor: colors.border,
+					},
+				]}
+				placeholder="My collection"
+				placeholderTextColor={colors.mutedForeground}
+				value={name}
+				onChangeText={setName}
+				onSubmitEditing={handleCreate}
+				returnKeyType="done"
+				autoFocus
+				maxLength={50}
+			/>
+			<Pressable
+				onPress={handleCreate}
+				disabled={!canCreate}
+				style={[
+					styles.createButton,
+					{
+						backgroundColor: canCreate
+							? colors.primary
+							: colors.muted,
+					},
+				]}
+			>
+				<Text
 					style={[
-						styles.input,
+						styles.createButtonText,
 						{
-							backgroundColor: colors.input,
-							color: colors.foreground,
-							borderColor: colors.border,
-						},
-					]}
-					placeholder="My collection"
-					placeholderTextColor={colors.mutedForeground}
-					value={name}
-					onChangeText={setName}
-					onSubmitEditing={handleCreate}
-					returnKeyType="done"
-					autoFocus
-					maxLength={50}
-				/>
-				<Pressable
-					onPress={handleCreate}
-					disabled={!canCreate}
-					style={[
-						styles.createButton,
-						{
-							backgroundColor: canCreate
-								? colors.primary
-								: colors.muted,
+							color: canCreate
+								? colors.primaryForeground
+								: colors.mutedForeground,
 						},
 					]}
 				>
-					<Text
-						style={[
-							styles.createButtonText,
-							{
-								color: canCreate
-									? colors.primaryForeground
-									: colors.mutedForeground,
-							},
-						]}
-					>
-						Create Collection
-					</Text>
-				</Pressable>
-			</BottomSheetView>
-		</BottomSheet>
+					Create Collection
+				</Text>
+			</Pressable>
+		</View>
 	);
 }
 
 const styles = StyleSheet.create({
 	content: {
+		flex: 1,
 		padding: 20,
-		paddingBottom: 36,
+		paddingTop: 24,
 	},
 	title: {
 		fontSize: 18,
