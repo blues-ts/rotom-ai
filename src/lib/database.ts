@@ -40,6 +40,18 @@ export function getDatabase(): SQLite.SQLiteDatabase {
         ALTER TABLE collection_cards ADD COLUMN graded_grade TEXT;
       `);
     }
+    if (!columns.includes("quantity")) {
+      db.execSync(`
+        ALTER TABLE collection_cards ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1;
+      `);
+    }
+
+    // Update unique index to include config so same card with different config = different entry
+    db.execSync(`
+      DROP INDEX IF EXISTS idx_collection_card;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_card
+        ON collection_cards(collection_id, card_id, pricing_type, source, condition, COALESCE(graded_company, ''), COALESCE(graded_grade, ''));
+    `);
   }
   return db;
 }

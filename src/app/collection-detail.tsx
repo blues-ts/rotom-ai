@@ -184,6 +184,8 @@ export default function CollectionDetail() {
 								condition: item.condition,
 								gradedCompany: item.gradedCompany ?? "",
 								gradedGrade: item.gradedGrade ?? "",
+								collectionId: item.collectionId,
+								quantity: String(item.quantity),
 							},
 						});
 					}}

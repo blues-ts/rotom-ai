@@ -36,8 +36,8 @@ export function useCollections() {
           c.id,
           c.name,
           c.created_at,
-          COUNT(cc.id) as card_count,
-          COALESCE(SUM(cc.card_value), 0) as total_value,
+          COALESCE(SUM(cc.quantity), 0) as card_count,
+          COALESCE(SUM(cc.card_value * cc.quantity), 0) as total_value,
           (SELECT GROUP_CONCAT(card_image_url) FROM (
             SELECT card_image_url FROM collection_cards
             WHERE collection_id = c.id
@@ -139,6 +139,72 @@ export function useCollections() {
     },
   });
 
+  const incrementCardQuantity = useMutation({
+    mutationFn: ({
+      collectionId,
+      cardId,
+      pricingType = "Raw",
+      source = "TCGPlayer",
+      condition = "NEAR_MINT",
+      gradedCompany,
+      gradedGrade,
+    }: {
+      collectionId: string;
+      cardId: string;
+      pricingType?: string;
+      source?: string;
+      condition?: string;
+      gradedCompany?: string;
+      gradedGrade?: string;
+    }) => {
+      db.runSync(
+        `UPDATE collection_cards SET quantity = quantity + 1
+         WHERE collection_id = ? AND card_id = ? AND pricing_type = ? AND source = ? AND condition = ?
+         AND COALESCE(graded_company, '') = ? AND COALESCE(graded_grade, '') = ?`,
+        [collectionId, cardId, pricingType, source, condition, gradedCompany ?? "", gradedGrade ?? ""],
+      );
+      return Promise.resolve();
+    },
+    onSuccess: (_data, { collectionId }) => {
+      queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
+      queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
+      queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
+    },
+  });
+
+  const decrementCardQuantity = useMutation({
+    mutationFn: ({
+      collectionId,
+      cardId,
+      pricingType = "Raw",
+      source = "TCGPlayer",
+      condition = "NEAR_MINT",
+      gradedCompany,
+      gradedGrade,
+    }: {
+      collectionId: string;
+      cardId: string;
+      pricingType?: string;
+      source?: string;
+      condition?: string;
+      gradedCompany?: string;
+      gradedGrade?: string;
+    }) => {
+      db.runSync(
+        `UPDATE collection_cards SET quantity = quantity - 1
+         WHERE collection_id = ? AND card_id = ? AND pricing_type = ? AND source = ? AND condition = ?
+         AND COALESCE(graded_company, '') = ? AND COALESCE(graded_grade, '') = ?`,
+        [collectionId, cardId, pricingType, source, condition, gradedCompany ?? "", gradedGrade ?? ""],
+      );
+      return Promise.resolve();
+    },
+    onSuccess: (_data, { collectionId }) => {
+      queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
+      queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
+      queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
+    },
+  });
+
   return {
     collections: query.data ?? [],
     isLoading: query.isLoading,
@@ -147,6 +213,8 @@ export function useCollections() {
     renameCollection,
     addCardToCollection,
     removeCardFromCollection,
+    incrementCardQuantity,
+    decrementCardQuantity,
   };
 }
 
@@ -161,8 +229,8 @@ export function useCollectionDetail(id: string) {
           c.id,
           c.name,
           c.created_at,
-          COUNT(cc.id) as card_count,
-          COALESCE(SUM(cc.card_value), 0) as total_value,
+          COALESCE(SUM(cc.quantity), 0) as card_count,
+          COALESCE(SUM(cc.card_value * cc.quantity), 0) as total_value,
           GROUP_CONCAT(cc.card_image_url) as card_images
         FROM collections c
         LEFT JOIN collection_cards cc ON cc.collection_id = c.id
@@ -189,6 +257,7 @@ interface CollectionCardRow {
   condition: string;
   graded_company: string | null;
   graded_grade: string | null;
+  quantity: number;
 }
 
 export function useCollectionCards(collectionId: string) {
@@ -214,6 +283,7 @@ export function useCollectionCards(collectionId: string) {
         condition: row.condition,
         gradedCompany: row.graded_company ?? undefined,
         gradedGrade: row.graded_grade ?? undefined,
+        quantity: row.quantity,
       }));
     },
     enabled: !!collectionId,

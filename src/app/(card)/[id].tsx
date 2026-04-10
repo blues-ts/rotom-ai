@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+	Alert,
 	Dimensions,
 	Image,
 	LayoutChangeEvent,
@@ -26,6 +27,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CartesianChart, Line } from "victory-native";
 import { useApi } from "@/lib/axios";
 import { useTheme } from "@/context/ThemeContext";
+import { useCollections } from "@/hooks/useCollections";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const IMAGE_WIDTH = SCREEN_WIDTH * 0.9;
@@ -918,7 +920,7 @@ function LoadingSkeleton({ colors }: { colors: any }) {
 
 export default function CardDetail() {
 	const { colors } = useTheme();
-	const { id, name, pricingType, source, condition, gradedCompany: initGradedCompany, gradedGrade: initGradedGrade } = useLocalSearchParams<{
+	const { id, name, pricingType, source, condition, gradedCompany: initGradedCompany, gradedGrade: initGradedGrade, collectionId, quantity: initQuantity } = useLocalSearchParams<{
 		id: string;
 		name: string;
 		pricingType?: string;
@@ -926,7 +928,11 @@ export default function CardDetail() {
 		condition?: string;
 		gradedCompany?: string;
 		gradedGrade?: string;
+		collectionId?: string;
+		quantity?: string;
 	}>();
+	const isFromCollection = !!collectionId;
+	const [quantity, setQuantity] = useState(parseInt(initQuantity || "1", 10) || 1);
 	const api = useApi();
 
 	// Tab state
@@ -939,6 +945,9 @@ export default function CardDetail() {
 	// Graded state
 	const [gradedCompany, setGradedCompany] = useState<string | null>(initGradedCompany || null);
 	const [gradedGrade, setGradedGrade] = useState<string | null>(initGradedGrade || null);
+
+	// Collection context
+	const { incrementCardQuantity, addCardToCollection, removeCardFromCollection, decrementCardQuantity } = useCollections();
 
 	// History
 	const [historyPeriod, setHistoryPeriod] = useState("all");
@@ -1390,6 +1399,52 @@ export default function CardDetail() {
 							</View>
 						</View>
 
+						{/* Quantity Badge */}
+						{isFromCollection && quantity > 1 && (
+							<View style={[styles.quantityBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
+								<Pressable
+									onPress={() => {
+										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+										decrementCardQuantity.mutate({
+											collectionId: collectionId!,
+											cardId: id,
+											pricingType: pricingType || "Raw",
+											source: source || "TCGPlayer",
+											condition: condition || "NEAR_MINT",
+											gradedCompany: initGradedCompany || undefined,
+											gradedGrade: initGradedGrade || undefined,
+										});
+										setQuantity((q) => q - 1);
+									}}
+									style={[styles.qtyButton, { backgroundColor: colors.muted }]}
+								>
+									<Ionicons name="remove" size={16} color={colors.foreground} />
+								</Pressable>
+								<Ionicons name="layers-outline" size={16} color={colors.primary} />
+								<Text style={[styles.quantityText, { color: colors.foreground }]}>
+									{quantity}
+								</Text>
+								<Pressable
+									onPress={() => {
+										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+										incrementCardQuantity.mutate({
+											collectionId: collectionId!,
+											cardId: id,
+											pricingType: pricingType || "Raw",
+											source: source || "TCGPlayer",
+											condition: condition || "NEAR_MINT",
+											gradedCompany: initGradedCompany || undefined,
+											gradedGrade: initGradedGrade || undefined,
+										});
+										setQuantity((q) => q + 1);
+									}}
+									style={[styles.qtyButton, { backgroundColor: colors.muted }]}
+								>
+									<Ionicons name="add" size={16} color={colors.foreground} />
+								</Pressable>
+							</View>
+						)}
+
 						{/* Card Meta Strip */}
 						<View style={styles.metaStrip}>
 							<View style={{ flex: 1 }}>
@@ -1680,8 +1735,41 @@ export default function CardDetail() {
 							</Text>
 						)}
 
+						{/* Remove from collection */}
+						{isFromCollection && quantity <= 1 && (
+							<Pressable
+								onPress={() => {
+									Alert.alert(
+										"Remove Card",
+										"Remove this card from the collection?",
+										[
+											{ text: "Cancel", style: "cancel" },
+											{
+												text: "Remove",
+												style: "destructive",
+												onPress: () => {
+													Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+													removeCardFromCollection.mutate(
+														{ collectionId: collectionId!, cardId: id },
+														{ onSuccess: () => router.back() },
+													);
+												},
+											},
+										],
+									);
+								}}
+								style={[styles.removeButton, { borderColor: colors.destructive ?? "#ef4444", marginHorizontal: 20, marginTop: 16 }]}
+							>
+								<Ionicons name="trash-outline" size={18} color={colors.destructive ?? "#ef4444"} />
+								<Text style={[styles.removeButtonText, { color: colors.destructive ?? "#ef4444" }]}>
+									Remove from Collection
+								</Text>
+							</Pressable>
+						)}
+
 						<View style={{ height: 40 }} />
 					</ScrollView>
+
 				</View>
 			) : (
 				<View
@@ -1721,6 +1809,45 @@ const styles = StyleSheet.create({
 		overflow: "hidden",
 		alignSelf: "center",
 		width: IMAGE_WIDTH,
+	},
+
+	// Quantity badge
+	quantityBadge: {
+		flexDirection: "row",
+		alignItems: "center",
+		alignSelf: "center",
+		gap: 10,
+		paddingHorizontal: 8,
+		paddingVertical: 6,
+		borderRadius: 20,
+		borderWidth: 1,
+		marginBottom: 12,
+	},
+	quantityText: {
+		fontSize: 14,
+		fontWeight: "600",
+		minWidth: 20,
+		textAlign: "center",
+	},
+	qtyButton: {
+		width: 28,
+		height: 28,
+		borderRadius: 14,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	removeButton: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "center",
+		gap: 8,
+		paddingVertical: 14,
+		borderRadius: 10,
+		borderWidth: 1,
+	},
+	removeButtonText: {
+		fontSize: 16,
+		fontWeight: "600",
 	},
 
 	// Estimate block — most prominent element

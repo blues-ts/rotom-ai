@@ -3,12 +3,13 @@ import { router } from "expo-router";
 import { useTheme } from "@/context/ThemeContext";
 import { useCollections } from "@/hooks/useCollections";
 import CollectionCard from "@/components/CollectionCard";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import * as Haptics from "expo-haptics";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Collections() {
 	const { colors } = useTheme();
-	const { collections } = useCollections();
+	const { collections, deleteCollection } = useCollections();
 
 	return (
 		<SafeAreaView
@@ -52,7 +53,24 @@ export default function Collections() {
 								cardImages={c.cardImages}
 								onPress={() => router.push(`/collection-detail?id=${c.id}`)}
 								onAddCards={() => {}}
-								onMenuPress={() => {}}
+								onMenuPress={() => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+									Alert.alert(
+										"Delete Collection",
+										`Are you sure you want to delete "${c.name}"? This cannot be undone.`,
+										[
+											{ text: "Cancel", style: "cancel" },
+											{
+												text: "Delete",
+												style: "destructive",
+												onPress: () => {
+													Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+													deleteCollection.mutate(c.id);
+												},
+											},
+										],
+									);
+								}}
 							/>
 						))}
 					</View>

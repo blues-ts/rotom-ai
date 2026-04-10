@@ -20,4 +20,5 @@ export interface CollectionCard {
   condition: string;
   gradedCompany?: string;
   gradedGrade?: string;
+  quantity: number;
 }
