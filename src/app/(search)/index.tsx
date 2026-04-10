@@ -368,7 +368,7 @@ export default function Search() {
 					/>
 				)}
 				{showNoResults && (
-					<Text style={[styles.empty, { color: colors.mutedForeground }]}>
+					<Text style={[styles.empty, { color: colors.mutedForeground, marginTop: insets.top + 20 }]}>
 						No cards found
 					</Text>
 				)}

@@ -112,11 +112,25 @@ export function useCollections() {
       gradedCompany?: string;
       gradedGrade?: string;
     }) => {
-      const id = Date.now().toString();
-      db.runSync(
-        "INSERT OR IGNORE INTO collection_cards (id, collection_id, card_id, card_name, card_image_url, card_value, pricing_type, source, condition, graded_company, graded_grade) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [id, collectionId, cardId, cardName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany ?? null, gradedGrade ?? null],
+      // Check if this exact config already exists
+      const existing = db.getFirstSync<{ id: string }>(
+        `SELECT id FROM collection_cards
+         WHERE collection_id = ? AND card_id = ? AND pricing_type = ? AND source = ? AND condition = ?
+         AND COALESCE(graded_company, '') = ? AND COALESCE(graded_grade, '') = ?`,
+        [collectionId, cardId, pricingType, source, condition, gradedCompany ?? "", gradedGrade ?? ""],
       );
+      if (existing) {
+        db.runSync(
+          "UPDATE collection_cards SET quantity = quantity + 1 WHERE id = ?",
+          [existing.id],
+        );
+      } else {
+        const id = Date.now().toString();
+        db.runSync(
+          "INSERT INTO collection_cards (id, collection_id, card_id, card_name, card_image_url, card_value, pricing_type, source, condition, graded_company, graded_grade, quantity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+          [id, collectionId, cardId, cardName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany ?? null, gradedGrade ?? null],
+        );
+      }
       return Promise.resolve();
     },
     onSuccess: (_data, { collectionId }) => {

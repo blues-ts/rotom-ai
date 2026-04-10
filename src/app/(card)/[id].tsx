@@ -1136,6 +1136,13 @@ export default function CardDetail() {
 		gradedGrade,
 	]);
 
+	const configMatches = isFromCollection &&
+		pricingTab === (pricingType || "Raw") &&
+		rawSource === (source || "TCGPlayer") &&
+		rawCondition === (condition || "NEAR_MINT") &&
+		(gradedCompany ?? "") === (initGradedCompany || "") &&
+		(gradedGrade ?? "") === (initGradedGrade || "");
+
 	return (
 		<>
 			<Stack.Screen
@@ -1146,13 +1153,6 @@ export default function CardDetail() {
 							onPress={() => {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 								if (isFromCollection) {
-									const configMatches =
-										pricingTab === (pricingType || "Raw") &&
-										rawSource === (source || "TCGPlayer") &&
-										rawCondition === (condition || "NEAR_MINT") &&
-										(gradedCompany ?? "") === (initGradedCompany || "") &&
-										(gradedGrade ?? "") === (initGradedGrade || "");
-
 									if (configMatches) {
 										incrementCardQuantity.mutate({
 											collectionId: collectionId!,
@@ -1182,6 +1182,13 @@ export default function CardDetail() {
 											{
 												onSuccess: () => {
 													Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+													const configLabel = pricingTab === "Graded"
+														? `${gradedCompany} ${gradedGrade}`
+														: `${rawSource} · ${rawCondition.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (ch: string) => ch.toUpperCase())}`;
+													Alert.alert(
+														"Added!",
+														`${configLabel} configuration added to collection.`,
+													);
 												},
 											},
 										);
@@ -1443,7 +1450,7 @@ export default function CardDetail() {
 						</View>
 
 						{/* Quantity Badge */}
-						{isFromCollection && quantity > 1 && (
+						{configMatches && quantity > 1 && (
 							<View style={[styles.quantityBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
 								<Pressable
 									onPress={() => {
