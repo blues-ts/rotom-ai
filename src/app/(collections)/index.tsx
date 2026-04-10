@@ -4,6 +4,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { useCollections } from "@/hooks/useCollections";
 import CollectionCard from "@/components/CollectionCard";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -43,10 +44,15 @@ export default function Collections() {
 						</Text>
 					</View>
 				) : (
-					<View style={styles.list}>
+					<Animated.View style={styles.list} layout={LinearTransition.duration(300)}>
 						{collections.map((c) => (
-							<CollectionCard
+							<Animated.View
 								key={c.id}
+								entering={FadeIn.duration(300)}
+								exiting={FadeOut.duration(200)}
+								layout={LinearTransition.duration(300)}
+							>
+							<CollectionCard
 								name={c.name}
 								cardCount={c.cardCount}
 								totalValue={c.totalValue}
@@ -72,8 +78,9 @@ export default function Collections() {
 									);
 								}}
 							/>
+						</Animated.View>
 						))}
-					</View>
+					</Animated.View>
 				)}
 			</ScrollView>
 		</SafeAreaView>

@@ -1145,20 +1145,63 @@ export default function CardDetail() {
 						<Pressable
 							onPress={() => {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-								router.push({
-									pathname: "/add-to-collection",
-									params: {
-										cardId: id,
-										cardName: name ?? "",
-										cardImageUrl: card?.image ?? "",
-										cardValue: String(heroPrice ?? 0),
-										pricingType: pricingTab,
-										source: rawSource,
-										condition: rawCondition,
-										gradedCompany: gradedCompany ?? "",
-										gradedGrade: gradedGrade ?? "",
-									},
-								});
+								if (isFromCollection) {
+									const configMatches =
+										pricingTab === (pricingType || "Raw") &&
+										rawSource === (source || "TCGPlayer") &&
+										rawCondition === (condition || "NEAR_MINT") &&
+										(gradedCompany ?? "") === (initGradedCompany || "") &&
+										(gradedGrade ?? "") === (initGradedGrade || "");
+
+									if (configMatches) {
+										incrementCardQuantity.mutate({
+											collectionId: collectionId!,
+											cardId: id,
+											pricingType: pricingTab,
+											source: rawSource,
+											condition: rawCondition,
+											gradedCompany: gradedCompany ?? undefined,
+											gradedGrade: gradedGrade ?? undefined,
+										});
+										setQuantity((q) => q + 1);
+										Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+									} else {
+										addCardToCollection.mutate(
+											{
+												collectionId: collectionId!,
+												cardId: id,
+												cardName: name ?? "",
+												cardImageUrl: card?.image ?? "",
+												cardValue: heroPrice ?? 0,
+												pricingType: pricingTab,
+												source: rawSource,
+												condition: rawCondition,
+												gradedCompany: gradedCompany ?? undefined,
+												gradedGrade: gradedGrade ?? undefined,
+											},
+											{
+												onSuccess: () => {
+													Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+												},
+											},
+										);
+									}
+								} else {
+									router.push({
+										pathname: "/add-to-collection",
+										params: {
+											cardId: id,
+											cardName: name ?? "",
+											cardImageUrl: card?.image ?? "",
+											cardValue: String(heroPrice ?? 0),
+											pricingType: pricingTab,
+											source: rawSource,
+											condition: rawCondition,
+											gradedCompany: gradedCompany ?? "",
+											gradedGrade: gradedGrade ?? "",
+										},
+									});
+								}
 							}}
 						>
 							<Ionicons

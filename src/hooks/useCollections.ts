@@ -46,7 +46,7 @@ export function useCollections() {
         FROM collections c
         LEFT JOIN collection_cards cc ON cc.collection_id = c.id
         GROUP BY c.id
-        ORDER BY c.created_at DESC
+        ORDER BY c.created_at ASC
       `);
       return rows.map(mapRow);
     },
@@ -134,8 +134,10 @@ export function useCollections() {
       );
       return Promise.resolve();
     },
-    onSuccess: () => {
+    onSuccess: (_data, { collectionId }) => {
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
+      queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
+      queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
     },
   });
 
