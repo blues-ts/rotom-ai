@@ -846,7 +846,8 @@ function AnimatedCollapsible({
 
 // --- Loading Skeleton ---
 
-function LoadingSkeleton({ colors }: { colors: any }) {
+function LoadingSkeleton({ colors, isFromCollection }: { colors: any; isFromCollection?: boolean }) {
+	const skeletonColor = colors.muted;
 	return (
 		<>
 			{/* Card Image */}
@@ -854,34 +855,41 @@ function LoadingSkeleton({ colors }: { colors: any }) {
 				<Skeleton
 					width={IMAGE_WIDTH}
 					height={IMAGE_HEIGHT}
-					color={colors.border}
+					color={skeletonColor}
 					style={{ borderRadius: 19 }}
 				/>
 			</View>
+
+			{/* Quantity Badge */}
+			{isFromCollection && (
+				<View style={{ alignSelf: "center", marginBottom: 12 }}>
+					<Skeleton width={120} height={36} color={skeletonColor} style={{ borderRadius: 20 }} />
+				</View>
+			)}
 
 			{/* Estimate Block */}
 			<View
 				style={[
 					styles.estimateBlock,
-					{ backgroundColor: colors.card, borderColor: colors.border },
+					{ borderColor: colors.border },
 				]}
 			>
-				<Skeleton width={100} height={11} color={colors.border} />
-				<Skeleton width={180} height={44} color={colors.border} style={{ marginTop: 6 }} />
+				<Skeleton width={100} height={11} color={skeletonColor} />
+				<Skeleton width={180} height={44} color={skeletonColor} style={{ marginTop: 6 }} />
 				<View style={{ flexDirection: "row", gap: 6, marginTop: 12 }}>
-					<Skeleton width={70} height={26} color={colors.border} style={{ borderRadius: 20 }} />
-					<Skeleton width={90} height={26} color={colors.border} style={{ borderRadius: 20 }} />
+					<Skeleton width={70} height={26} color={skeletonColor} style={{ borderRadius: 20 }} />
+					<Skeleton width={90} height={26} color={skeletonColor} style={{ borderRadius: 20 }} />
 				</View>
 			</View>
 
 			{/* Meta Strip */}
 			<View style={styles.metaStrip}>
 				<View style={{ flex: 1, gap: 4 }}>
-					<Skeleton width="65%" height={17} color={colors.border} />
-					<Skeleton width="45%" height={13} color={colors.border} />
+					<Skeleton width="65%" height={17} color={skeletonColor} />
+					<Skeleton width="45%" height={13} color={skeletonColor} />
 					<View style={{ flexDirection: "row", gap: 6, marginTop: 4 }}>
-						<Skeleton width={60} height={22} color={colors.border} style={{ borderRadius: 6 }} />
-						<Skeleton width={80} height={22} color={colors.border} style={{ borderRadius: 6 }} />
+						<Skeleton width={60} height={22} color={skeletonColor} style={{ borderRadius: 6 }} />
+						<Skeleton width={80} height={22} color={skeletonColor} style={{ borderRadius: 6 }} />
 					</View>
 				</View>
 			</View>
@@ -893,12 +901,12 @@ function LoadingSkeleton({ colors }: { colors: any }) {
 					{ backgroundColor: colors.card, borderColor: colors.border },
 				]}
 			>
-				<Skeleton width={130} height={16} color={colors.border} style={{ marginBottom: 12 }} />
-				<Skeleton width="100%" height={36} color={colors.border} style={{ borderRadius: 8 }} />
-				<Skeleton width={60} height={11} color={colors.border} style={{ marginTop: 14 }} />
+				<Skeleton width={130} height={16} color={skeletonColor} style={{ marginBottom: 12 }} />
+				<Skeleton width="100%" height={36} color={skeletonColor} style={{ borderRadius: 8 }} />
+				<Skeleton width={60} height={11} color={skeletonColor} style={{ marginTop: 14 }} />
 				<View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-					<Skeleton width={80} height={32} color={colors.border} style={{ borderRadius: 8 }} />
-					<Skeleton width={80} height={32} color={colors.border} style={{ borderRadius: 8 }} />
+					<Skeleton width={80} height={32} color={skeletonColor} style={{ borderRadius: 8 }} />
+					<Skeleton width={80} height={32} color={skeletonColor} style={{ borderRadius: 8 }} />
 				</View>
 			</View>
 
@@ -909,8 +917,8 @@ function LoadingSkeleton({ colors }: { colors: any }) {
 					{ backgroundColor: colors.card, borderColor: colors.border },
 				]}
 			>
-				<Skeleton width={110} height={16} color={colors.border} style={{ marginBottom: 12 }} />
-				<Skeleton width="100%" height={180} color={colors.border} style={{ borderRadius: 8 }} />
+				<Skeleton width={110} height={16} color={skeletonColor} style={{ marginBottom: 12 }} />
+				<Skeleton width="100%" height={180} color={skeletonColor} style={{ borderRadius: 8 }} />
 			</View>
 		</>
 	);
@@ -1148,51 +1156,38 @@ export default function CardDetail() {
 			<Stack.Screen
 				options={{
 					headerTitle: name ?? "Card",
-					headerRight: () => (
+					headerRight: () =>
+						configMatches ? null : (
 						<Pressable
 							onPress={() => {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 								if (isFromCollection) {
-									if (configMatches) {
-										incrementCardQuantity.mutate({
+									addCardToCollection.mutate(
+										{
 											collectionId: collectionId!,
 											cardId: id,
+											cardName: name ?? "",
+											cardImageUrl: card?.image ?? "",
+											cardValue: heroPrice ?? 0,
 											pricingType: pricingTab,
 											source: rawSource,
 											condition: rawCondition,
 											gradedCompany: gradedCompany ?? undefined,
 											gradedGrade: gradedGrade ?? undefined,
-										});
-										setQuantity((q) => q + 1);
-										Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-									} else {
-										addCardToCollection.mutate(
-											{
-												collectionId: collectionId!,
-												cardId: id,
-												cardName: name ?? "",
-												cardImageUrl: card?.image ?? "",
-												cardValue: heroPrice ?? 0,
-												pricingType: pricingTab,
-												source: rawSource,
-												condition: rawCondition,
-												gradedCompany: gradedCompany ?? undefined,
-												gradedGrade: gradedGrade ?? undefined,
+										},
+										{
+											onSuccess: () => {
+												Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+												const configLabel = pricingTab === "Graded"
+													? `${gradedCompany} ${gradedGrade}`
+													: `${rawSource} · ${rawCondition.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (ch: string) => ch.toUpperCase())}`;
+												Alert.alert(
+													"Added!",
+													`${configLabel} configuration added to collection.`,
+												);
 											},
-											{
-												onSuccess: () => {
-													Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-													const configLabel = pricingTab === "Graded"
-														? `${gradedCompany} ${gradedGrade}`
-														: `${rawSource} · ${rawCondition.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (ch: string) => ch.toUpperCase())}`;
-													Alert.alert(
-														"Added!",
-														`${configLabel} configuration added to collection.`,
-													);
-												},
-											},
-										);
-									}
+										},
+									);
 								} else {
 									router.push({
 										pathname: "/add-to-collection",
@@ -1231,7 +1226,7 @@ export default function CardDetail() {
 					contentInsetAdjustmentBehavior="automatic"
 					scrollEnabled={false}
 				>
-					<LoadingSkeleton colors={colors} />
+					<LoadingSkeleton colors={colors} isFromCollection={isFromCollection} />
 				</ScrollView>
 			) : card ? (
 				<View
@@ -1450,7 +1445,7 @@ export default function CardDetail() {
 						</View>
 
 						{/* Quantity Badge */}
-						{configMatches && quantity > 1 && (
+						{configMatches && (
 							<View style={[styles.quantityBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
 								<Pressable
 									onPress={() => {
@@ -1786,7 +1781,7 @@ export default function CardDetail() {
 						)}
 
 						{/* Remove from collection */}
-						{isFromCollection && quantity <= 1 && (
+						{configMatches && quantity <= 1 && (
 							<Pressable
 								onPress={() => {
 									Alert.alert(

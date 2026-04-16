@@ -58,7 +58,7 @@ export default function Collections() {
 								totalValue={c.totalValue}
 								cardImages={c.cardImages}
 								onPress={() => router.push(`/collection-detail?id=${c.id}`)}
-								onAddCards={() => {}}
+								onAddCards={() => router.push("/(search)")}
 								onMenuPress={() => {
 									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 									Alert.alert(

@@ -190,37 +190,51 @@ export default function CollectionDetail() {
 						});
 					}}
 				>
-					{item.cardImageUrl ? (
-						<FadeImage
-							uri={item.cardImageUrl}
-							style={styles.cardImage}
-							backgroundColor={colors.card}
-							shimmerColor={colors.border}
-						/>
-					) : (
-						<View
-							style={[
-								styles.cardImage,
-								styles.placeholder,
-								{ backgroundColor: colors.card },
-							]}
-						>
-							<Ionicons
-								name="image-outline"
-								size={24}
-								color={colors.mutedForeground}
+					<View>
+						{item.cardImageUrl ? (
+							<FadeImage
+								uri={item.cardImageUrl}
+								style={styles.cardImage}
+								backgroundColor={colors.card}
+								shimmerColor={colors.border}
 							/>
-							<Text
+						) : (
+							<View
 								style={[
-									styles.placeholderName,
-									{ color: colors.foreground },
+									styles.cardImage,
+									styles.placeholder,
+									{ backgroundColor: colors.card },
 								]}
-								numberOfLines={2}
 							>
-								{item.cardName}
-							</Text>
+								<Ionicons
+									name="image-outline"
+									size={24}
+									color={colors.mutedForeground}
+								/>
+								<Text
+									style={[
+										styles.placeholderName,
+										{ color: colors.foreground },
+									]}
+									numberOfLines={2}
+								>
+									{item.cardName}
+								</Text>
+							</View>
+						)}
+						<View style={styles.configOverlay}>
+							<View style={[styles.configPill, { backgroundColor: "rgba(0,0,0,0.7)" }]}>
+								<Text style={styles.configText}>
+									{item.pricingType === "Graded"
+										? `${item.gradedCompany} ${item.gradedGrade}`
+										: item.condition.replace(/_/g, " ").split(" ").map((w: string) => w[0]).join("")}
+								</Text>
+								{item.quantity > 1 && (
+									<Text style={styles.configQty}>×{item.quantity}</Text>
+								)}
+							</View>
 						</View>
-					)}
+					</View>
 				</CardPressable>
 			</Animated.View>
 		),
@@ -459,6 +473,32 @@ const styles = StyleSheet.create({
 		width: imageWidth,
 		height: imageHeight,
 		borderRadius: 8,
+	},
+	configOverlay: {
+		position: "absolute",
+		bottom: 4,
+		left: 4,
+		right: 4,
+		flexDirection: "row",
+		justifyContent: "center",
+	},
+	configPill: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 3,
+		paddingHorizontal: 6,
+		paddingVertical: 2,
+		borderRadius: 6,
+	},
+	configText: {
+		color: "white",
+		fontSize: 9,
+		fontWeight: "700",
+	},
+	configQty: {
+		color: "rgba(255,255,255,0.7)",
+		fontSize: 9,
+		fontWeight: "600",
 	},
 	placeholder: {
 		alignItems: "center",
