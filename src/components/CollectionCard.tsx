@@ -8,6 +8,13 @@ import {
 	Text,
 	View,
 } from "react-native";
+import Animated, {
+	useAnimatedStyle,
+	useSharedValue,
+	withTiming,
+} from "react-native-reanimated";
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 interface CollectionCardProps {
 	name: string;
@@ -33,13 +40,27 @@ export default function CollectionCard({
 	onPress,
 }: CollectionCardProps) {
 	const { colors } = useTheme();
+	const scale = useSharedValue(1);
+	const animatedStyle = useAnimatedStyle(() => ({
+		transform: [{ scale: scale.value }],
+	}));
 
 	return (
-		<Pressable
-			onPress={onPress}
+		<AnimatedPressable
+			onPress={() => {
+				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+				onPress?.();
+			}}
+			onPressIn={() => {
+				scale.value = withTiming(0.97, { duration: 80 });
+			}}
+			onPressOut={() => {
+				scale.value = withTiming(1, { duration: 120 });
+			}}
 			style={[
 				styles.container,
 				{ backgroundColor: colors.card, borderColor: colors.border },
+				animatedStyle,
 			]}
 		>
 			{/* Header */}
@@ -117,7 +138,7 @@ export default function CollectionCard({
 					/>
 				</Pressable>
 			</View>
-		</Pressable>
+		</AnimatedPressable>
 	);
 }
 

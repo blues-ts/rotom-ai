@@ -1850,7 +1850,7 @@ const styles = StyleSheet.create({
 	imageContainer: {
 		alignItems: "center",
 		marginBottom: 20,
-		borderRadius: Math.round(IMAGE_WIDTH * 0.05),
+		borderRadius: 23,
 		overflow: "hidden",
 		alignSelf: "center",
 		width: IMAGE_WIDTH,
