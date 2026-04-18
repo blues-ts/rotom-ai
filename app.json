@@ -1,15 +1,15 @@
 {
   "expo": {
-    "name": "rotomai",
-    "slug": "rotomai",
+    "name": "River AI",
+    "slug": "river-ai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "rotomai",
+    "scheme": "riverai",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.anonymous.rotomai"
+      "bundleIdentifier": "com.riverai.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -19,13 +19,19 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.rotomai"
+      "package": "com.riverai.app"
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan Pokemon cards."
+        }
+      ],
       "expo-router",
       [
         "expo-splash-screen",
@@ -36,7 +42,8 @@
             "imageWidth": 76
           }
         }
-      ]
+      ],
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true,

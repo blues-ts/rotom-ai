@@ -1,4 +1,4 @@
-package com.anonymous.rotomai
+package com.riverai.app
 
 import android.app.Application
 import android.content.res.Configuration

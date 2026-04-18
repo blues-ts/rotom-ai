@@ -1,6 +1,7 @@
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import * as Haptics from "expo-haptics";
+import * as SecureStore from "expo-secure-store";
 import { router } from "expo-router";
 import {
 	Alert,
@@ -114,6 +115,40 @@ export default function Settings() {
 						</Text>
 					</Pressable>
 				</View>
+
+				{/* Dev Tools */}
+				{__DEV__ && (
+					<View style={styles.section}>
+						<Text
+							style={[
+								styles.sectionTitle,
+								{ color: colors.mutedForeground },
+							]}
+						>
+							Dev Tools
+						</Text>
+						<Pressable
+							style={[
+								styles.signOutButton,
+								{ backgroundColor: colors.card },
+							]}
+							onPress={async () => {
+								await SecureStore.deleteItemAsync("onboarding_complete");
+								await signOut();
+								router.replace("/(auth)");
+							}}
+						>
+							<Text
+								style={[
+									styles.label,
+									{ color: colors.foreground },
+								]}
+							>
+								Reset Onboarding
+							</Text>
+						</Pressable>
+					</View>
+				)}
 			</ScrollView>
 		</SafeAreaView>
 	);

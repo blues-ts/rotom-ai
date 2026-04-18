@@ -117,6 +117,13 @@ export default function Home() {
 						router.push("/(collections)");
 					}}
 				/>
+						<Stack.Toolbar.Button
+					icon={"camera"}
+					onPress={() => {
+						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+						router.push("/(camera)");
+					}}
+				/>
 				<Stack.Toolbar.Button
 					icon={"magnifyingglass"}
 					onPress={() => {

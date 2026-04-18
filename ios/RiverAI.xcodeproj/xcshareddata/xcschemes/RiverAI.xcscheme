@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "rotomai.app"
-               BlueprintName = "rotomai"
-               ReferencedContainer = "container:rotomai.xcodeproj">
+               BuildableName = "RiverAI.app"
+               BlueprintName = "RiverAI"
+               ReferencedContainer = "container:RiverAI.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "rotomaiTests.xctest"
-               BlueprintName = "rotomaiTests"
-               ReferencedContainer = "container:rotomai.xcodeproj">
+               BuildableName = "RiverAITests.xctest"
+               BlueprintName = "RiverAITests"
+               ReferencedContainer = "container:RiverAI.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "rotomai.app"
-            BlueprintName = "rotomai"
-            ReferencedContainer = "container:rotomai.xcodeproj">
+            BuildableName = "RiverAI.app"
+            BlueprintName = "RiverAI"
+            ReferencedContainer = "container:RiverAI.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "rotomai.app"
-            BlueprintName = "rotomai"
-            ReferencedContainer = "container:rotomai.xcodeproj">
+            BuildableName = "RiverAI.app"
+            BlueprintName = "RiverAI"
+            ReferencedContainer = "container:RiverAI.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

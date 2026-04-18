@@ -117,6 +117,13 @@ function AppContent() {
 					}}
 				/>
 				<Stack.Screen
+					name="(camera)"
+					options={{
+						presentation: "fullScreenModal",
+						headerShown: false,
+					}}
+				/>
+				<Stack.Screen
 					name="(search)"
 					options={{
 						presentation: "fullScreenModal",
@@ -148,7 +155,6 @@ function AppContent() {
 }
 
 export default function RootLayout() {
-	SplashScreen.hideAsync();
 
 	if (!publishableKey) {
 		throw new Error(

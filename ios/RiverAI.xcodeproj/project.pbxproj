@@ -8,30 +8,30 @@
 
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		39CFA5112CC86043692B226F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 456CE48C4475E7CAB001A5FE /* PrivacyInfo.xcprivacy */; };
+		1FC57D37A6DE463AB98CAA39 /* expo.icon in Resources */ = {isa = PBXBuildFile; fileRef = FE9A63C931A440F79FA1DB54 /* expo.icon */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		55A18208575CCD6344032277 /* libPods-rotomai.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CE4A222E34C2DC5E2AE08A8C /* libPods-rotomai.a */; };
-		5E4163FD25074EF4AE3E170A /* expo.icon in Resources */ = {isa = PBXBuildFile; fileRef = 52D7383B4C27408DBBD1A701 /* expo.icon */; };
+		3FE32737A9A9B63BA5C41638 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A80C6608418F534D2DE8A4AC /* PrivacyInfo.xcprivacy */; };
+		6E8813B152B2A18242A75B93 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC1E2AC89FE90D1FDA318346 /* ExpoModulesProvider.swift */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		BE35BC08A03EAB817049BCF3 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA2F7C6974D177BF8132461B /* ExpoModulesProvider.swift */; };
+		E30FA180E51274A099EBDF79 /* libPods-RiverAI.a in Frameworks */ = {isa = PBXBuildFile; fileRef = DAAA9141C0BDC08E2ADD05A9 /* libPods-RiverAI.a */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		00CED414EC5DAB3A2EEAB98D /* Pods-rotomai.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-rotomai.debug.xcconfig"; path = "Target Support Files/Pods-rotomai/Pods-rotomai.debug.xcconfig"; sourceTree = "<group>"; };
-		13B07F961A680F5B00A75B9A /* rotomai.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = rotomai.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = rotomai/Images.xcassets; sourceTree = "<group>"; };
-		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = rotomai/Info.plist; sourceTree = "<group>"; };
-		34E54E4E9ED95FB0F05B7741 /* Pods-rotomai.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-rotomai.release.xcconfig"; path = "Target Support Files/Pods-rotomai/Pods-rotomai.release.xcconfig"; sourceTree = "<group>"; };
-		456CE48C4475E7CAB001A5FE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = rotomai/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		52D7383B4C27408DBBD1A701 /* expo.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = expo.icon; path = rotomai/expo.icon; sourceTree = "<group>"; };
-		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = rotomai/SplashScreen.storyboard; sourceTree = "<group>"; };
+		13B07F961A680F5B00A75B9A /* RiverAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RiverAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = RiverAI/Images.xcassets; sourceTree = "<group>"; };
+		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = RiverAI/Info.plist; sourceTree = "<group>"; };
+		20F0947E6CFA188E8FB4F433 /* Pods-RiverAI.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RiverAI.debug.xcconfig"; path = "Target Support Files/Pods-RiverAI/Pods-RiverAI.debug.xcconfig"; sourceTree = "<group>"; };
+		40ABF95A11928199014DBAB4 /* Pods-RiverAI.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RiverAI.release.xcconfig"; path = "Target Support Files/Pods-RiverAI/Pods-RiverAI.release.xcconfig"; sourceTree = "<group>"; };
+		A80C6608418F534D2DE8A4AC /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = RiverAI/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = RiverAI/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		CE4A222E34C2DC5E2AE08A8C /* libPods-rotomai.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-rotomai.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DAAA9141C0BDC08E2ADD05A9 /* libPods-RiverAI.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-RiverAI.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		EC1E2AC89FE90D1FDA318346 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-RiverAI/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
-		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = rotomai/AppDelegate.swift; sourceTree = "<group>"; };
-		F11748442D0722820044C1D9 /* rotomai-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "rotomai-Bridging-Header.h"; path = "rotomai/rotomai-Bridging-Header.h"; sourceTree = "<group>"; };
-		FA2F7C6974D177BF8132461B /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-rotomai/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = RiverAI/AppDelegate.swift; sourceTree = "<group>"; };
+		F11748442D0722820044C1D9 /* RiverAI-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "RiverAI-Bridging-Header.h"; path = "RiverAI/RiverAI-Bridging-Header.h"; sourceTree = "<group>"; };
+		FE9A63C931A440F79FA1DB54 /* expo.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = expo.icon; path = RiverAI/expo.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -39,50 +39,42 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				55A18208575CCD6344032277 /* libPods-rotomai.a in Frameworks */,
+				E30FA180E51274A099EBDF79 /* libPods-RiverAI.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		13B07FAE1A68108700A75B9A /* rotomai */ = {
+		13B07FAE1A68108700A75B9A /* RiverAI */ = {
 			isa = PBXGroup;
 			children = (
 				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
-				F11748442D0722820044C1D9 /* rotomai-Bridging-Header.h */,
+				F11748442D0722820044C1D9 /* RiverAI-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				52D7383B4C27408DBBD1A701 /* expo.icon */,
-				456CE48C4475E7CAB001A5FE /* PrivacyInfo.xcprivacy */,
+				FE9A63C931A440F79FA1DB54 /* expo.icon */,
+				A80C6608418F534D2DE8A4AC /* PrivacyInfo.xcprivacy */,
 			);
-			name = rotomai;
+			name = RiverAI;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				CE4A222E34C2DC5E2AE08A8C /* libPods-rotomai.a */,
+				DAAA9141C0BDC08E2ADD05A9 /* libPods-RiverAI.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		59C9B8F114CD92F0B820D1C4 /* ExpoModulesProviders */ = {
+		5750F908458D0462BE514FD4 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				C08C5886068B4E0A78C3F2B2 /* rotomai */,
-			);
-			name = ExpoModulesProviders;
-			sourceTree = "<group>";
-		};
-		5DEA68E9E62EC71756657862 /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				00CED414EC5DAB3A2EEAB98D /* Pods-rotomai.debug.xcconfig */,
-				34E54E4E9ED95FB0F05B7741 /* Pods-rotomai.release.xcconfig */,
+				20F0947E6CFA188E8FB4F433 /* Pods-RiverAI.debug.xcconfig */,
+				40ABF95A11928199014DBAB4 /* Pods-RiverAI.release.xcconfig */,
 			);
 			name = Pods;
 			path = Pods;
@@ -98,12 +90,12 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
-				13B07FAE1A68108700A75B9A /* rotomai */,
+				13B07FAE1A68108700A75B9A /* RiverAI */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				5DEA68E9E62EC71756657862 /* Pods */,
-				59C9B8F114CD92F0B820D1C4 /* ExpoModulesProviders */,
+				5750F908458D0462BE514FD4 /* Pods */,
+				B43673755F95F5DEF668C530 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -113,9 +105,25 @@
 		83CBBA001A601CBA00E9B192 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				13B07F961A680F5B00A75B9A /* rotomai.app */,
+				13B07F961A680F5B00A75B9A /* RiverAI.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		9A3201CF1280C8B60F66AD22 /* RiverAI */ = {
+			isa = PBXGroup;
+			children = (
+				EC1E2AC89FE90D1FDA318346 /* ExpoModulesProvider.swift */,
+			);
+			name = RiverAI;
+			sourceTree = "<group>";
+		};
+		B43673755F95F5DEF668C530 /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				9A3201CF1280C8B60F66AD22 /* RiverAI */,
+			);
+			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
@@ -124,40 +132,32 @@
 				BB2F792C24A3F905000567C9 /* Expo.plist */,
 			);
 			name = Supporting;
-			path = rotomai/Supporting;
-			sourceTree = "<group>";
-		};
-		C08C5886068B4E0A78C3F2B2 /* rotomai */ = {
-			isa = PBXGroup;
-			children = (
-				FA2F7C6974D177BF8132461B /* ExpoModulesProvider.swift */,
-			);
-			name = rotomai;
+			path = RiverAI/Supporting;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		13B07F861A680F5B00A75B9A /* rotomai */ = {
+		13B07F861A680F5B00A75B9A /* RiverAI */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "rotomai" */;
+			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "RiverAI" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				D749F51436EB793E796991D5 /* [Expo] Configure project */,
+				CAD956EB231727C9846359F3 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				93EC526E9E447A10EBC00751 /* [CP] Embed Pods Frameworks */,
+				1B9BC31BC6E36D5F97F19AE1 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
-			name = rotomai;
-			productName = rotomai;
-			productReference = 13B07F961A680F5B00A75B9A /* rotomai.app */;
+			name = RiverAI;
+			productName = RiverAI;
+			productReference = 13B07F961A680F5B00A75B9A /* RiverAI.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -173,7 +173,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "rotomai" */;
+			buildConfigurationList = 83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "RiverAI" */;
 			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -186,7 +186,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				13B07F861A680F5B00A75B9A /* rotomai */,
+				13B07F861A680F5B00A75B9A /* RiverAI */,
 			);
 		};
 /* End PBXProject section */
@@ -199,8 +199,8 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				5E4163FD25074EF4AE3E170A /* expo.icon in Resources */,
-				39CFA5112CC86043692B226F /* PrivacyInfo.xcprivacy in Resources */,
+				1FC57D37A6DE463AB98CAA39 /* expo.icon in Resources */,
+				3FE32737A9A9B63BA5C41638 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -239,11 +239,33 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-rotomai-checkManifestLockResult.txt",
+				"$(DERIVED_FILE_DIR)/Pods-RiverAI-checkManifestLockResult.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		1B9BC31BC6E36D5F97F19AE1 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-RiverAI/Pods-RiverAI-frameworks.sh",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermesvm.framework/hermesvm",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermesvm.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-RiverAI/Pods-RiverAI-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
@@ -252,7 +274,7 @@
 			files = (
 			);
 			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-rotomai/Pods-rotomai-resources.sh",
+				"${PODS_ROOT}/Target Support Files/Pods-RiverAI/Pods-RiverAI-resources.sh",
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXApplication/ExpoApplication_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/EXConstants.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/ExpoConstants_privacy.bundle",
@@ -279,32 +301,10 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-rotomai/Pods-rotomai-resources.sh\"\n";
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-RiverAI/Pods-RiverAI-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		93EC526E9E447A10EBC00751 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-rotomai/Pods-rotomai-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermesvm.framework/hermesvm",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermesvm.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-rotomai/Pods-rotomai-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		D749F51436EB793E796991D5 /* [Expo] Configure project */ = {
+		CAD956EB231727C9846359F3 /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -315,18 +315,18 @@
 			inputPaths = (
 				"$(SRCROOT)/.xcode.env",
 				"$(SRCROOT)/.xcode.env.local",
-				"$(SRCROOT)/rotomai/rotomai.entitlements",
-				"$(SRCROOT)/Pods/Target Support Files/Pods-rotomai/expo-configure-project.sh",
+				"$(SRCROOT)/RiverAI/RiverAI.entitlements",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-RiverAI/expo-configure-project.sh",
 			);
 			name = "[Expo] Configure project";
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(SRCROOT)/Pods/Target Support Files/Pods-rotomai/ExpoModulesProvider.swift",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-RiverAI/ExpoModulesProvider.swift",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-rotomai/expo-configure-project.sh\"\n";
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-RiverAI/expo-configure-project.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -336,7 +336,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				BE35BC08A03EAB817049BCF3 /* ExpoModulesProvider.swift in Sources */,
+				6E8813B152B2A18242A75B93 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -345,18 +345,18 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 00CED414EC5DAB3A2EEAB98D /* Pods-rotomai.debug.xcconfig */;
+			baseConfigurationReference = 20F0947E6CFA188E8FB4F433 /* Pods-RiverAI.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = expo;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = rotomai/rotomai.entitlements;
+				CODE_SIGN_ENTITLEMENTS = RiverAI/RiverAI.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
 					"FB_SONARKIT_ENABLED=1",
 				);
-				INFOPLIST_FILE = rotomai/Info.plist;
+				INFOPLIST_FILE = RiverAI/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -369,9 +369,9 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
-				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.rotomai;
-				PRODUCT_NAME = rotomai;
-				SWIFT_OBJC_BRIDGING_HEADER = "rotomai/rotomai-Bridging-Header.h";
+				PRODUCT_BUNDLE_IDENTIFIER = com.riverai.app;
+				PRODUCT_NAME = RiverAI;
+				SWIFT_OBJC_BRIDGING_HEADER = "RiverAI/RiverAI-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -381,13 +381,13 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 34E54E4E9ED95FB0F05B7741 /* Pods-rotomai.release.xcconfig */;
+			baseConfigurationReference = 40ABF95A11928199014DBAB4 /* Pods-RiverAI.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = expo;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = rotomai/rotomai.entitlements;
+				CODE_SIGN_ENTITLEMENTS = RiverAI/RiverAI.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
-				INFOPLIST_FILE = rotomai/Info.plist;
+				INFOPLIST_FILE = RiverAI/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -400,9 +400,9 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
-				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.rotomai;
-				PRODUCT_NAME = rotomai;
-				SWIFT_OBJC_BRIDGING_HEADER = "rotomai/rotomai-Bridging-Header.h";
+				PRODUCT_BUNDLE_IDENTIFIER = com.riverai.app;
+				PRODUCT_NAME = RiverAI;
+				SWIFT_OBJC_BRIDGING_HEADER = "RiverAI/RiverAI-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -534,7 +534,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "rotomai" */ = {
+		13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "RiverAI" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				13B07F941A680F5B00A75B9A /* Debug */,
@@ -543,7 +543,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "rotomai" */ = {
+		83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "RiverAI" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,

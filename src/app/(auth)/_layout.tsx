@@ -1,5 +1,5 @@
 import { useAuth } from "@clerk/clerk-expo";
-import { Redirect, Stack, useLocalSearchParams } from "expo-router";
+import { Redirect, SplashScreen, Stack, useLocalSearchParams } from "expo-router";
 
 export default function AuthLayout() {
   const { isSignedIn, isLoaded } = useAuth();
@@ -10,6 +10,7 @@ export default function AuthLayout() {
   }
 
   if (isSignedIn && !(__DEV__ && debug === "true")) {
+    SplashScreen.hideAsync();
     return <Redirect href="/(home)" />;
   }
 

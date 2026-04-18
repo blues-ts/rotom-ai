@@ -1,11 +1,11 @@
 import { Pressable } from "react-native";
-import { Redirect, router, Stack } from "expo-router";
-import * as Haptics from "expo-haptics";
-import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@clerk/clerk-expo";
+import { Redirect, router, Stack } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 
-export default function CardLayout() {
+export default function CameraLayout() {
 	const { colors } = useTheme();
 	const { isSignedIn, isLoaded } = useAuth();
 
@@ -22,7 +22,8 @@ export default function CardLayout() {
 				headerTransparent: true,
 				headerStyle: { backgroundColor: "transparent" },
 				headerTintColor: colors.foreground,
-				contentStyle: { backgroundColor: "transparent" },
+				headerTitle: "",
+				contentStyle: { backgroundColor: colors.background },
 				headerLeft: () => (
 					<Pressable
 						onPress={() => {
@@ -33,7 +34,6 @@ export default function CardLayout() {
 						<Ionicons name="close" size={24} color={colors.foreground} />
 					</Pressable>
 				),
-				headerRight: () => null,
 			}}
 		/>
 	);

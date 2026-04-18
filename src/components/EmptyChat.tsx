@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { Keyboard, Pressable, StyleSheet, Text } from "react-native";
+import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
 import Animated, {
 	useSharedValue,
 	useAnimatedStyle,
@@ -26,11 +27,18 @@ export default function EmptyChat() {
 	return (
 		<Pressable style={styles.container} onPress={Keyboard.dismiss}>
 			<Animated.View style={animatedStyle}>
-				<Text style={[styles.title, { color: colors.foreground, textAlign: "center" }]}>
-					River
-				</Text>
+				<View style={styles.titleRow}>
+					<Text style={[styles.title, { color: colors.foreground }]}>
+						River
+					</Text>
+					<Image
+						source="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/501.gif"
+						style={styles.sprite}
+						contentFit="contain"
+					/>
+				</View>
 				<Text style={[styles.subtitle, { color: colors.mutedForeground, textAlign: "center" }]}>
-					Your Pokemon AI Assistant
+					Your Pokemon TCG AI Assistant
 				</Text>
 			</Animated.View>
 		</Pressable>
@@ -44,10 +52,21 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		paddingHorizontal: 32,
 	},
+	titleRow: {
+		flexDirection: "row",
+		alignItems: "flex-end",
+		justifyContent: "center",
+		marginBottom: 8,
+		overflow: "visible",
+	},
 	title: {
 		fontSize: 28,
 		fontWeight: "700",
-		marginBottom: 8,
+	},
+	sprite: {
+		width: 56,
+		height: 56,
+		marginLeft: 4,
 	},
 	subtitle: {
 		fontSize: 16,
