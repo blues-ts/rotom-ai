@@ -24,7 +24,7 @@ import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useQuery } from "@tanstack/react-query";
-import { CartesianChart, Line } from "victory-native";
+import { LineChart } from "react-native-wagmi-charts";
 import { useApi } from "@/lib/axios";
 import { useTheme } from "@/context/ThemeContext";
 import { useCollections } from "@/hooks/useCollections";
@@ -32,6 +32,8 @@ import { useCollections } from "@/hooks/useCollections";
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const IMAGE_WIDTH = SCREEN_WIDTH * 0.9;
 const IMAGE_HEIGHT = IMAGE_WIDTH * 1.4;
+// Chart width: screen - section horizontal margin (20*2) - section padding (16*2)
+const CHART_WIDTH = SCREEN_WIDTH - 72;
 
 // --- Helpers ---
 
@@ -320,13 +322,24 @@ function InfoPill({
 	label,
 	color,
 	bgColor,
+	borderColor,
 }: {
 	label: string;
 	color: string;
 	bgColor: string;
+	borderColor?: string;
 }) {
 	return (
-		<View style={[styles.pill, { backgroundColor: bgColor }]}>
+		<View
+			style={[
+				styles.pill,
+				{
+					backgroundColor: bgColor,
+					borderColor: borderColor ?? "transparent",
+					borderWidth: borderColor ? 1 : 0,
+				},
+			]}
+		>
 			<Text style={[styles.pillText, { color }]}>{label}</Text>
 		</View>
 	);
@@ -386,15 +399,13 @@ function PillToggle({
 				return (
 					<Pressable
 						key={opt}
+						hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
 						style={[
 							styles.togglePill,
 							{
 								backgroundColor: active
-									? colors.foreground
-									: colors.card,
-								borderColor: active
-									? colors.foreground
-									: colors.border,
+									? colors.primary
+									: colors.muted,
 							},
 						]}
 						onPress={() => {
@@ -407,8 +418,9 @@ function PillToggle({
 								styles.toggleText,
 								{
 									color: active
-										? colors.background
-										: colors.mutedForeground,
+										? colors.primaryForeground
+										: colors.foreground,
+									opacity: active ? 1 : 0.75,
 								},
 							]}
 						>
@@ -439,15 +451,13 @@ function LabeledPillToggle({
 				return (
 					<Pressable
 						key={opt.value}
+						hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
 						style={[
 							styles.togglePill,
 							{
 								backgroundColor: active
-									? colors.foreground
-									: colors.card,
-								borderColor: active
-									? colors.foreground
-									: colors.border,
+									? colors.primary
+									: colors.muted,
 							},
 						]}
 						onPress={() => {
@@ -460,8 +470,9 @@ function LabeledPillToggle({
 								styles.toggleText,
 								{
 									color: active
-										? colors.background
-										: colors.mutedForeground,
+										? colors.primaryForeground
+										: colors.foreground,
+									opacity: active ? 1 : 0.75,
 								},
 							]}
 						>
@@ -488,19 +499,21 @@ function PeriodToggle({
 	colors: any;
 }) {
 	return (
-		<View style={styles.toggleRow}>
+		<View
+			style={[
+				styles.periodRow,
+				{ backgroundColor: colors.muted },
+			]}
+		>
 			{PERIODS.map((p) => {
 				const active = p === selected;
 				return (
 					<Pressable
 						key={p}
+						hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }}
 						style={[
 							styles.periodPill,
-							{
-								backgroundColor: active
-									? colors.foreground
-									: "transparent",
-							},
+							active && { backgroundColor: colors.primary },
 						]}
 						onPress={() => {
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -512,8 +525,9 @@ function PeriodToggle({
 								styles.periodText,
 								{
 									color: active
-										? colors.background
-										: colors.mutedForeground,
+										? colors.primaryForeground
+										: colors.foreground,
+									opacity: active ? 1 : 0.75,
 								},
 							]}
 						>
@@ -540,17 +554,26 @@ function TabBar({
 	colors: any;
 }) {
 	return (
-		<View style={styles.tabBar}>
+		<View
+			style={[
+				styles.segmentedControl,
+				{ backgroundColor: colors.muted },
+			]}
+		>
 			{tabs.map((tab) => {
 				const active = tab === selected;
 				return (
 					<Pressable
 						key={tab}
 						style={[
-							styles.tab,
+							styles.segment,
 							active && {
-								borderBottomColor: colors.primary,
-								borderBottomWidth: 2,
+								backgroundColor: colors.primary,
+								shadowColor: "#000",
+								shadowOpacity: 0.2,
+								shadowRadius: 3,
+								shadowOffset: { width: 0, height: 1 },
+								elevation: 2,
 							},
 						]}
 						onPress={() => {
@@ -560,12 +583,12 @@ function TabBar({
 					>
 						<Text
 							style={[
-								styles.tabText,
+								styles.segmentText,
 								{
 									color: active
-										? colors.foreground
-										: colors.mutedForeground,
-									fontWeight: active ? "700" : "500",
+										? colors.primaryForeground
+										: colors.foreground,
+									fontWeight: active ? "700" : "600",
 								},
 							]}
 						>
@@ -806,7 +829,7 @@ function AnimatedCollapsible({
 			style={[
 				styles.section,
 				{
-					backgroundColor: colors.card,
+					backgroundColor: colors.card + "D9",
 					borderColor: colors.border,
 				},
 			]}
@@ -898,7 +921,7 @@ function LoadingSkeleton({ colors, isFromCollection }: { colors: any; isFromColl
 			<View
 				style={[
 					styles.section,
-					{ backgroundColor: colors.card, borderColor: colors.border },
+					{ backgroundColor: colors.card + "D9", borderColor: colors.border },
 				]}
 			>
 				<Skeleton width={130} height={16} color={skeletonColor} style={{ marginBottom: 12 }} />
@@ -914,7 +937,7 @@ function LoadingSkeleton({ colors, isFromCollection }: { colors: any; isFromColl
 			<View
 				style={[
 					styles.section,
-					{ backgroundColor: colors.card, borderColor: colors.border },
+					{ backgroundColor: colors.card + "D9", borderColor: colors.border },
 				]}
 			>
 				<Skeleton width={110} height={16} color={skeletonColor} style={{ marginBottom: 12 }} />
@@ -1090,18 +1113,21 @@ export default function CardDetail() {
 			);
 	}, [gradedHistory]);
 
-	// Chart data — show data for the active tab
+	// Chart data — show data for the active tab (wagmi-charts format)
 	const chartData = useMemo(() => {
 		const source =
 			pricingTab === "Graded"
 				? filteredGradedHistory
 				: filteredRawHistory;
-		return source.map((e: any, i: number) => ({
-			index: i,
-			date: e.date,
-			price: e.avg,
-		}));
+		return source
+			.filter((e: any) => e.avg !== undefined && e.avg !== null)
+			.map((e: any) => ({
+				timestamp: new Date(e.date).getTime(),
+				value: Number(e.avg),
+			}));
 	}, [pricingTab, filteredRawHistory, filteredGradedHistory]);
+
+	const currencySymbol = card?.currency === "EUR" ? "€" : "$";
 
 	// History list for the active tab
 	const historyList = useMemo(() => {
@@ -1159,6 +1185,7 @@ export default function CardDetail() {
 					headerRight: () =>
 						configMatches ? null : (
 						<Pressable
+							hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
 							onPress={() => {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 								if (isFromCollection) {
@@ -1275,6 +1302,30 @@ export default function CardDetail() {
 									mutedColor={colors.mutedForeground}
 								/>
 							</ZoomableImage>
+							<View
+								pointerEvents="none"
+								style={[
+									styles.zoomHint,
+									{
+										backgroundColor: colors.background + "B3",
+										borderColor: colors.border,
+									},
+								]}
+							>
+								<Ionicons
+									name="search"
+									size={12}
+									color={colors.foreground}
+								/>
+								<Text
+									style={[
+										styles.zoomHintText,
+										{ color: colors.foreground },
+									]}
+								>
+									Pinch to zoom
+								</Text>
+							</View>
 						</View>
 
 						{/* Estimate Block — most prominent element */}
@@ -1282,7 +1333,7 @@ export default function CardDetail() {
 							style={[
 								styles.estimateBlock,
 								{
-									backgroundColor: colors.card,
+									backgroundColor: colors.card + "D9",
 									borderColor: colors.border,
 								},
 							]}
@@ -1290,7 +1341,7 @@ export default function CardDetail() {
 							<Text
 								style={[
 									styles.estimateLabel,
-									{ color: colors.mutedForeground },
+									{ color: colors.foreground, opacity: 0.75 },
 								]}
 							>
 								ESTIMATED VALUE
@@ -1312,9 +1363,9 @@ export default function CardDetail() {
 												styles.selectionChip,
 												{
 													backgroundColor:
-														colors.primary + "18",
+														colors.primary + "33",
 													borderColor:
-														colors.primary + "40",
+														colors.primary + "55",
 												},
 											]}
 										>
@@ -1331,7 +1382,7 @@ export default function CardDetail() {
 												style={[
 													styles.selectionChipText,
 													{
-														color: colors.primary,
+														color: colors.foreground,
 													},
 												]}
 											>
@@ -1345,10 +1396,10 @@ export default function CardDetail() {
 													{
 														backgroundColor:
 															colors.primary +
-															"18",
+															"33",
 														borderColor:
 															colors.primary +
-															"40",
+															"55",
 													},
 												]}
 											>
@@ -1365,7 +1416,7 @@ export default function CardDetail() {
 													style={[
 														styles.selectionChipText,
 														{
-															color: colors.primary,
+															color: colors.foreground,
 														},
 													]}
 												>
@@ -1382,9 +1433,9 @@ export default function CardDetail() {
 												styles.selectionChip,
 												{
 													backgroundColor:
-														colors.primary + "18",
+														colors.primary + "33",
 													borderColor:
-														colors.primary + "40",
+														colors.primary + "55",
 												},
 											]}
 										>
@@ -1401,7 +1452,7 @@ export default function CardDetail() {
 												style={[
 													styles.selectionChipText,
 													{
-														color: colors.primary,
+														color: colors.foreground,
 													},
 												]}
 											>
@@ -1413,9 +1464,9 @@ export default function CardDetail() {
 												styles.selectionChip,
 												{
 													backgroundColor:
-														colors.primary + "18",
+														colors.primary + "33",
 													borderColor:
-														colors.primary + "40",
+														colors.primary + "55",
 												},
 											]}
 										>
@@ -1432,7 +1483,7 @@ export default function CardDetail() {
 												style={[
 													styles.selectionChipText,
 													{
-														color: colors.primary,
+														color: colors.foreground,
 													},
 												]}
 											>
@@ -1446,7 +1497,7 @@ export default function CardDetail() {
 
 						{/* Quantity Badge */}
 						{configMatches && (
-							<View style={[styles.quantityBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
+							<View style={[styles.quantityBadge, { backgroundColor: colors.card + "D9", borderColor: colors.border }]}>
 								<Pressable
 									onPress={() => {
 										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1491,7 +1542,15 @@ export default function CardDetail() {
 						)}
 
 						{/* Card Meta Strip */}
-						<View style={styles.metaStrip}>
+						<View
+							style={[
+								styles.metaStrip,
+								{
+									backgroundColor: colors.card + "D9",
+									borderColor: colors.border,
+								},
+							]}
+						>
 							<View style={{ flex: 1 }}>
 								<Text
 									style={[
@@ -1503,8 +1562,9 @@ export default function CardDetail() {
 									{card.cardNumber ? (
 										<Text
 											style={{
-												color: colors.mutedForeground,
-												fontWeight: "400",
+												color: colors.foreground,
+												opacity: 0.65,
+												fontWeight: "500",
 											}}
 										>
 											{" "}
@@ -1515,7 +1575,7 @@ export default function CardDetail() {
 								<Text
 									style={[
 										styles.setName,
-										{ color: colors.mutedForeground },
+										{ color: colors.foreground, opacity: 0.7 },
 									]}
 								>
 									{card.set?.name}
@@ -1525,8 +1585,9 @@ export default function CardDetail() {
 								{card.rarity && (
 									<InfoPill
 										label={card.rarity}
-										color={colors.primary}
-										bgColor={colors.primary + "15"}
+										color={colors.foreground}
+										bgColor={colors.primary + "33"}
+										borderColor={colors.primary + "55"}
 									/>
 								)}
 								{card.variant && (
@@ -1535,8 +1596,9 @@ export default function CardDetail() {
 											/_/g,
 											" ",
 										)}
-										color={colors.primary}
-										bgColor={colors.primary + "15"}
+										color={colors.foreground}
+										bgColor={colors.primary + "33"}
+										borderColor={colors.primary + "55"}
 									/>
 								)}
 							</View>
@@ -1547,7 +1609,7 @@ export default function CardDetail() {
 							style={[
 								styles.section,
 								{
-									backgroundColor: colors.card,
+									backgroundColor: colors.card + "D9",
 									borderColor: colors.border,
 								},
 							]}
@@ -1611,7 +1673,7 @@ export default function CardDetail() {
 							style={[
 								styles.section,
 								{
-									backgroundColor: colors.card,
+									backgroundColor: colors.card + "D9",
 									borderColor: colors.border,
 								},
 							]}
@@ -1645,28 +1707,69 @@ export default function CardDetail() {
 									/>
 								</View>
 							) : chartData.length > 1 ? (
-								<View style={styles.chartContainer}>
-									<CartesianChart
-										data={chartData}
-										xKey="index"
-										yKeys={["price"]}
-										domainPadding={{
-											top: 20,
-											bottom: 10,
-										}}
-									>
-										{({ points }) => (
-											<Line
-												points={points.price.filter(
-													(p: any) =>
-														p.y !== undefined,
-												)}
-												color={colors.primary}
-												strokeWidth={2}
-												curveType="natural"
+								<View>
+									<LineChart.Provider data={chartData}>
+										<View style={styles.chartHoverHeader}>
+											<LineChart.PriceText
+												format={({ value }) => {
+													"worklet";
+													if (!value) return "";
+													const n = Number(value);
+													if (!isFinite(n)) return "—";
+													return `${currencySymbol}${n.toFixed(2)}`;
+												}}
+												style={[
+													styles.chartHoverPrice,
+													{ color: colors.foreground },
+												]}
 											/>
-										)}
-									</CartesianChart>
+											<LineChart.DatetimeText
+												style={[
+													styles.chartHoverDate,
+													{
+														color: colors.foreground,
+														opacity: 0.7,
+													},
+												]}
+											/>
+										</View>
+
+										<View style={styles.chartContainer}>
+											<LineChart
+												height={180}
+												width={CHART_WIDTH}
+												yGutter={20}
+											>
+												<LineChart.Path
+													color={colors.primary}
+													width={2}
+												>
+													<LineChart.Gradient />
+													<LineChart.Dot
+														at={chartData.length - 1}
+														color={colors.primary}
+														size={5}
+														hasPulse
+														pulseBehaviour="while-inactive"
+													/>
+												</LineChart.Path>
+												<LineChart.CursorCrosshair
+													color={colors.foreground}
+												/>
+											</LineChart>
+										</View>
+									</LineChart.Provider>
+									<Text
+										style={[
+											styles.scrubHint,
+											{
+												color: colors.foreground,
+												opacity: 0.55,
+											},
+										]}
+									>
+										Touch and drag to see prices
+									</Text>
 								</View>
 							) : (
 								<View style={styles.chartPlaceholder}>
@@ -1692,14 +1795,14 @@ export default function CardDetail() {
 								}
 								colors={colors}
 							>
-								{historyList.slice(0, 20).map((item, i) => (
+								{historyList.slice(0, 20).map((item: any, i: number) => (
 									<View
 										key={`${item.date}-${item.type}-${i}`}
 										style={[
 											styles.historyRow,
 											i < Math.min(historyList.length, 20) - 1 && {
-												borderBottomWidth: StyleSheet.hairlineWidth,
-												borderBottomColor: colors.border,
+												borderBottomWidth: 1,
+												borderBottomColor: colors.foreground + "14",
 											},
 										]}
 									>
@@ -1720,7 +1823,8 @@ export default function CardDetail() {
 												style={[
 													styles.historyMeta,
 													{
-														color: colors.mutedForeground,
+														color: colors.foreground,
+														opacity: 0.6,
 													},
 												]}
 											>
@@ -1749,7 +1853,8 @@ export default function CardDetail() {
 														style={[
 															styles.historyMeta,
 															{
-																color: colors.mutedForeground,
+																color: colors.foreground,
+																opacity: 0.6,
 															},
 														]}
 													>
@@ -1855,6 +1960,22 @@ const styles = StyleSheet.create({
 		alignSelf: "center",
 		width: IMAGE_WIDTH,
 	},
+	zoomHint: {
+		position: "absolute",
+		bottom: 10,
+		right: 10,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 5,
+		paddingHorizontal: 9,
+		paddingVertical: 5,
+		borderRadius: 999,
+		borderWidth: StyleSheet.hairlineWidth,
+	},
+	zoomHintText: {
+		fontSize: 11,
+		fontWeight: "600",
+	},
 
 	// Quantity badge
 	quantityBadge: {
@@ -1905,10 +2026,10 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 	},
 	estimateLabel: {
-		fontSize: 11,
+		fontSize: 12,
 		fontWeight: "700",
-		letterSpacing: 1.5,
-		marginBottom: 6,
+		letterSpacing: 2,
+		marginBottom: 8,
 	},
 	heroPrice: {
 		fontSize: 44,
@@ -1936,18 +2057,22 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 	},
 	chipDot: {
-		width: 5,
-		height: 5,
-		borderRadius: 2.5,
+		width: 7,
+		height: 7,
+		borderRadius: 3.5,
 	},
 
 	// Card meta strip
 	metaStrip: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingHorizontal: 20,
+		marginHorizontal: 20,
 		marginBottom: 12,
+		paddingHorizontal: 16,
+		paddingVertical: 14,
 		gap: 12,
+		borderRadius: 12,
+		borderWidth: 1,
 	},
 	cardName: {
 		fontSize: 17,
@@ -1988,21 +2113,23 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 	},
 
-	// Tab bar
-	tabBar: {
+	// Segmented control (Raw / Graded)
+	segmentedControl: {
 		flexDirection: "row",
-		gap: 0,
-		marginBottom: 2,
+		borderRadius: 10,
+		padding: 3,
+		marginBottom: 4,
 	},
-	tab: {
+	segment: {
 		flex: 1,
 		alignItems: "center",
-		paddingVertical: 10,
-		borderBottomWidth: 2,
-		borderBottomColor: "transparent",
+		justifyContent: "center",
+		paddingVertical: 8,
+		borderRadius: 8,
+		minHeight: 34,
 	},
-	tabText: {
-		fontSize: 14,
+	segmentText: {
+		fontSize: 13,
 	},
 
 	// Sections
@@ -2028,22 +2155,32 @@ const styles = StyleSheet.create({
 	},
 	togglePill: {
 		paddingHorizontal: 14,
-		paddingVertical: 7,
-		borderRadius: 8,
-		borderWidth: 1,
+		paddingVertical: 10,
+		borderRadius: 10,
+		minHeight: 36,
+		justifyContent: "center",
 	},
 	toggleText: {
 		fontSize: 13,
 		fontWeight: "600",
 	},
+	periodRow: {
+		flexDirection: "row",
+		borderRadius: 8,
+		padding: 2,
+		gap: 2,
+	},
 	periodPill: {
 		paddingHorizontal: 10,
-		paddingVertical: 4,
+		paddingVertical: 6,
 		borderRadius: 6,
+		minWidth: 36,
+		alignItems: "center",
 	},
 	periodText: {
 		fontSize: 11,
-		fontWeight: "600",
+		fontWeight: "700",
+		letterSpacing: 0.3,
 	},
 
 	// Chart
@@ -2058,6 +2195,28 @@ const styles = StyleSheet.create({
 		height: 180,
 		marginTop: 8,
 	},
+	chartHoverHeader: {
+		flexDirection: "row",
+		alignItems: "baseline",
+		gap: 10,
+		marginBottom: 4,
+		minHeight: 22,
+	},
+	chartHoverPrice: {
+		fontSize: 18,
+		fontWeight: "700",
+		fontVariant: ["tabular-nums"],
+	},
+	chartHoverDate: {
+		fontSize: 12,
+		fontWeight: "500",
+	},
+	scrubHint: {
+		fontSize: 11,
+		fontWeight: "500",
+		marginTop: 10,
+		textAlign: "center",
+	},
 	chartPlaceholder: {
 		height: 180,
 		marginTop: 8,
@@ -2070,19 +2229,22 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-		paddingVertical: 10,
+		paddingVertical: 14,
 	},
 	historyDate: {
 		fontSize: 14,
-		fontWeight: "500",
+		fontWeight: "600",
+		fontVariant: ["tabular-nums"],
 	},
 	historyMeta: {
 		fontSize: 12,
-		marginTop: 2,
+		fontWeight: "500",
+		marginTop: 3,
 	},
 	historyPrice: {
 		fontSize: 15,
-		fontWeight: "600",
+		fontWeight: "700",
+		fontVariant: ["tabular-nums"],
 	},
 	lastUpdated: {
 		fontSize: 12,
