@@ -50,6 +50,13 @@ function AppContent() {
 				}}
 			>
 				<Stack.Screen name="index" />
+				<Stack.Screen
+					name="(onboarding)"
+					options={{
+						animation: "fade",
+						gestureEnabled: false,
+					}}
+				/>
 				<Stack.Screen name="(auth)" options={{ animation: "fade" }} />
 				<Stack.Screen
 					name="(home)"

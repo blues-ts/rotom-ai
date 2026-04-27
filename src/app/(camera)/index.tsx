@@ -6,7 +6,7 @@ import {
 	type AvailableLenses,
 } from "expo-camera";
 import * as Haptics from "expo-haptics";
-import { router, useFocusEffect } from "expo-router";
+import { router, Stack, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
@@ -19,12 +19,14 @@ import {
 } from "react-native";
 import Animated, {
 	FadeIn,
+	runOnJS,
 	useAnimatedStyle,
 	useSharedValue,
 	withRepeat,
 	withSequence,
 	withTiming,
 } from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Svg, { Defs, Mask, Rect } from "react-native-svg";
 
 const { width, height } = Dimensions.get("window");
@@ -56,6 +58,26 @@ export default function Camera() {
 	const pulseStyle = useAnimatedStyle(() => ({
 		opacity: pulseOpacity.value,
 	}));
+
+	// Pinch-to-zoom: pinchBase captures zoom at gesture start; lastPushed mirrors committed state for throttling
+	const pinchBase = useSharedValue(zoom);
+	const lastPushed = useSharedValue(zoom);
+	useEffect(() => {
+		lastPushed.value = zoom;
+	}, [zoom]);
+
+	const pinchGesture = Gesture.Pinch()
+		.onStart(() => {
+			pinchBase.value = lastPushed.value;
+		})
+		.onUpdate((e) => {
+			const next = Math.min(1, Math.max(0, pinchBase.value * e.scale));
+			const rounded = Math.round(next * 100) / 100;
+			if (Math.abs(rounded - lastPushed.value) >= 0.01) {
+				lastPushed.value = rounded;
+				runOnJS(setZoom)(rounded);
+			}
+		});
 
 	// Request camera permissions on load
 	useEffect(() => {
@@ -136,17 +158,6 @@ export default function Camera() {
 		(_event: AvailableLenses) => { selectBestLens(); },
 		[selectBestLens],
 	);
-
-	// Zoom controls
-	const handleZoomIn = useCallback(() => {
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-		setZoom((prev) => Math.min(1, prev + 0.1));
-	}, []);
-
-	const handleZoomOut = useCallback(() => {
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-		setZoom((prev) => Math.max(0, prev - 0.1));
-	}, []);
 
 	const handleToggleTorch = useCallback(() => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -255,16 +266,33 @@ export default function Camera() {
 	}
 
 	return (
-		<View style={styles.container}>
-			<CameraView
-				ref={cameraRef}
-				style={StyleSheet.absoluteFill}
-				selectedLens={selectedLens}
-				zoom={zoom}
-				enableTorch={torchEnabled}
-				onCameraReady={handleCameraReady}
-				onAvailableLensesChanged={handleAvailableLensesChanged}
-			/>
+		<GestureDetector gesture={pinchGesture}>
+			<View style={styles.container}>
+				<Stack.Screen
+					options={{
+						headerRight: () => (
+							<Pressable
+								hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+								onPress={handleToggleTorch}
+							>
+								<Ionicons
+									name={torchEnabled ? "flashlight" : "flashlight-outline"}
+									size={22}
+									color={torchEnabled ? "#FFAE04" : "#fff"}
+								/>
+							</Pressable>
+						),
+					}}
+				/>
+				<CameraView
+					ref={cameraRef}
+					style={StyleSheet.absoluteFill}
+					selectedLens={selectedLens}
+					zoom={zoom}
+					enableTorch={torchEnabled}
+					onCameraReady={handleCameraReady}
+					onAvailableLensesChanged={handleAvailableLensesChanged}
+				/>
 
 			{/* SVG overlay with card cutout */}
 			<Svg style={StyleSheet.absoluteFill} width={width} height={height}>
@@ -296,52 +324,6 @@ export default function Camera() {
 				<View style={styles.cardArea} />
 
 				<View style={styles.bottomSection}>
-					{/* Zoom + torch controls */}
-					<View style={styles.controlsRow}>
-						<View style={styles.zoomControls}>
-							<Pressable
-								style={({ pressed }) => [
-									styles.zoomButton,
-									{ opacity: pressed ? 0.7 : zoom <= 0 ? 0.4 : 1 },
-								]}
-								onPress={handleZoomOut}
-								disabled={zoom <= 0}
-							>
-								<Ionicons name="remove" size={22} color="#fff" />
-							</Pressable>
-							<View style={styles.zoomIndicator}>
-								<Text style={styles.zoomText}>{Math.round(zoom * 100)}%</Text>
-							</View>
-							<Pressable
-								style={({ pressed }) => [
-									styles.zoomButton,
-									{ opacity: pressed ? 0.7 : zoom >= 1 ? 0.4 : 1 },
-								]}
-								onPress={handleZoomIn}
-								disabled={zoom >= 1}
-							>
-								<Ionicons name="add" size={22} color="#fff" />
-							</Pressable>
-						</View>
-
-						<View style={styles.controlsSeparator} />
-
-						<Pressable
-							style={({ pressed }) => [
-								styles.torchButton,
-								torchEnabled && styles.torchButtonActive,
-								{ opacity: pressed ? 0.7 : 1 },
-							]}
-							onPress={handleToggleTorch}
-						>
-							<Ionicons
-								name={torchEnabled ? "flashlight" : "flashlight-outline"}
-								size={20}
-								color="#fff"
-							/>
-						</Pressable>
-					</View>
-
 					{/* Scan button */}
 					<Pressable
 						style={({ pressed }) => [
@@ -371,7 +353,8 @@ export default function Camera() {
 					</Animated.Text>
 				</View>
 			</View>
-		</View>
+			</View>
+		</GestureDetector>
 	);
 }
 
@@ -396,59 +379,6 @@ const styles = StyleSheet.create({
 		flex: 1,
 		alignItems: "center",
 		justifyContent: "flex-start",
-	},
-	controlsRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		marginBottom: 16,
-		gap: 8,
-	},
-	controlsSeparator: {
-		width: 1,
-		height: 28,
-		backgroundColor: "rgba(255, 255, 255, 0.2)",
-		marginHorizontal: 12,
-	},
-	zoomControls: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: "rgba(255, 255, 255, 0.08)",
-		borderRadius: 28,
-		paddingVertical: 4,
-		paddingHorizontal: 6,
-		gap: 4,
-	},
-	zoomButton: {
-		width: 44,
-		height: 44,
-		borderRadius: 22,
-		backgroundColor: "rgba(255, 255, 255, 0.15)",
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	zoomIndicator: {
-		paddingVertical: 4,
-		paddingHorizontal: 12,
-		minWidth: 56,
-		alignItems: "center",
-	},
-	zoomText: {
-		color: "#fff",
-		fontSize: 15,
-		fontWeight: "600",
-	},
-	torchButton: {
-		width: 48,
-		height: 48,
-		borderRadius: 24,
-		backgroundColor: "rgba(255, 255, 255, 0.15)",
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	torchButtonActive: {
-		backgroundColor: "rgba(255, 174, 4, 0.4)",
 	},
 	scanButton: {
 		flexDirection: "row",

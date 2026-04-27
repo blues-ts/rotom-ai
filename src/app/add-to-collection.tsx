@@ -10,7 +10,7 @@ import { useCollections } from "@/hooks/useCollections";
 export default function AddToCollection() {
   const { colors } = useTheme();
 
-  const { cardId, cardName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany, gradedGrade } =
+  const { cardId, cardName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany, gradedGrade, pricePaid } =
     useLocalSearchParams<{
       cardId: string;
       cardName: string;
@@ -21,6 +21,7 @@ export default function AddToCollection() {
       condition: string;
       gradedCompany: string;
       gradedGrade: string;
+      pricePaid?: string;
     }>();
 
   const { collections, addCardToCollection } = useCollections();
@@ -33,6 +34,10 @@ export default function AddToCollection() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+      const parsedPricePaid =
+        pricePaid && pricePaid.trim().length > 0
+          ? parseFloat(pricePaid)
+          : undefined;
       addCardToCollection.mutate(
         {
           collectionId,
@@ -45,6 +50,10 @@ export default function AddToCollection() {
           condition: condition ?? "NEAR_MINT",
           gradedCompany: gradedCompany || undefined,
           gradedGrade: gradedGrade || undefined,
+          pricePaid:
+            parsedPricePaid !== undefined && !isNaN(parsedPricePaid)
+              ? parsedPricePaid
+              : undefined,
         },
         {
           onSuccess: () => {
@@ -60,7 +69,7 @@ export default function AddToCollection() {
         },
       );
     },
-    [cardId, cardName, cardImageUrl, cardValue, addCardToCollection, collections],
+    [cardId, cardName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany, gradedGrade, pricePaid, addCardToCollection, collections],
   );
 
   return (

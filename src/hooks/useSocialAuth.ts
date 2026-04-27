@@ -13,7 +13,7 @@ function useSocialAuth() {
       const { createdSessionId, setActive, signIn, signUp } = await startSSOFlow({
         strategy,
         redirectUrl: AuthSession.makeRedirectUri({
-          scheme: "rotomai",
+          scheme: "riverai",
           path: "sso-callback",
         }),
       });

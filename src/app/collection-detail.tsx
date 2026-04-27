@@ -186,6 +186,10 @@ export default function CollectionDetail() {
 								gradedGrade: item.gradedGrade ?? "",
 								collectionId: item.collectionId,
 								quantity: String(item.quantity),
+								pricePaid:
+									item.pricePaid !== undefined
+										? String(item.pricePaid)
+										: "",
 							},
 						});
 					}}

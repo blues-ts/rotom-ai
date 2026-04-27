@@ -133,9 +133,10 @@ export default function Settings() {
 								{ backgroundColor: colors.card },
 							]}
 							onPress={async () => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 								await SecureStore.deleteItemAsync("onboarding_complete");
 								await signOut();
-								router.replace("/(auth)");
+								router.replace("/(onboarding)/welcome");
 							}}
 						>
 							<Text

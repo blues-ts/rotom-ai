@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/clerk-expo";
 import type { Message } from "@/types/chat";
 import { parseSSE } from "@/lib/parseSSE";
 import type { ParsedEvent } from "@/lib/parseSSE";
+import { useCollectionSnapshot } from "@/hooks/useCollectionSnapshot";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const DRAIN_INTERVAL_MS = 16;
@@ -12,6 +13,7 @@ const CHARS_PER_TICK = 4;
 
 export function useChat() {
 	const { getToken } = useAuth();
+	const { data: collectionSnapshot } = useCollectionSnapshot();
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [streamingContent, setStreamingContent] = useState("");
 	const [isStreaming, setIsStreaming] = useState(false);
@@ -194,6 +196,7 @@ export function useChat() {
 								role: m.role,
 								content: m.content,
 							})),
+							collectionContext: collectionSnapshot ?? undefined,
 						}),
 					);
 
@@ -221,6 +224,7 @@ export function useChat() {
 			handleEvent,
 			flushBuffer,
 			resetStreamingState,
+			collectionSnapshot,
 		],
 	);
 

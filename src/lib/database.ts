@@ -45,6 +45,9 @@ export function getDatabase(): SQLite.SQLiteDatabase {
         ALTER TABLE collection_cards ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1;
       `);
     }
+    if (!columns.includes("price_paid")) {
+      db.execSync(`ALTER TABLE collection_cards ADD COLUMN price_paid REAL;`);
+    }
 
     // Update unique index to include config so same card with different config = different entry
     db.execSync(`

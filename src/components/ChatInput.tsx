@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
 		marginRight: 8,
 	},
 	clearButton: {
-		marginRight: 4,
+		marginRight: 10,
 	},
 	sendButton: {
 		width: 32,

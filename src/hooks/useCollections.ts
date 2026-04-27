@@ -3,6 +3,7 @@ import { getDatabase } from "@/lib/database";
 import type { Collection, CollectionCard } from "@/types/collection";
 
 const COLLECTIONS_KEY = ["collections"] as const;
+const COLLECTION_SNAPSHOT_KEY = ["collectionSnapshot"] as const;
 
 interface CollectionRow {
   id: string;
@@ -64,6 +65,7 @@ export function useCollections() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
+      queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
     },
   });
 
@@ -74,6 +76,7 @@ export function useCollections() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
+      queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
     },
   });
 
@@ -84,6 +87,7 @@ export function useCollections() {
     },
     onSuccess: (_data, { id }) => {
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
+      queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
       queryClient.invalidateQueries({ queryKey: ["collection", id] });
     },
   });
@@ -100,6 +104,7 @@ export function useCollections() {
       condition = "NEAR_MINT",
       gradedCompany,
       gradedGrade,
+      pricePaid,
     }: {
       collectionId: string;
       cardId: string;
@@ -111,6 +116,7 @@ export function useCollections() {
       condition?: string;
       gradedCompany?: string;
       gradedGrade?: string;
+      pricePaid?: number;
     }) => {
       // Check if this exact config already exists
       const existing = db.getFirstSync<{ id: string }>(
@@ -120,21 +126,29 @@ export function useCollections() {
         [collectionId, cardId, pricingType, source, condition, gradedCompany ?? "", gradedGrade ?? ""],
       );
       if (existing) {
-        db.runSync(
-          "UPDATE collection_cards SET quantity = quantity + 1 WHERE id = ?",
-          [existing.id],
-        );
+        if (pricePaid !== undefined) {
+          db.runSync(
+            "UPDATE collection_cards SET quantity = quantity + 1, price_paid = ? WHERE id = ?",
+            [pricePaid, existing.id],
+          );
+        } else {
+          db.runSync(
+            "UPDATE collection_cards SET quantity = quantity + 1 WHERE id = ?",
+            [existing.id],
+          );
+        }
       } else {
         const id = Date.now().toString();
         db.runSync(
-          "INSERT INTO collection_cards (id, collection_id, card_id, card_name, card_image_url, card_value, pricing_type, source, condition, graded_company, graded_grade, quantity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
-          [id, collectionId, cardId, cardName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany ?? null, gradedGrade ?? null],
+          "INSERT INTO collection_cards (id, collection_id, card_id, card_name, card_image_url, card_value, pricing_type, source, condition, graded_company, graded_grade, quantity, price_paid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)",
+          [id, collectionId, cardId, cardName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany ?? null, gradedGrade ?? null, pricePaid ?? null],
         );
       }
       return Promise.resolve();
     },
     onSuccess: (_data, { collectionId }) => {
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
+      queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
       queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
       queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
     },
@@ -150,6 +164,7 @@ export function useCollections() {
     },
     onSuccess: (_data, { collectionId }) => {
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
+      queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
       queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
       queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
     },
@@ -183,6 +198,7 @@ export function useCollections() {
     },
     onSuccess: (_data, { collectionId }) => {
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
+      queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
       queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
       queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
     },
@@ -216,6 +232,7 @@ export function useCollections() {
     },
     onSuccess: (_data, { collectionId }) => {
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
+      queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
       queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
       queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
     },
@@ -274,6 +291,7 @@ interface CollectionCardRow {
   graded_company: string | null;
   graded_grade: string | null;
   quantity: number;
+  price_paid: number | null;
 }
 
 export function useCollectionCards(collectionId: string) {
@@ -300,6 +318,7 @@ export function useCollectionCards(collectionId: string) {
         gradedCompany: row.graded_company ?? undefined,
         gradedGrade: row.graded_grade ?? undefined,
         quantity: row.quantity,
+        pricePaid: row.price_paid ?? undefined,
       }));
     },
     enabled: !!collectionId,

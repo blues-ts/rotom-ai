@@ -8,6 +8,7 @@ import {
 	ScrollView,
 	StyleSheet,
 	Text,
+	TextInput,
 	View,
 } from "react-native";
 import Animated, {
@@ -951,7 +952,7 @@ function LoadingSkeleton({ colors, isFromCollection }: { colors: any; isFromColl
 
 export default function CardDetail() {
 	const { colors } = useTheme();
-	const { id, name, pricingType, source, condition, gradedCompany: initGradedCompany, gradedGrade: initGradedGrade, collectionId, quantity: initQuantity } = useLocalSearchParams<{
+	const { id, name, pricingType, source, condition, gradedCompany: initGradedCompany, gradedGrade: initGradedGrade, collectionId, quantity: initQuantity, pricePaid: initPricePaid } = useLocalSearchParams<{
 		id: string;
 		name: string;
 		pricingType?: string;
@@ -961,6 +962,7 @@ export default function CardDetail() {
 		gradedGrade?: string;
 		collectionId?: string;
 		quantity?: string;
+		pricePaid?: string;
 	}>();
 	const isFromCollection = !!collectionId;
 	const [quantity, setQuantity] = useState(parseInt(initQuantity || "1", 10) || 1);
@@ -971,11 +973,16 @@ export default function CardDetail() {
 
 	// Raw state
 	const [rawSource, setRawSource] = useState<string>(source || "TCGPlayer");
-	const [rawCondition, setRawCondition] = useState(condition || "NEAR_MINT");
+	const [rawCondition, setRawCondition] = useState(
+		pricingType === "Graded" ? "NEAR_MINT" : (condition || "NEAR_MINT"),
+	);
 
 	// Graded state
 	const [gradedCompany, setGradedCompany] = useState<string | null>(initGradedCompany || null);
 	const [gradedGrade, setGradedGrade] = useState<string | null>(initGradedGrade || null);
+
+	// Price paid state
+	const [pricePaid, setPricePaid] = useState<string>(initPricePaid || "");
 
 	// Collection context
 	const { incrementCardQuantity, addCardToCollection, removeCardFromCollection, decrementCardQuantity } = useCollections();
@@ -1172,10 +1179,11 @@ export default function CardDetail() {
 
 	const configMatches = isFromCollection &&
 		pricingTab === (pricingType || "Raw") &&
-		rawSource === (source || "TCGPlayer") &&
-		rawCondition === (condition || "NEAR_MINT") &&
-		(gradedCompany ?? "") === (initGradedCompany || "") &&
-		(gradedGrade ?? "") === (initGradedGrade || "");
+		(pricingTab === "Graded"
+			? (gradedCompany ?? "") === (initGradedCompany || "") &&
+				(gradedGrade ?? "") === (initGradedGrade || "")
+			: rawSource === (source || "TCGPlayer") &&
+				rawCondition === (condition || "NEAR_MINT"));
 
 	return (
 		<>
@@ -1188,6 +1196,10 @@ export default function CardDetail() {
 							hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
 							onPress={() => {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								const parsedPricePaid =
+									pricePaid.trim().length > 0
+										? parseFloat(pricePaid)
+										: undefined;
 								if (isFromCollection) {
 									addCardToCollection.mutate(
 										{
@@ -1198,9 +1210,14 @@ export default function CardDetail() {
 											cardValue: heroPrice ?? 0,
 											pricingType: pricingTab,
 											source: rawSource,
-											condition: rawCondition,
+											condition: pricingTab === "Graded" ? "GRADED" : rawCondition,
 											gradedCompany: gradedCompany ?? undefined,
 											gradedGrade: gradedGrade ?? undefined,
+											pricePaid:
+												parsedPricePaid !== undefined &&
+												!isNaN(parsedPricePaid)
+													? parsedPricePaid
+													: undefined,
 										},
 										{
 											onSuccess: () => {
@@ -1225,9 +1242,14 @@ export default function CardDetail() {
 											cardValue: String(heroPrice ?? 0),
 											pricingType: pricingTab,
 											source: rawSource,
-											condition: rawCondition,
+											condition: pricingTab === "Graded" ? "GRADED" : rawCondition,
 											gradedCompany: gradedCompany ?? "",
 											gradedGrade: gradedGrade ?? "",
+											pricePaid:
+												parsedPricePaid !== undefined &&
+												!isNaN(parsedPricePaid)
+													? String(parsedPricePaid)
+													: "",
 										},
 									});
 								}
@@ -1666,6 +1688,53 @@ export default function CardDetail() {
 								setGradedGrade={setGradedGrade}
 								colors={colors}
 							/>
+
+							<Text
+								style={[
+									styles.toggleLabel,
+									{
+										color: colors.mutedForeground,
+										marginTop: 14,
+									},
+								]}
+							>
+								Price Paid
+							</Text>
+							<View
+								style={[
+									styles.pricePaidRow,
+									{
+										backgroundColor: colors.input,
+										borderColor: colors.border,
+									},
+								]}
+							>
+								<Text
+									style={[
+										styles.pricePaidSymbol,
+										{ color: colors.mutedForeground },
+									]}
+								>
+									{currencySymbol}
+								</Text>
+								<TextInput
+									style={[
+										styles.pricePaidInput,
+										{ color: colors.foreground },
+									]}
+									value={pricePaid}
+									onChangeText={(v) => {
+										const cleaned = v
+											.replace(/[^0-9.]/g, "")
+											.replace(/(\..*)\./g, "$1");
+										setPricePaid(cleaned);
+									}}
+									placeholder="0.00"
+									placeholderTextColor={colors.mutedForeground}
+									keyboardType="decimal-pad"
+									returnKeyType="done"
+								/>
+							</View>
 						</View>
 
 						{/* Price History Chart */}
@@ -2095,6 +2164,27 @@ const styles = StyleSheet.create({
 		letterSpacing: 0.5,
 		textTransform: "uppercase",
 		marginBottom: 8,
+	},
+
+	// Price paid input
+	pricePaidRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		borderRadius: 10,
+		borderWidth: 1,
+		paddingHorizontal: 12,
+		height: 42,
+	},
+	pricePaidSymbol: {
+		fontSize: 16,
+		fontWeight: "500",
+		marginRight: 6,
+	},
+	pricePaidInput: {
+		flex: 1,
+		fontSize: 16,
+		fontVariant: ["tabular-nums"],
+		paddingVertical: 0,
 	},
 
 	// Collapsible header

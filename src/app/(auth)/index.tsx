@@ -1,58 +1,29 @@
-import { useEffect, useRef, useState } from "react";
 import { Linking, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
-import { SplashScreen } from "expo-router";
 import { AnimatedButton } from "react-native-3d-animated-buttons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTheme } from "@/context/ThemeContext";
 import useSocialAuth from "@/hooks/useSocialAuth";
 import { useWarmUpBrowser } from "@/hooks/useWarmUpBrowser";
-import Onboarding from "@/components/Onboarding";
 
 WebBrowser.maybeCompleteAuthSession();
-
-const ONBOARDING_KEY = "onboarding_complete";
 
 const Index = () => {
   useWarmUpBrowser();
   const { colors } = useTheme();
   const { bottom } = useSafeAreaInsets();
   const { loadingStrategy, handleSocialAuth } = useSocialAuth();
-  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null);
-  const cameFromOnboarding = useRef(false);
 
   const isLoadingGoogle = loadingStrategy === "oauth_google";
   const isLoadingApple = loadingStrategy === "oauth_apple";
   const isLoading = isLoadingGoogle || isLoadingApple;
 
-  useEffect(() => {
-    SecureStore.getItemAsync(ONBOARDING_KEY).then((value) => {
-      setHasCompletedOnboarding(value === "true");
-      SplashScreen.hideAsync();
-    });
-  }, []);
-
-  const handleOnboardingComplete = async () => {
-    await SecureStore.setItemAsync(ONBOARDING_KEY, "true");
-    cameFromOnboarding.current = true;
-    setHasCompletedOnboarding(true);
-  };
-
-  if (hasCompletedOnboarding === null) return null;
-
-  if (!hasCompletedOnboarding) {
-    return <Onboarding onComplete={handleOnboardingComplete} />;
-  }
-
-  const entering = cameFromOnboarding.current ? FadeIn.duration(500) : undefined;
-
   return (
-    <Animated.View style={styles.container} entering={entering}>
+    <Animated.View style={styles.container} entering={FadeIn.duration(500)}>
       <LinearGradient
         colors={[colors.primary, colors.background]}
         style={StyleSheet.absoluteFill}
@@ -64,9 +35,7 @@ const Index = () => {
           style={styles.sprite}
           contentFit="contain"
         />
-        <Text style={[styles.title, { color: colors.foreground }]}>
-          River AI
-        </Text>
+        <Text style={[styles.title, { color: colors.foreground }]}>River AI</Text>
         <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
           Your Pokemon TCG AI Assistant
         </Text>
@@ -74,26 +43,26 @@ const Index = () => {
 
       <View style={[styles.buttons, { paddingBottom: bottom + 16 }]}>
         <AnimatedButton
-          title="Continue with Google"
-          onPress={() => handleSocialAuth("oauth_google")}
-          icon="google"
-          backgroundColor={colors.secondary}
-          textColor={colors.secondaryForeground}
-          shadowColor="#00000040"
+          title="Continue with Apple"
+          onPress={() => handleSocialAuth("oauth_apple")}
+          icon="apple"
+          backgroundColor="#000000"
+          textColor="#ffffff"
+          shadowColor="#2a2a2a"
           disabled={isLoading}
-          loading={isLoadingGoogle}
+          loading={isLoadingApple}
           loadingText="Signing in..."
           fullWidth
         />
         <AnimatedButton
-          title="Continue with Apple"
-          onPress={() => handleSocialAuth("oauth_apple")}
-          icon="apple"
-          backgroundColor={colors.card}
-          textColor={colors.cardForeground}
-          shadowColor="#00000040"
+          title="Continue with Google"
+          onPress={() => handleSocialAuth("oauth_google")}
+          icon="google"
+          backgroundColor="#ffffff"
+          textColor="#000000"
+          shadowColor="#d4d4d4"
           disabled={isLoading}
-          loading={isLoadingApple}
+          loading={isLoadingGoogle}
           loadingText="Signing in..."
           fullWidth
         />
