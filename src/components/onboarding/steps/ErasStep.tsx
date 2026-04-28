@@ -1,5 +1,4 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
@@ -9,10 +8,9 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 
-import { ScreenLayout } from "@/components/onboarding/ScreenLayout";
-import { PrimaryCTA } from "@/components/onboarding/PrimaryCTA";
+import { FlowStep } from "@/components/onboarding/FlowStep";
 import { useOnboarding } from "@/context/OnboardingContext";
-import { ERA_OPTIONS, STEP_NUMBERS } from "@/constants/onboarding";
+import { ERA_OPTIONS } from "@/constants/onboarding";
 import { useTheme } from "@/context/ThemeContext";
 
 type EraOption = (typeof ERA_OPTIONS)[number];
@@ -20,46 +18,49 @@ type EraOption = (typeof ERA_OPTIONS)[number];
 const STAGGER_MS = 60;
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const SPRING = { damping: 18, stiffness: 350, mass: 0.6 };
+const COLS = 2;
 
-export default function Eras() {
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size));
+  }
+  return out;
+}
+
+export function ErasStep() {
   const { eras, toggleEra } = useOnboarding();
+  const rows = chunk(ERA_OPTIONS, COLS);
 
   return (
-    <ScreenLayout
-      step={STEP_NUMBERS.eras}
-      title="What do you collect?"
-      subtitle="River will tune insights to your cards."
-      scrollable
-      footer={
-        <PrimaryCTA
-          title="Continue"
-          disabled={eras.length === 0}
-          onPress={() => router.push("/(onboarding)/budget")}
-        />
-      }
-    >
+    <FlowStep title="What do you collect?" subtitle="River will tune insights to your cards.">
       <View style={styles.grid}>
-        {ERA_OPTIONS.map((opt, i) => {
-          const selected = eras.includes(opt.id);
-          return (
-            <Animated.View
-              key={opt.id}
-              entering={FadeInDown.duration(400).delay(i * STAGGER_MS)}
-              style={styles.tileWrap}
-            >
-              <EraTile
-                opt={opt}
-                selected={selected}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  toggleEra(opt.id);
-                }}
-              />
-            </Animated.View>
-          );
-        })}
+        {rows.map((row, rowIdx) => (
+          <View key={rowIdx} style={styles.row}>
+            {row.map((opt, colIdx) => {
+              const selected = eras.includes(opt.id);
+              const i = rowIdx * COLS + colIdx;
+              return (
+                <Animated.View
+                  key={opt.id}
+                  entering={FadeInDown.duration(400).delay(i * STAGGER_MS)}
+                  style={styles.tileWrap}
+                >
+                  <EraTile
+                    opt={opt}
+                    selected={selected}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      toggleEra(opt.id);
+                    }}
+                  />
+                </Animated.View>
+              );
+            })}
+          </View>
+        ))}
       </View>
-    </ScreenLayout>
+    </FlowStep>
   );
 }
 
@@ -127,23 +128,25 @@ function EraTile({ opt, selected, onPress }: EraTileProps) {
 
 const styles = StyleSheet.create({
   grid: {
+    flex: 1,
+    marginTop: 16,
+    gap: 10,
+  },
+  row: {
+    flex: 1,
     flexDirection: "row",
-    flexWrap: "wrap",
-    columnGap: 10,
-    rowGap: 10,
-    marginTop: 20,
+    gap: 10,
   },
   tileWrap: {
-    width: "48.5%",
+    flex: 1,
   },
   tile: {
     flex: 1,
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 14,
     borderWidth: 1.5,
     gap: 10,
-    height: 130,
     justifyContent: "center",
   },
   iconWrap: {

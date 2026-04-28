@@ -42,7 +42,7 @@ export default function Welcome() {
         entering={FadeInDown.duration(500).delay(700)}
         style={[styles.footer, { paddingBottom: bottom + 16 }]}
       >
-        <PrimaryCTA title="Get Started" onPress={() => router.push("/(onboarding)/goal")} />
+        <PrimaryCTA title="Get Started" onPress={() => router.push("/(onboarding)/flow")} />
       </Animated.View>
     </View>
   );

@@ -13,17 +13,10 @@ export default function OnboardingLayout() {
         }}
       >
         <Stack.Screen name="welcome" options={{ animation: "fade" }} />
-        <Stack.Screen name="goal" />
-        <Stack.Screen name="pain" />
-        <Stack.Screen name="proof" />
-        <Stack.Screen name="solution" />
-        <Stack.Screen name="comparison" />
-        <Stack.Screen name="eras" />
-        <Stack.Screen name="budget" />
-        <Stack.Screen name="camera" />
+        <Stack.Screen name="flow" options={{ animation: "fade" }} />
         <Stack.Screen name="processing" options={{ animation: "fade" }} />
-        <Stack.Screen name="demo" />
-        <Stack.Screen name="demo-chat" />
+        <Stack.Screen name="demo" options={{ animation: "fade" }} />
+        <Stack.Screen name="demo-chat" options={{ animation: "fade" }} />
         <Stack.Screen name="snapshot" options={{ animation: "fade" }} />
         <Stack.Screen name="paywall" options={{ animation: "fade" }} />
       </Stack>

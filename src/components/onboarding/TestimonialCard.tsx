@@ -38,10 +38,10 @@ export function TestimonialCard({ name, tag, rating, quote }: TestimonialCardPro
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    padding: 16,
-    gap: 12,
+    padding: 14,
+    gap: 10,
   },
   header: {
     flexDirection: "row",
@@ -75,8 +75,8 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   quote: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
     fontStyle: "italic",
   },
 });

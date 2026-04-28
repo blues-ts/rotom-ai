@@ -315,7 +315,6 @@ const styles = StyleSheet.create({
   aiName: {
     fontSize: 13,
     fontWeight: "700",
-    flex: 1,
   },
   streamingDot: {
     fontSize: 14,

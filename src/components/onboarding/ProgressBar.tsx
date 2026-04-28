@@ -12,9 +12,8 @@ interface ProgressBarProps {
 
 export function ProgressBar({ step, total = ONBOARDING_STEPS }: ProgressBarProps) {
   const { colors } = useTheme();
-  const progress = useSharedValue(0);
-
   const pct = Math.min(Math.max(step / total, 0), 1);
+  const progress = useSharedValue(pct);
 
   useEffect(() => {
     progress.value = withTiming(pct, { duration: 400 });

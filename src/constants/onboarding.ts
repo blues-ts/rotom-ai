@@ -127,7 +127,7 @@ export type EraId =
   | "bw_sm"
   | "swsh"
   | "sv"
-  | "japanese"
+  | "mega"
   | "sealed";
 
 export const ERA_OPTIONS: { id: EraId; icon: IconName; label: string }[] = [
@@ -137,7 +137,7 @@ export const ERA_OPTIONS: { id: EraId; icon: IconName; label: string }[] = [
   { id: "bw_sm", icon: "sunny-outline", label: "BW → XY → Sun & Moon" },
   { id: "swsh", icon: "shield-outline", label: "Sword & Shield" },
   { id: "sv", icon: "moon-outline", label: "Scarlet & Violet" },
-  { id: "japanese", icon: "language-outline", label: "Japanese exclusives" },
+  { id: "mega", icon: "flash-outline", label: "Mega Evolution" },
   { id: "sealed", icon: "cube-outline", label: "Sealed product" },
 ];
 

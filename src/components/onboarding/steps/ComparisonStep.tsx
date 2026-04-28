@@ -1,27 +1,18 @@
 import { StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
-import { ScreenLayout } from "@/components/onboarding/ScreenLayout";
-import { PrimaryCTA } from "@/components/onboarding/PrimaryCTA";
+import { FlowStep } from "@/components/onboarding/FlowStep";
 import { useTheme } from "@/context/ThemeContext";
-import { COMPARISON_ROWS, STEP_NUMBERS } from "@/constants/onboarding";
+import { COMPARISON_ROWS } from "@/constants/onboarding";
 
-export default function Comparison() {
+export function ComparisonStep() {
   const { colors } = useTheme();
 
   return (
-    <ScreenLayout
-      step={STEP_NUMBERS.comparison}
+    <FlowStep
       title="87% of collectors undersell their cards."
       subtitle="No AI. No edge."
       scrollable
-      footer={
-        <PrimaryCTA
-          title="Continue"
-          onPress={() => router.push("/(onboarding)/eras")}
-        />
-      }
     >
       <View style={[styles.table, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={[styles.headerRow, { borderBottomColor: colors.border }]}>
@@ -66,7 +57,7 @@ export default function Comparison() {
           </View>
         ))}
       </View>
-    </ScreenLayout>
+    </FlowStep>
   );
 }
 

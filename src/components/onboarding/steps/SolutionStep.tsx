@@ -1,12 +1,10 @@
 import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
-import { ScreenLayout } from "@/components/onboarding/ScreenLayout";
-import { PrimaryCTA } from "@/components/onboarding/PrimaryCTA";
+import { FlowStep } from "@/components/onboarding/FlowStep";
 import { useOnboarding } from "@/context/OnboardingContext";
-import { PAIN_OPTIONS, STEP_NUMBERS } from "@/constants/onboarding";
+import { PAIN_OPTIONS } from "@/constants/onboarding";
 import { useTheme } from "@/context/ThemeContext";
 
 const ROWS: {
@@ -40,7 +38,7 @@ const ROWS: {
   },
 ];
 
-export default function Solution() {
+export function SolutionStep() {
   const { pains } = useOnboarding();
   const { colors } = useTheme();
 
@@ -55,17 +53,10 @@ export default function Solution() {
   };
 
   return (
-    <ScreenLayout
-      step={STEP_NUMBERS.solution}
+    <FlowStep
       title="Meet River."
       subtitle="Built for exactly what you just told us."
       scrollable
-      footer={
-        <PrimaryCTA
-          title="Continue"
-          onPress={() => router.push("/(onboarding)/comparison")}
-        />
-      }
     >
       <View style={styles.list}>
         {ROWS.map((row, i) => (
@@ -88,7 +79,7 @@ export default function Solution() {
           </Animated.View>
         ))}
       </View>
-    </ScreenLayout>
+    </FlowStep>
   );
 }
 

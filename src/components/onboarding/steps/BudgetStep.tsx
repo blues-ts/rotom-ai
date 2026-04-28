@@ -1,31 +1,21 @@
 import { StyleSheet, View } from "react-native";
-import { router } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
-import { ScreenLayout } from "@/components/onboarding/ScreenLayout";
+import { FlowStep } from "@/components/onboarding/FlowStep";
 import { OptionRow } from "@/components/onboarding/OptionRow";
-import { PrimaryCTA } from "@/components/onboarding/PrimaryCTA";
 import { useOnboarding } from "@/context/OnboardingContext";
-import { BUDGET_OPTIONS, STEP_NUMBERS } from "@/constants/onboarding";
+import { BUDGET_OPTIONS } from "@/constants/onboarding";
 
 const STAGGER_MS = 70;
 
-export default function Budget() {
+export function BudgetStep() {
   const { budget, setBudget } = useOnboarding();
 
   return (
-    <ScreenLayout
-      step={STEP_NUMBERS.budget}
+    <FlowStep
       title="What's your range per card?"
       subtitle="River flags opportunities in your budget first."
       scrollable
-      footer={
-        <PrimaryCTA
-          title="Continue"
-          disabled={!budget}
-          onPress={() => router.push("/(onboarding)/camera")}
-        />
-      }
     >
       <View style={styles.options}>
         {BUDGET_OPTIONS.map((opt, i) => (
@@ -42,7 +32,7 @@ export default function Budget() {
           </Animated.View>
         ))}
       </View>
-    </ScreenLayout>
+    </FlowStep>
   );
 }
 

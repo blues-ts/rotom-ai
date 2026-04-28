@@ -10,24 +10,32 @@ interface OnboardingHeaderProps {
   step: number;
   showBack?: boolean;
   showProgress?: boolean;
+  onBack?: () => void;
 }
 
 export function OnboardingHeader({
   step,
   showBack = true,
   showProgress = true,
+  onBack,
 }: OnboardingHeaderProps) {
   const { colors } = useTheme();
 
   const handleBack = () => {
     Haptics.selectionAsync();
-    if (router.canGoBack()) router.back();
+    if (onBack) {
+      onBack();
+    } else if (router.canGoBack()) {
+      router.back();
+    }
   };
+
+  const canBack = showBack && (onBack !== undefined || router.canGoBack());
 
   return (
     <View style={styles.container}>
       <View style={styles.row}>
-        {showBack && router.canGoBack() ? (
+        {canBack ? (
           <Pressable onPress={handleBack} hitSlop={12} style={styles.backButton}>
             <Ionicons name="chevron-back" size={24} color={colors.foreground} />
           </Pressable>

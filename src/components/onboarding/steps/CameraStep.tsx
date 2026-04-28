@@ -1,7 +1,6 @@
+import { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useCameraPermissions } from "expo-camera";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import Animated, {
@@ -14,12 +13,8 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { useEffect } from "react";
 
-import { ScreenLayout } from "@/components/onboarding/ScreenLayout";
-import { PrimaryCTA, TextLink } from "@/components/onboarding/PrimaryCTA";
-import { useOnboarding } from "@/context/OnboardingContext";
-import { STEP_NUMBERS } from "@/constants/onboarding";
+import { FlowStep } from "@/components/onboarding/FlowStep";
 import { useTheme } from "@/context/ThemeContext";
 
 const BULLETS: { icon: keyof typeof Ionicons.glyphMap; text: string }[] = [
@@ -32,38 +27,11 @@ const HERO_CARD_IMAGE = "https://images.pokemontcg.io/swsh7/215_hires.png";
 const CARD_W = 130;
 const CARD_H = 180;
 
-export default function CameraPrime() {
+export function CameraStep() {
   const { colors } = useTheme();
-  const { setCameraGranted } = useOnboarding();
-  const [permission, requestPermission] = useCameraPermissions();
-
-  const handleEnable = async () => {
-    const result = await requestPermission();
-    setCameraGranted(result.granted);
-    router.push("/(onboarding)/processing");
-  };
-
-  const handleSkip = () => {
-    setCameraGranted(false);
-    router.push("/(onboarding)/processing");
-  };
-
-  const alreadyGranted = permission?.granted === true;
 
   return (
-    <ScreenLayout
-      step={STEP_NUMBERS.camera}
-      showProgress
-      footer={
-        <>
-          <PrimaryCTA
-            title={alreadyGranted ? "Camera's on — Continue" : "Enable Camera"}
-            onPress={handleEnable}
-          />
-          <TextLink title="Not now" onPress={handleSkip} />
-        </>
-      }
-    >
+    <FlowStep>
       <View style={styles.hero}>
         <Animated.View entering={FadeIn.duration(500)} style={styles.illoWrap}>
           <LinearGradient
@@ -101,7 +69,7 @@ export default function CameraPrime() {
           ))}
         </View>
       </View>
-    </ScreenLayout>
+    </FlowStep>
   );
 }
 
