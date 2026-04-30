@@ -66,7 +66,7 @@ export default function Snapshot() {
 
   const handleNext = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push("/(onboarding)/paywall");
+    router.push("/(auth)");
   };
 
   return (

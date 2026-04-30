@@ -1,5 +1,6 @@
 import AuthSync from "@/components/AuthSync";
 import { queryClient } from "@/config/queryClient";
+import { RevenueCatProvider } from "@/context/RevenueCatContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { ClerkLoaded, ClerkProvider } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
@@ -179,7 +180,9 @@ export default function RootLayout() {
 							tokenCache={tokenCache}
 						>
 							<ClerkLoaded>
-								<AppContent />
+								<RevenueCatProvider>
+									<AppContent />
+								</RevenueCatProvider>
 							</ClerkLoaded>
 						</ClerkProvider>
 					</QueryClientProvider>

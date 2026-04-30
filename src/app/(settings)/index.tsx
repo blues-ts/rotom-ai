@@ -1,8 +1,12 @@
+import { useRevenueCat } from "@/context/RevenueCatContext";
 import { useTheme } from "@/context/ThemeContext";
+import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
 import { router } from "expo-router";
+import Purchases from "react-native-purchases";
+import RevenueCatUI from "react-native-purchases-ui";
 import {
 	Alert,
 	Pressable,
@@ -17,6 +21,7 @@ export default function Settings() {
 	const { signOut } = useAuth();
 	const { user } = useUser();
 	const { colors } = useTheme();
+	const { isPro, refresh } = useRevenueCat();
 
 	const handleSignOut = () => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -31,6 +36,49 @@ export default function Settings() {
 				},
 			},
 		]);
+	};
+
+	const handleManageSubscription = async () => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		try {
+			await RevenueCatUI.presentCustomerCenter();
+			await refresh();
+		} catch (err) {
+			console.warn("[Settings] presentCustomerCenter failed:", err);
+		}
+	};
+
+	const handleUpgrade = async () => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+		try {
+			await RevenueCatUI.presentPaywallIfNeeded({
+				requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
+			});
+			await refresh();
+		} catch (err) {
+			console.warn("[Settings] presentPaywall failed:", err);
+		}
+	};
+
+	const handleRestore = async () => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		try {
+			const info = await Purchases.restorePurchases();
+			await refresh();
+			if (info.entitlements.active[PRO_ENTITLEMENT_ID]) {
+				Alert.alert("Restored", "Your River AI Pro subscription is active.");
+			} else {
+				Alert.alert(
+					"No purchases found",
+					"We couldn't find an active subscription to restore.",
+				);
+			}
+		} catch (err) {
+			Alert.alert(
+				"Restore failed",
+				err instanceof Error ? err.message : "Please try again.",
+			);
+		}
 	};
 
 	return (
@@ -93,6 +141,48 @@ export default function Settings() {
 								{user?.fullName ?? "—"}
 							</Text>
 						</View>
+					</View>
+				</View>
+
+				{/* Subscription Section */}
+				<View style={styles.section}>
+					<Text
+						style={[
+							styles.sectionTitle,
+							{ color: colors.mutedForeground },
+						]}
+					>
+						Subscription
+					</Text>
+					<View style={[styles.card, { backgroundColor: colors.card }]}>
+						<Pressable
+							style={[
+								styles.row,
+								{ borderBottomColor: colors.border },
+							]}
+							onPress={isPro ? handleManageSubscription : handleUpgrade}
+						>
+							<Text
+								style={[styles.label, { color: colors.foreground }]}
+							>
+								{isPro ? "Manage subscription" : "Upgrade to River AI Pro"}
+							</Text>
+							<Text
+								style={[
+									styles.value,
+									{ color: isPro ? colors.primary : colors.mutedForeground },
+								]}
+							>
+								{isPro ? "Pro" : "Free"}
+							</Text>
+						</Pressable>
+						<Pressable style={styles.row} onPress={handleRestore}>
+							<Text
+								style={[styles.label, { color: colors.foreground }]}
+							>
+								Restore purchases
+							</Text>
+						</Pressable>
 					</View>
 				</View>
 
