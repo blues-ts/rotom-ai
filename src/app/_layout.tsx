@@ -1,7 +1,8 @@
 import AuthSync from "@/components/AuthSync";
 import { queryClient } from "@/config/queryClient";
-import { RevenueCatProvider } from "@/context/RevenueCatContext";
+import { RevenueCatProvider, useRevenueCat } from "@/context/RevenueCatContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
+import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
 import { ClerkLoaded, ClerkProvider } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import {
@@ -13,9 +14,10 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { router, SplashScreen, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
-import { Pressable } from "react-native";
+import { Alert, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import RevenueCatUI from "react-native-purchases-ui";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
@@ -25,6 +27,7 @@ const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 
 function AppContent() {
 	const { theme, colors } = useTheme();
+	const { isPro } = useRevenueCat();
 
 	const navigationTheme = theme === "dark" ? DarkTheme : DefaultTheme;
 
@@ -81,6 +84,24 @@ function AppContent() {
 								<Pressable
 									onPress={() => {
 										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+										if (!isPro) {
+											Alert.alert(
+												"River AI Pro required",
+												"Creating collections is a Pro feature. Unlock River AI Pro to keep building your collection.",
+												[
+													{ text: "Maybe later", style: "cancel" },
+													{
+														text: "Unlock",
+														onPress: () => {
+															void RevenueCatUI.presentPaywallIfNeeded({
+																requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
+															});
+														},
+													},
+												],
+											);
+											return;
+										}
 										router.push("/create-collection");
 									}}
 								>

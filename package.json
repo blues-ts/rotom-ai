@@ -21,6 +21,7 @@
     "axios": "^1.13.6",
     "expo": "~55.0.4",
     "expo-auth-session": "^55.0.6",
+    "expo-blur": "~55.0.14",
     "expo-camera": "~55.0.15",
     "expo-clipboard": "~55.0.9",
     "expo-constants": "~55.0.7",

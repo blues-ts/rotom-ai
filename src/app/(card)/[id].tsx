@@ -23,12 +23,13 @@ import Animated, {
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useQuery } from "@tanstack/react-query";
 import { LineChart } from "react-native-wagmi-charts";
 import { useApi } from "@/lib/axios";
 import { useTheme } from "@/context/ThemeContext";
 import { useCollections } from "@/hooks/useCollections";
+import { useRevenueCat } from "@/context/RevenueCatContext";
+import { ProGate } from "@/components/ProGate";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const IMAGE_WIDTH = SCREEN_WIDTH * 0.9;
@@ -170,117 +171,6 @@ function FadeImage({
 				/>
 			</Animated.View>
 		</View>
-	);
-}
-
-function ZoomableImage({
-	children,
-	width,
-	height,
-}: {
-	children: React.ReactNode;
-	width: number;
-	height: number;
-}) {
-	const scale = useSharedValue(1);
-	const savedScale = useSharedValue(1);
-	const translateX = useSharedValue(0);
-	const translateY = useSharedValue(0);
-	const savedTranslateX = useSharedValue(0);
-	const savedTranslateY = useSharedValue(0);
-
-	const clampTranslation = (
-		translationVal: number,
-		scaleVal: number,
-		dimension: number,
-	) => {
-		"worklet";
-		const maxTranslate = ((scaleVal - 1) * dimension) / 2;
-		return Math.min(Math.max(translationVal, -maxTranslate), maxTranslate);
-	};
-
-	const pinchGesture = Gesture.Pinch()
-		.onUpdate((e) => {
-			const newScale = savedScale.value * e.scale;
-			scale.value = Math.min(Math.max(newScale, 0.5), 4);
-		})
-		.onEnd(() => {
-			if (scale.value < 1) {
-				scale.value = withSpring(1, { damping: 20, stiffness: 200 });
-				translateX.value = withSpring(0, { damping: 20, stiffness: 200 });
-				translateY.value = withSpring(0, { damping: 20, stiffness: 200 });
-				savedScale.value = 1;
-				savedTranslateX.value = 0;
-				savedTranslateY.value = 0;
-			} else {
-				savedScale.value = scale.value;
-				translateX.value = clampTranslation(
-					translateX.value,
-					scale.value,
-					width,
-				);
-				translateY.value = clampTranslation(
-					translateY.value,
-					scale.value,
-					height,
-				);
-				savedTranslateX.value = translateX.value;
-				savedTranslateY.value = translateY.value;
-			}
-		});
-
-	const panGesture = Gesture.Pan()
-		.minPointers(2)
-		.onUpdate((e) => {
-			if (savedScale.value > 1) {
-				translateX.value = clampTranslation(
-					savedTranslateX.value + e.translationX,
-					scale.value,
-					width,
-				);
-				translateY.value = clampTranslation(
-					savedTranslateY.value + e.translationY,
-					scale.value,
-					height,
-				);
-			}
-		})
-		.onEnd(() => {
-			savedTranslateX.value = translateX.value;
-			savedTranslateY.value = translateY.value;
-		});
-
-	const doubleTapGesture = Gesture.Tap()
-		.numberOfTaps(2)
-		.onStart(() => {
-			if (scale.value > 1.1) {
-				scale.value = withSpring(1, { damping: 20, stiffness: 200 });
-				translateX.value = withSpring(0, { damping: 20, stiffness: 200 });
-				translateY.value = withSpring(0, { damping: 20, stiffness: 200 });
-				savedScale.value = 1;
-				savedTranslateX.value = 0;
-				savedTranslateY.value = 0;
-			} else {
-				scale.value = withSpring(2, { damping: 20, stiffness: 200 });
-				savedScale.value = 2;
-			}
-		});
-
-	const composed = Gesture.Simultaneous(pinchGesture, panGesture);
-	const gesture = Gesture.Exclusive(doubleTapGesture, composed);
-
-	const animatedStyle = useAnimatedStyle(() => ({
-		transform: [
-			{ scale: scale.value },
-			{ translateX: translateX.value },
-			{ translateY: translateY.value },
-		],
-	}));
-
-	return (
-		<GestureDetector gesture={gesture}>
-			<Animated.View style={animatedStyle}>{children}</Animated.View>
-		</GestureDetector>
 	);
 }
 
@@ -952,6 +842,7 @@ function LoadingSkeleton({ colors, isFromCollection }: { colors: any; isFromColl
 
 export default function CardDetail() {
 	const { colors } = useTheme();
+	const { isPro } = useRevenueCat();
 	const { id, name, pricingType, source, condition, gradedCompany: initGradedCompany, gradedGrade: initGradedGrade, collectionId, quantity: initQuantity, pricePaid: initPricePaid } = useLocalSearchParams<{
 		id: string;
 		name: string;
@@ -1306,52 +1197,23 @@ export default function CardDetail() {
 					>
 						{/* Card Image */}
 						<View style={styles.imageContainer}>
-							<ZoomableImage
-								width={IMAGE_WIDTH}
-								height={IMAGE_HEIGHT}
-							>
-								<FadeImage
-									uri={card.image ?? ""}
-									name={card.name}
-									cardNumber={card.cardNumber}
-									style={{
-										width: IMAGE_WIDTH,
-										height: IMAGE_HEIGHT,
-									}}
-									backgroundColor={colors.background}
-									shimmerColor={colors.border}
-									foregroundColor={colors.foreground}
-									mutedColor={colors.mutedForeground}
-								/>
-							</ZoomableImage>
-							<View
-								pointerEvents="none"
-								style={[
-									styles.zoomHint,
-									{
-										backgroundColor: colors.background + "B3",
-										borderColor: colors.border,
-									},
-								]}
-							>
-								<Ionicons
-									name="search"
-									size={12}
-									color={colors.foreground}
-								/>
-								<Text
-									style={[
-										styles.zoomHintText,
-										{ color: colors.foreground },
-									]}
-								>
-									Pinch to zoom
-								</Text>
-							</View>
+							<FadeImage
+								uri={card.image ?? ""}
+								name={card.name}
+								cardNumber={card.cardNumber}
+								style={{
+									width: IMAGE_WIDTH,
+									height: IMAGE_HEIGHT,
+								}}
+								backgroundColor={colors.background}
+								shimmerColor={colors.border}
+								foregroundColor={colors.foreground}
+								mutedColor={colors.mutedForeground}
+							/>
 						</View>
 
 						{/* Estimate Block — most prominent element */}
-						<View
+						<ProGate
 							style={[
 								styles.estimateBlock,
 								{
@@ -1515,7 +1377,7 @@ export default function CardDetail() {
 									</>
 								)}
 							</View>
-						</View>
+						</ProGate>
 
 						{/* Quantity Badge */}
 						{configMatches && (
@@ -1738,7 +1600,7 @@ export default function CardDetail() {
 						</View>
 
 						{/* Price History Chart */}
-						<View
+						<ProGate
 							style={[
 								styles.section,
 								{
@@ -1852,91 +1714,158 @@ export default function CardDetail() {
 									</Text>
 								</View>
 							)}
-						</View>
+						</ProGate>
 
 						{/* Recent Sales */}
 						{historyList.length > 0 && (
-							<AnimatedCollapsible
-								title="Recent Sales"
-								expanded={salesExpanded}
-								onToggle={() =>
-									setSalesExpanded((v) => !v)
-								}
-								colors={colors}
-							>
-								{historyList.slice(0, 20).map((item: any, i: number) => (
-									<View
-										key={`${item.date}-${item.type}-${i}`}
-										style={[
-											styles.historyRow,
-											i < Math.min(historyList.length, 20) - 1 && {
-												borderBottomWidth: 1,
-												borderBottomColor: colors.foreground + "14",
-											},
-										]}
-									>
-										<View style={{ flex: 1 }}>
-											<Text
-												style={[
-													styles.historyDate,
-													{
-														color: colors.foreground,
-													},
-												]}
-											>
-												{new Date(
-													item.date,
-												).toLocaleDateString()}
-											</Text>
-											<Text
-												style={[
-													styles.historyMeta,
-													{
-														color: colors.foreground,
-														opacity: 0.6,
-													},
-												]}
-											>
-												{item.type} · {item.source}
-											</Text>
-										</View>
+							isPro ? (
+								<AnimatedCollapsible
+									title="Recent Sales"
+									expanded={salesExpanded}
+									onToggle={() =>
+										setSalesExpanded((v) => !v)
+									}
+									colors={colors}
+								>
+									{historyList.slice(0, 20).map((item: any, i: number) => (
 										<View
-											style={{ alignItems: "flex-end" }}
+											key={`${item.date}-${item.type}-${i}`}
+											style={[
+												styles.historyRow,
+												i < Math.min(historyList.length, 20) - 1 && {
+													borderBottomWidth: 1,
+													borderBottomColor: colors.foreground + "14",
+												},
+											]}
 										>
+											<View style={{ flex: 1 }}>
+												<Text
+													style={[
+														styles.historyDate,
+														{
+															color: colors.foreground,
+														},
+													]}
+												>
+													{new Date(
+														item.date,
+													).toLocaleDateString()}
+												</Text>
+												<Text
+													style={[
+														styles.historyMeta,
+														{
+															color: colors.foreground,
+															opacity: 0.6,
+														},
+													]}
+												>
+													{item.type} · {item.source}
+												</Text>
+											</View>
+											<View
+												style={{ alignItems: "flex-end" }}
+											>
+												<Text
+													style={[
+														styles.historyPrice,
+														{
+															color: colors.foreground,
+														},
+													]}
+												>
+													{formatPrice(
+														item.avg,
+														card.currency,
+													)}
+												</Text>
+												{item.saleCount !== undefined &&
+													item.saleCount > 0 && (
+														<Text
+															style={[
+																styles.historyMeta,
+																{
+																	color: colors.foreground,
+																	opacity: 0.6,
+																},
+															]}
+														>
+															{item.saleCount} sale
+															{item.saleCount !== 1
+																? "s"
+																: ""}
+														</Text>
+													)}
+											</View>
+										</View>
+									))}
+								</AnimatedCollapsible>
+							) : (
+								<ProGate
+									style={[
+										styles.section,
+										{
+											backgroundColor: colors.card + "D9",
+											borderColor: colors.border,
+										},
+									]}
+								>
+									<View style={styles.collapsibleHeader}>
+										<Text
+											style={[
+												styles.sectionTitle,
+												{ color: colors.foreground, marginBottom: 0 },
+											]}
+										>
+											Recent Sales
+										</Text>
+										<Ionicons
+											name="chevron-down"
+											size={18}
+											color={colors.mutedForeground}
+										/>
+									</View>
+									{historyList.slice(0, 3).map((item: any, i: number) => (
+										<View
+											key={`${item.date}-${item.type}-${i}`}
+											style={[
+												styles.historyRow,
+												i < Math.min(historyList.length, 3) - 1 && {
+													borderBottomWidth: 1,
+													borderBottomColor: colors.foreground + "14",
+												},
+											]}
+										>
+											<View style={{ flex: 1 }}>
+												<Text
+													style={[
+														styles.historyDate,
+														{ color: colors.foreground },
+													]}
+												>
+													{new Date(item.date).toLocaleDateString()}
+												</Text>
+												<Text
+													style={[
+														styles.historyMeta,
+														{ color: colors.foreground, opacity: 0.6 },
+													]}
+												>
+													{item.type} · {item.source}
+												</Text>
+											</View>
 											<Text
 												style={[
 													styles.historyPrice,
-													{
-														color: colors.foreground,
-													},
+													{ color: colors.foreground },
 												]}
 											>
-												{formatPrice(
-													item.avg,
-													card.currency,
-												)}
+												{formatPrice(item.avg, card.currency)}
 											</Text>
-											{item.saleCount !== undefined &&
-												item.saleCount > 0 && (
-													<Text
-														style={[
-															styles.historyMeta,
-															{
-																color: colors.foreground,
-																opacity: 0.6,
-															},
-														]}
-													>
-														{item.saleCount} sale
-														{item.saleCount !== 1
-															? "s"
-															: ""}
-													</Text>
-												)}
 										</View>
-									</View>
-								))}
-							</AnimatedCollapsible>
+									))}
+								</ProGate>
+							)
 						)}
 
 						{/* Last Updated */}
@@ -2029,23 +1958,6 @@ const styles = StyleSheet.create({
 		alignSelf: "center",
 		width: IMAGE_WIDTH,
 	},
-	zoomHint: {
-		position: "absolute",
-		bottom: 10,
-		right: 10,
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 5,
-		paddingHorizontal: 9,
-		paddingVertical: 5,
-		borderRadius: 999,
-		borderWidth: StyleSheet.hairlineWidth,
-	},
-	zoomHintText: {
-		fontSize: 11,
-		fontWeight: "600",
-	},
-
 	// Quantity badge
 	quantityBadge: {
 		flexDirection: "row",

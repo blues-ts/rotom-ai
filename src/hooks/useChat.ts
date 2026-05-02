@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@clerk/clerk-expo";
+import RevenueCatUI from "react-native-purchases-ui";
 
 import type { Message } from "@/types/chat";
 import { parseSSE } from "@/lib/parseSSE";
 import type { ParsedEvent } from "@/lib/parseSSE";
 import { useCollectionSnapshot } from "@/hooks/useCollectionSnapshot";
+import { useRevenueCat } from "@/context/RevenueCatContext";
+import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const DRAIN_INTERVAL_MS = 16;
@@ -13,6 +16,7 @@ const CHARS_PER_TICK = 4;
 
 export function useChat() {
 	const { getToken } = useAuth();
+	const { isPro } = useRevenueCat();
 	const { data: collectionSnapshot } = useCollectionSnapshot();
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [streamingContent, setStreamingContent] = useState("");
@@ -105,6 +109,22 @@ export function useChat() {
 	const sendMessage = useCallback(
 		async (text: string) => {
 			if (isStreaming) return;
+
+			if (!isPro) {
+				const gateMessage: Message = {
+					id: Date.now().toString(),
+					role: "assistant",
+					content:
+						"Chat with River is a Pro feature. Unlock River AI Pro to keep going.",
+					createdAt: new Date().toISOString(),
+					status: "complete",
+				};
+				setMessages((prev) => [...prev, gateMessage]);
+				void RevenueCatUI.presentPaywallIfNeeded({
+					requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
+				});
+				return;
+			}
 
 			const userMessage: Message = {
 				id: Date.now().toString(),
@@ -219,6 +239,7 @@ export function useChat() {
 		},
 		[
 			isStreaming,
+			isPro,
 			messages,
 			getToken,
 			handleEvent,
