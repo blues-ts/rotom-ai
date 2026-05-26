@@ -14,7 +14,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { router, SplashScreen, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
-import { Alert, Pressable } from "react-native";
+import { Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import RevenueCatUI from "react-native-purchases-ui";
@@ -85,21 +85,9 @@ function AppContent() {
 									onPress={() => {
 										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 										if (!isPro) {
-											Alert.alert(
-												"River AI Pro required",
-												"Creating collections is a Pro feature. Unlock River AI Pro to keep building your collection.",
-												[
-													{ text: "Maybe later", style: "cancel" },
-													{
-														text: "Unlock",
-														onPress: () => {
-															void RevenueCatUI.presentPaywallIfNeeded({
-																requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
-															});
-														},
-													},
-												],
-											);
+											void RevenueCatUI.presentPaywallIfNeeded({
+												requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
+											});
 											return;
 										}
 										router.push("/create-collection");

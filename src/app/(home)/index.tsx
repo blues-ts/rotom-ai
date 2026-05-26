@@ -5,6 +5,7 @@ import { router, Stack } from "expo-router";
 
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import RevenueCatUI from "react-native-purchases-ui";
 import Animated, {
 	interpolate,
 	useAnimatedStyle,
@@ -23,10 +24,13 @@ import ChatMessageList, {
 } from "@/components/ChatMessageList";
 import EmptyChat from "@/components/EmptyChat";
 import { useTheme } from "@/context/ThemeContext";
+import { useRevenueCat } from "@/context/RevenueCatContext";
 import { useChat } from "@/hooks/useChat";
+import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
 
 export default function Home() {
 	const { colors } = useTheme();
+	const { isPro } = useRevenueCat();
 	const { bottom } = useSafeAreaInsets();
 	const chatListRef = useRef<ChatMessageListRef>(null);
 	const gradientOpacity = useSharedValue(1);
@@ -121,6 +125,12 @@ export default function Home() {
 					icon={"camera"}
 					onPress={() => {
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+						if (!isPro) {
+							void RevenueCatUI.presentPaywallIfNeeded({
+								requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
+							});
+							return;
+						}
 						router.push("/(camera)");
 					}}
 				/>

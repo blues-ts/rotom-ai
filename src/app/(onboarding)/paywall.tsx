@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, InteractionManager, Linking, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -63,18 +63,20 @@ export default function Paywall() {
     }
   }, [finish]);
 
+  // Skip the paywall entirely if the user is already Pro — covers the race where
+  // Clerk → RevenueCat logIn resolves after this screen mounts and flips isPro
+  // mid-flight.
+  useEffect(() => {
+    if (isReady && isPro) void finish();
+  }, [isReady, isPro, finish]);
+
   // Auto-present on first focus only. The delay lets Clerk's OAuth
   // SFAuthenticationViewController finish dismissing — without it, UIKit refuses
   // to present onto a VC that's not in the window hierarchy.
   useFocusEffect(
     useCallback(() => {
-      if (!isReady || hasAutoPresented.current) return;
+      if (!isReady || isPro || hasAutoPresented.current) return;
       hasAutoPresented.current = true;
-
-      if (isPro) {
-        void finish();
-        return;
-      }
 
       let timeoutId: ReturnType<typeof setTimeout> | null = null;
       const task = InteractionManager.runAfterInteractions(() => {
@@ -85,7 +87,7 @@ export default function Paywall() {
         task.cancel();
         if (timeoutId) clearTimeout(timeoutId);
       };
-    }, [isReady, isPro, finish, present]),
+    }, [isReady, isPro, present]),
   );
 
   const handleRestore = async () => {

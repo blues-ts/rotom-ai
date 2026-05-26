@@ -1,5 +1,6 @@
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useApi } from "@/lib/axios";
 import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import * as Haptics from "expo-haptics";
@@ -22,6 +23,7 @@ export default function Settings() {
 	const { user } = useUser();
 	const { colors } = useTheme();
 	const { isPro, refresh } = useRevenueCat();
+	const api = useApi();
 
 	const handleSignOut = () => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -58,6 +60,40 @@ export default function Settings() {
 		} catch (err) {
 			console.warn("[Settings] presentPaywall failed:", err);
 		}
+	};
+
+	const handleDeleteAccount = () => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+		const message = isPro
+			? "This permanently deletes your account and all data. You'll still be charged for any active subscription until you cancel it in your iPhone Settings → Apple ID → Subscriptions."
+			: "This permanently deletes your account and all data. This cannot be undone.";
+
+		Alert.alert("Delete Account", message, [
+			{ text: "Cancel", style: "cancel" },
+			{
+				text: "Delete",
+				style: "destructive",
+				onPress: async () => {
+					try {
+						await api.delete("/api/auth/user");
+						await SecureStore.deleteItemAsync("onboarding_complete");
+						try {
+							await Purchases.logOut();
+						} catch {
+							// Anonymous users can't log out; ignore.
+						}
+						await signOut();
+						router.replace("/(auth)");
+					} catch (err) {
+						console.warn("[Settings] deleteAccount failed:", err);
+						Alert.alert(
+							"Delete failed",
+							err instanceof Error ? err.message : "Please try again.",
+						);
+					}
+				},
+			},
+		]);
 	};
 
 	const handleRestore = async () => {
@@ -202,6 +238,21 @@ export default function Settings() {
 							]}
 						>
 							Sign Out
+						</Text>
+					</Pressable>
+				</View>
+
+				{/* Delete Account */}
+				<View style={styles.section}>
+					<Pressable
+						style={[
+							styles.signOutButton,
+							{ backgroundColor: colors.destructive },
+						]}
+						onPress={handleDeleteAccount}
+					>
+						<Text style={[styles.signOutText, { color: "#fff" }]}>
+							Delete Account
 						</Text>
 					</Pressable>
 				</View>
