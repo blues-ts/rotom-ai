@@ -48,12 +48,33 @@ export function getDatabase(): SQLite.SQLiteDatabase {
     if (!columns.includes("price_paid")) {
       db.execSync(`ALTER TABLE collection_cards ADD COLUMN price_paid REAL;`);
     }
+    if (!columns.includes("card_value_updated_at")) {
+      db.execSync(`ALTER TABLE collection_cards ADD COLUMN card_value_updated_at TEXT;`);
+    }
 
     // Update unique index to include config so same card with different config = different entry
     db.execSync(`
       DROP INDEX IF EXISTS idx_collection_card;
       CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_card
         ON collection_cards(collection_id, card_id, pricing_type, source, condition, COALESCE(graded_company, ''), COALESCE(graded_grade, ''));
+    `);
+
+    // Migrate snapshots from old date-keyed schema to event-stream schema.
+    const snapCols = db
+      .getAllSync<{ name: string }>("PRAGMA table_info(collection_value_snapshots)")
+      .map((c) => c.name);
+    if (snapCols.includes("date")) {
+      db.execSync("DROP TABLE collection_value_snapshots;");
+    }
+
+    db.execSync(`
+      CREATE TABLE IF NOT EXISTS collection_value_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recorded_at TEXT NOT NULL,
+        total_value REAL NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_value_snapshots_recorded_at
+        ON collection_value_snapshots(recorded_at);
     `);
   }
   return db;

@@ -1,9 +1,14 @@
+import { useEffect } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "@/context/ThemeContext";
-import { useCollections } from "@/hooks/useCollections";
+import { useAutoRefreshStalePrices, useCollections } from "@/hooks/useCollections";
+import { recordCollectionValueSnapshot } from "@/lib/collectionValueHistory";
 import CollectionCard from "@/components/CollectionCard";
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import CollectionValueChart from "@/components/CollectionValueChart";
+import RefreshingPill from "@/components/RefreshingPill";
+import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -11,13 +16,30 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function Collections() {
 	const { colors } = useTheme();
 	const { collections, deleteCollection } = useCollections();
+	const refreshPrices = useAutoRefreshStalePrices();
+	const queryClient = useQueryClient();
+
+	useEffect(() => {
+		recordCollectionValueSnapshot();
+		queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
+	}, [queryClient]);
 
 	return (
 		<SafeAreaView
 			style={[styles.container, { backgroundColor: colors.background }]}
 			edges={["bottom"]}
 		>
-			<ScrollView contentContainerStyle={styles.content}>
+			<RefreshingPill visible={refreshPrices.isPending} />
+			<ScrollView
+				contentContainerStyle={styles.content}
+				refreshControl={
+					<RefreshControl
+						refreshing={refreshPrices.isPending}
+						onRefresh={() => refreshPrices.mutate(undefined)}
+						tintColor={colors.mutedForeground}
+					/>
+				}
+			>
 				{collections.length === 0 ? (
 					<View style={styles.emptyState}>
 						<Ionicons
@@ -44,6 +66,8 @@ export default function Collections() {
 						</Text>
 					</View>
 				) : (
+					<>
+					<CollectionValueChart />
 					<Animated.View style={styles.list} layout={LinearTransition.duration(300)}>
 						{collections.map((c) => (
 							<Animated.View
@@ -81,6 +105,7 @@ export default function Collections() {
 						</Animated.View>
 						))}
 					</Animated.View>
+					</>
 				)}
 			</ScrollView>
 		</SafeAreaView>

@@ -1,6 +1,12 @@
+import { useCallback, useEffect, useRef } from "react";
+import { AppState } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDatabase } from "@/lib/database";
+import { useApi } from "@/lib/axios";
+import { recordCollectionValueSnapshot } from "@/lib/collectionValueHistory";
 import type { Collection, CollectionCard } from "@/types/collection";
+
+const STALE_TTL_MS = 24 * 60 * 60 * 1000;
 
 const COLLECTIONS_KEY = ["collections"] as const;
 const COLLECTION_SNAPSHOT_KEY = ["collectionSnapshot"] as const;
@@ -75,8 +81,10 @@ export function useCollections() {
       return Promise.resolve();
     },
     onSuccess: () => {
+      recordCollectionValueSnapshot();
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
       queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
+      queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
     },
   });
 
@@ -140,17 +148,19 @@ export function useCollections() {
       } else {
         const id = Date.now().toString();
         db.runSync(
-          "INSERT INTO collection_cards (id, collection_id, card_id, card_name, card_image_url, card_value, pricing_type, source, condition, graded_company, graded_grade, quantity, price_paid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)",
-          [id, collectionId, cardId, cardName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany ?? null, gradedGrade ?? null, pricePaid ?? null],
+          "INSERT INTO collection_cards (id, collection_id, card_id, card_name, card_image_url, card_value, pricing_type, source, condition, graded_company, graded_grade, quantity, price_paid, card_value_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
+          [id, collectionId, cardId, cardName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany ?? null, gradedGrade ?? null, pricePaid ?? null, new Date().toISOString()],
         );
       }
       return Promise.resolve();
     },
     onSuccess: (_data, { collectionId }) => {
+      recordCollectionValueSnapshot();
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
       queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
       queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
       queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
+      queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
     },
   });
 
@@ -163,10 +173,12 @@ export function useCollections() {
       return Promise.resolve();
     },
     onSuccess: (_data, { collectionId }) => {
+      recordCollectionValueSnapshot();
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
       queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
       queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
       queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
+      queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
     },
   });
 
@@ -197,10 +209,12 @@ export function useCollections() {
       return Promise.resolve();
     },
     onSuccess: (_data, { collectionId }) => {
+      recordCollectionValueSnapshot();
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
       queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
       queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
       queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
+      queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
     },
   });
 
@@ -231,10 +245,12 @@ export function useCollections() {
       return Promise.resolve();
     },
     onSuccess: (_data, { collectionId }) => {
+      recordCollectionValueSnapshot();
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
       queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
       queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
       queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
+      queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
     },
   });
 
@@ -292,6 +308,77 @@ interface CollectionCardRow {
   graded_grade: string | null;
   quantity: number;
   price_paid: number | null;
+  card_value_updated_at: string | null;
+}
+
+function resolvePriceForRow(card: any, row: CollectionCardRow): number | undefined {
+  if (!card?.prices) return undefined;
+  if (row.pricing_type === "Graded" && row.graded_company && row.graded_grade) {
+    const tierKey = `${row.graded_company.toUpperCase()}_${row.graded_grade.replace(/\./g, "_")}`;
+    return (
+      card.prices.ebay?.[tierKey]?.avg ??
+      card.prices.tcgplayer?.[tierKey]?.avg
+    );
+  }
+  const sourceKey = row.source === "eBay" ? "ebay" : "tcgplayer";
+  return card.prices[sourceKey]?.[row.condition]?.avg;
+}
+
+export function useRefreshCollectionPrices() {
+  const queryClient = useQueryClient();
+  const db = getDatabase();
+  const api = useApi();
+
+  return useMutation({
+    mutationFn: async (collectionId?: string) => {
+      const rows = collectionId
+        ? db.getAllSync<CollectionCardRow>(
+            "SELECT * FROM collection_cards WHERE collection_id = ?",
+            [collectionId],
+          )
+        : db.getAllSync<CollectionCardRow>("SELECT * FROM collection_cards");
+
+      if (rows.length === 0) return { updated: 0 };
+
+      const uniqueCardIds = Array.from(new Set(rows.map((r) => r.card_id)));
+      const results = await Promise.all(
+        uniqueCardIds.map(async (cardId) => {
+          try {
+            const res = await api.get(`/api/pricing/cards/${cardId}`);
+            return [cardId, res.data?.data] as const;
+          } catch {
+            return [cardId, null] as const;
+          }
+        }),
+      );
+      const cardMap = new Map(results);
+
+      const now = new Date().toISOString();
+      let updated = 0;
+      for (const row of rows) {
+        const card = cardMap.get(row.card_id);
+        if (!card) continue;
+        const price = resolvePriceForRow(card, row);
+        if (price === undefined || price === null) continue;
+        db.runSync(
+          "UPDATE collection_cards SET card_value = ?, card_value_updated_at = ? WHERE id = ?",
+          [price, now, row.id],
+        );
+        updated += 1;
+      }
+      return { updated };
+    },
+    onSuccess: (_data, collectionId) => {
+      recordCollectionValueSnapshot();
+      queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
+      queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
+      queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
+      if (collectionId) {
+        queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
+        queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
+      }
+    },
+  });
 }
 
 export function useCollectionCards(collectionId: string) {
@@ -323,4 +410,39 @@ export function useCollectionCards(collectionId: string) {
     },
     enabled: !!collectionId,
   });
+}
+
+export function useAutoRefreshStalePrices() {
+  const db = getDatabase();
+  const refresh = useRefreshCollectionPrices();
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+
+  const checkAndRefresh = useCallback(() => {
+    const current = refreshRef.current;
+    if (current.isPending) return;
+    const cutoff = new Date(Date.now() - STALE_TTL_MS).toISOString();
+    const stale = db.getFirstSync<{ id: string }>(
+      `SELECT id FROM collection_cards
+       WHERE card_value_updated_at IS NULL OR card_value_updated_at < ?
+       LIMIT 1`,
+      [cutoff],
+    );
+    if (stale) {
+      current.mutate(undefined);
+    }
+  }, [db]);
+
+  useEffect(() => {
+    checkAndRefresh();
+  }, [checkAndRefresh]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") checkAndRefresh();
+    });
+    return () => sub.remove();
+  }, [checkAndRefresh]);
+
+  return refresh;
 }

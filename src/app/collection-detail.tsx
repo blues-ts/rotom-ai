@@ -6,6 +6,7 @@ import {
 	Image,
 	Keyboard,
 	Pressable,
+	RefreshControl,
 	StyleSheet,
 	Text,
 	TextInput,
@@ -27,7 +28,9 @@ import {
 	useCollectionCards,
 	useCollectionDetail,
 	useCollections,
+	useRefreshCollectionPrices,
 } from "@/hooks/useCollections";
+import RefreshingPill from "@/components/RefreshingPill";
 import type { CollectionCard } from "@/types/collection";
 
 const COLUMNS = 3;
@@ -134,6 +137,7 @@ export default function CollectionDetail() {
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const { colors } = useTheme();
 	const { renameCollection } = useCollections();
+	const refreshPrices = useRefreshCollectionPrices();
 	const { data: collection } = useCollectionDetail(id);
 	const { data: cards } = useCollectionCards(id);
 	const [filterQuery, setFilterQuery] = useState("");
@@ -293,6 +297,7 @@ export default function CollectionDetail() {
 			/>
 
 			<View style={[styles.container, { backgroundColor: colors.background }]}>
+				<RefreshingPill visible={refreshPrices.isPending} />
 				{/* Filter bar */}
 				<View style={styles.filterContainer}>
 					<View
@@ -386,6 +391,13 @@ export default function CollectionDetail() {
 						showsVerticalScrollIndicator={false}
 						keyboardDismissMode="on-drag"
 						keyboardShouldPersistTaps="handled"
+						refreshControl={
+							<RefreshControl
+								refreshing={refreshPrices.isPending}
+								onRefresh={() => refreshPrices.mutate(id)}
+								tintColor={colors.mutedForeground}
+							/>
+						}
 					/>
 				) : (
 					<View style={styles.emptyState}>
