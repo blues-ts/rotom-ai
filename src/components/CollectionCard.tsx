@@ -177,12 +177,14 @@ const styles = StyleSheet.create({
 		gap: 8,
 	},
 	cardImageWrapper: {
-		borderRadius: Math.round(80 * 0.05),
+		flex: 1,
+		aspectRatio: 80 / 112,
+		borderRadius: 4,
 		overflow: "hidden",
 	},
 	cardImage: {
-		width: 80,
-		height: 112,
+		width: "100%",
+		height: "100%",
 	},
 	footer: {
 		flexDirection: "row",
