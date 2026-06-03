@@ -2,7 +2,12 @@ import { useRevenueCat } from "@/context/RevenueCatContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useApi } from "@/lib/axios";
 import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
+import {
+	clearCollectionValueHistory,
+	seedCollectionValueHistory,
+} from "@/lib/collectionValueHistory";
 import { useAuth, useUser } from "@clerk/clerk-expo";
+import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
 import { router } from "expo-router";
@@ -24,6 +29,7 @@ export default function Settings() {
 	const { colors } = useTheme();
 	const { isPro, refresh } = useRevenueCat();
 	const api = useApi();
+	const queryClient = useQueryClient();
 
 	const handleSignOut = () => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -287,6 +293,46 @@ export default function Settings() {
 								]}
 							>
 								Reset Onboarding
+							</Text>
+						</Pressable>
+						<Pressable
+							style={[
+								styles.signOutButton,
+								{ backgroundColor: colors.card },
+							]}
+							onPress={() => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								seedCollectionValueHistory();
+								queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
+							}}
+						>
+							<Text
+								style={[
+									styles.label,
+									{ color: colors.foreground },
+								]}
+							>
+								Seed Test History
+							</Text>
+						</Pressable>
+						<Pressable
+							style={[
+								styles.signOutButton,
+								{ backgroundColor: colors.card },
+							]}
+							onPress={() => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								clearCollectionValueHistory();
+								queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
+							}}
+						>
+							<Text
+								style={[
+									styles.label,
+									{ color: colors.foreground },
+								]}
+							>
+								Clear History
 							</Text>
 						</Pressable>
 					</View>
