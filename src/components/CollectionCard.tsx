@@ -2,12 +2,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
 import * as Haptics from "expo-haptics";
 import {
-	Image,
 	Pressable,
 	StyleSheet,
 	Text,
 	View,
 } from "react-native";
+import { Image } from "expo-image";
 import Animated, {
 	useAnimatedStyle,
 	useSharedValue,
@@ -98,7 +98,7 @@ export default function CollectionCard({
 							<Image
 								source={{ uri }}
 								style={styles.cardImage}
-								resizeMode="contain"
+								contentFit="contain"
 							/>
 						</View>
 					))}

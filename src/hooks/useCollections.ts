@@ -254,6 +254,39 @@ export function useCollections() {
     },
   });
 
+  const updateCardPricePaid = useMutation({
+    mutationFn: ({
+      collectionId,
+      cardId,
+      pricingType = "Raw",
+      source = "TCGPlayer",
+      condition = "NEAR_MINT",
+      gradedCompany,
+      gradedGrade,
+      pricePaid,
+    }: {
+      collectionId: string;
+      cardId: string;
+      pricingType?: string;
+      source?: string;
+      condition?: string;
+      gradedCompany?: string;
+      gradedGrade?: string;
+      pricePaid: number | null;
+    }) => {
+      db.runSync(
+        `UPDATE collection_cards SET price_paid = ?
+         WHERE collection_id = ? AND card_id = ? AND pricing_type = ? AND source = ? AND condition = ?
+         AND COALESCE(graded_company, '') = ? AND COALESCE(graded_grade, '') = ?`,
+        [pricePaid, collectionId, cardId, pricingType, source, condition, gradedCompany ?? "", gradedGrade ?? ""],
+      );
+      return Promise.resolve();
+    },
+    onSuccess: (_data, { collectionId }) => {
+      queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
+    },
+  });
+
   return {
     collections: query.data ?? [],
     isLoading: query.isLoading,
@@ -264,6 +297,7 @@ export function useCollections() {
     removeCardFromCollection,
     incrementCardQuantity,
     decrementCardQuantity,
+    updateCardPricePaid,
   };
 }
 

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	Alert,
 	Dimensions,
-	Image,
 	LayoutChangeEvent,
 	Pressable,
 	ScrollView,
@@ -29,7 +28,9 @@ import { useApi } from "@/lib/axios";
 import { useTheme } from "@/context/ThemeContext";
 import { useCollections } from "@/hooks/useCollections";
 import { useRevenueCat } from "@/context/RevenueCatContext";
+import { Image } from "expo-image";
 import { ProGate } from "@/components/ProGate";
+import CardImage from "@/components/CardImage";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const IMAGE_WIDTH = SCREEN_WIDTH * 0.9;
@@ -67,112 +68,6 @@ function buildGradedTierKey(company: string, grade: string): string {
 }
 
 // --- Shared UI Components ---
-
-function FadeImage({
-	uri,
-	name,
-	cardNumber,
-	style,
-	backgroundColor,
-	shimmerColor,
-	foregroundColor,
-	mutedColor,
-}: {
-	uri: string;
-	name?: string;
-	cardNumber?: string;
-	style: any;
-	backgroundColor: string;
-	shimmerColor: string;
-	foregroundColor: string;
-	mutedColor: string;
-}) {
-	const opacity = useSharedValue(0);
-	const shimmerOpacity = useSharedValue(0.3);
-	const [loaded, setLoaded] = useState(false);
-	const [failed, setFailed] = useState(false);
-
-	useEffect(() => {
-		shimmerOpacity.value = withRepeat(
-			withSequence(
-				withTiming(0.7, { duration: 800 }),
-				withTiming(0.3, { duration: 800 }),
-			),
-			-1,
-		);
-	}, []);
-
-	const animatedStyle = useAnimatedStyle(() => ({
-		opacity: opacity.value,
-	}));
-	const shimmerStyle = useAnimatedStyle(() => ({
-		opacity: shimmerOpacity.value,
-	}));
-
-	if (failed) {
-		return (
-			<View
-				style={[
-					style,
-					{
-						backgroundColor,
-						borderRadius: 14,
-						alignItems: "center",
-						justifyContent: "center",
-						gap: 6,
-					},
-				]}
-			>
-				<Ionicons name="image-outline" size={28} color={mutedColor} />
-				{name && (
-					<Text
-						style={{
-							color: foregroundColor,
-							fontSize: 12,
-							fontWeight: "600",
-							textAlign: "center",
-							paddingHorizontal: 8,
-						}}
-						numberOfLines={2}
-					>
-						{name}
-					</Text>
-				)}
-				{cardNumber && (
-					<Text style={{ color: mutedColor, fontSize: 11 }}>
-						#{cardNumber}
-					</Text>
-				)}
-			</View>
-		);
-	}
-
-	return (
-		<View style={[style, { overflow: "hidden" }]}>
-			{!loaded && (
-				<Animated.View
-					style={[
-						StyleSheet.absoluteFill,
-						{ backgroundColor: shimmerColor },
-						shimmerStyle,
-					]}
-				/>
-			)}
-			<Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
-				<Image
-					source={{ uri }}
-					style={StyleSheet.absoluteFill}
-					resizeMode="contain"
-					onLoad={() => {
-						setLoaded(true);
-						opacity.value = withTiming(1, { duration: 200 });
-					}}
-					onError={() => setFailed(true)}
-				/>
-			</Animated.View>
-		</View>
-	);
-}
 
 function Skeleton({
 	width,
@@ -876,7 +771,7 @@ export default function CardDetail() {
 	const [pricePaid, setPricePaid] = useState<string>(initPricePaid || "");
 
 	// Collection context
-	const { incrementCardQuantity, addCardToCollection, removeCardFromCollection, decrementCardQuantity } = useCollections();
+	const { incrementCardQuantity, addCardToCollection, removeCardFromCollection, decrementCardQuantity, updateCardPricePaid } = useCollections();
 
 	// History
 	const [historyPeriod, setHistoryPeriod] = useState("all");
@@ -1076,6 +971,37 @@ export default function CardDetail() {
 			: rawSource === (source || "TCGPlayer") &&
 				rawCondition === (condition || "NEAR_MINT"));
 
+	useEffect(() => {
+		if (!isFromCollection || !configMatches) return;
+		if (pricePaid === (initPricePaid || "")) return;
+		const timer = setTimeout(() => {
+			const parsed = pricePaid.trim().length > 0 ? parseFloat(pricePaid) : NaN;
+			updateCardPricePaid.mutate({
+				collectionId: collectionId!,
+				cardId: id,
+				pricingType: pricingTab,
+				source: rawSource,
+				condition: pricingTab === "Graded" ? "GRADED" : rawCondition,
+				gradedCompany: gradedCompany ?? undefined,
+				gradedGrade: gradedGrade ?? undefined,
+				pricePaid: isNaN(parsed) ? null : parsed,
+			});
+		}, 600);
+		return () => clearTimeout(timer);
+	}, [
+		pricePaid,
+		isFromCollection,
+		configMatches,
+		initPricePaid,
+		collectionId,
+		id,
+		pricingTab,
+		rawSource,
+		rawCondition,
+		gradedCompany,
+		gradedGrade,
+	]);
+
 	return (
 		<>
 			<Stack.Screen
@@ -1179,8 +1105,9 @@ export default function CardDetail() {
 						<Image
 							source={{ uri: card.image }}
 							style={StyleSheet.absoluteFill}
-							resizeMode="cover"
+							contentFit="cover"
 							blurRadius={30}
+							cachePolicy="memory-disk"
 						/>
 					)}
 					<View
@@ -1197,18 +1124,55 @@ export default function CardDetail() {
 					>
 						{/* Card Image */}
 						<View style={styles.imageContainer}>
-							<FadeImage
+							<CardImage
 								uri={card.image ?? ""}
-								name={card.name}
-								cardNumber={card.cardNumber}
 								style={{
 									width: IMAGE_WIDTH,
 									height: IMAGE_HEIGHT,
+									borderRadius: 14,
 								}}
 								backgroundColor={colors.background}
 								shimmerColor={colors.border}
-								foregroundColor={colors.foreground}
-								mutedColor={colors.mutedForeground}
+								fallback={
+									<View
+										style={{
+											flex: 1,
+											alignItems: "center",
+											justifyContent: "center",
+											gap: 6,
+										}}
+									>
+										<Ionicons
+											name="image-outline"
+											size={28}
+											color={colors.mutedForeground}
+										/>
+										{card.name && (
+											<Text
+												style={{
+													color: colors.foreground,
+													fontSize: 12,
+													fontWeight: "600",
+													textAlign: "center",
+													paddingHorizontal: 8,
+												}}
+												numberOfLines={2}
+											>
+												{card.name}
+											</Text>
+										)}
+										{card.cardNumber && (
+											<Text
+												style={{
+													color: colors.mutedForeground,
+													fontSize: 11,
+												}}
+											>
+												#{card.cardNumber}
+											</Text>
+										)}
+									</View>
+								}
 							/>
 						</View>
 

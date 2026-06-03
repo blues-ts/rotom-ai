@@ -1,5 +1,6 @@
 import React, { type ReactNode } from "react";
-import { Image, type ImageStyle, Pressable, Text, type TextStyle, View, type ViewStyle } from "react-native";
+import { type ImageStyle, Pressable, Text, type TextStyle, View, type ViewStyle } from "react-native";
+import { Image } from "expo-image";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { Renderer } from "react-native-marked";
 import { router } from "expo-router";
@@ -57,7 +58,7 @@ export class ColoredRenderer extends Renderer {
 				key={this.getKey()}
 				source={{ uri: imageUrl }}
 				style={{ width: "100%", aspectRatio: 63 / 88, borderRadius: 23 }}
-				resizeMode="contain"
+				contentFit="contain"
 				accessibilityLabel={alt}
 			/>
 		);

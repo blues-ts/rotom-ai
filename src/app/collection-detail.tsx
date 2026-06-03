@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
 	Alert,
 	Dimensions,
 	FlatList,
-	Image,
 	Keyboard,
 	Pressable,
 	RefreshControl,
@@ -16,8 +15,6 @@ import Animated, {
 	FadeIn,
 	useAnimatedStyle,
 	useSharedValue,
-	withRepeat,
-	withSequence,
 	withTiming,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
@@ -31,6 +28,7 @@ import {
 	useRefreshCollectionPrices,
 } from "@/hooks/useCollections";
 import RefreshingPill from "@/components/RefreshingPill";
+import CardImage from "@/components/CardImage";
 import type { CollectionCard } from "@/types/collection";
 
 const COLUMNS = 3;
@@ -67,65 +65,6 @@ function CardPressable({
 		>
 			{children}
 		</AnimatedPressable>
-	);
-}
-
-function FadeImage({
-	uri,
-	style,
-	backgroundColor,
-	shimmerColor,
-}: {
-	uri: string;
-	style: any;
-	backgroundColor: string;
-	shimmerColor: string;
-}) {
-	const opacity = useSharedValue(0);
-	const shimmerOpacity = useSharedValue(0.3);
-	const [loaded, setLoaded] = useState(false);
-
-	useEffect(() => {
-		shimmerOpacity.value = withRepeat(
-			withSequence(
-				withTiming(0.7, { duration: 800 }),
-				withTiming(0.3, { duration: 800 }),
-			),
-			-1,
-		);
-	}, []);
-
-	const animatedStyle = useAnimatedStyle(() => ({
-		opacity: opacity.value,
-	}));
-
-	const shimmerStyle = useAnimatedStyle(() => ({
-		opacity: shimmerOpacity.value,
-	}));
-
-	return (
-		<View style={[style, { backgroundColor, overflow: "hidden" }]}>
-			{!loaded && (
-				<Animated.View
-					style={[
-						StyleSheet.absoluteFill,
-						{ backgroundColor: shimmerColor },
-						shimmerStyle,
-					]}
-				/>
-			)}
-			<Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
-				<Image
-					source={{ uri }}
-					style={StyleSheet.absoluteFill}
-					resizeMode="contain"
-					onLoad={() => {
-						setLoaded(true);
-						opacity.value = withTiming(1, { duration: 200 });
-					}}
-				/>
-			</Animated.View>
-		</View>
 	);
 }
 
@@ -200,7 +139,7 @@ export default function CollectionDetail() {
 				>
 					<View>
 						{item.cardImageUrl ? (
-							<FadeImage
+							<CardImage
 								uri={item.cardImageUrl}
 								style={styles.cardImage}
 								backgroundColor={colors.card}

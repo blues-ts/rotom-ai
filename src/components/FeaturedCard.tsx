@@ -1,4 +1,5 @@
-import { Image, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
 
 import { useTheme } from "@/context/ThemeContext";
 
@@ -17,7 +18,7 @@ export default function FeaturedCard() {
 					uri: "https://images.pokemontcg.io/sv7/1_hires.png",
 				}}
 				style={styles.image}
-				resizeMode="contain"
+				contentFit="contain"
 			/>
 			<View style={styles.info}>
 				<Text style={[styles.label, { color: colors.mutedForeground }]}>

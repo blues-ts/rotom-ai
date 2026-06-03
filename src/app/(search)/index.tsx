@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
 	Dimensions,
 	FlatList,
-	Image,
 	Keyboard,
 	Platform,
 	Pressable,
@@ -28,6 +27,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/context/ThemeContext";
 import { useApi } from "@/lib/axios";
+import CardImage from "@/components/CardImage";
 
 interface CardResult {
 	id: string;
@@ -76,58 +76,6 @@ function CardPressable({ children, onPress }: { children: React.ReactNode; onPre
 		>
 			{children}
 		</AnimatedPressable>
-	);
-}
-
-function FadeImage({ uri, style, backgroundColor, shimmerColor, onError }: {
-	uri: string;
-	style: any;
-	backgroundColor: string;
-	shimmerColor: string;
-	onError: () => void;
-}) {
-	const opacity = useSharedValue(0);
-	const shimmerOpacity = useSharedValue(0.3);
-	const [loaded, setLoaded] = useState(false);
-
-	useEffect(() => {
-		shimmerOpacity.value = withRepeat(
-			withSequence(
-				withTiming(0.7, { duration: 800 }),
-				withTiming(0.3, { duration: 800 }),
-			),
-			-1,
-		);
-	}, []);
-
-	const animatedStyle = useAnimatedStyle(() => ({
-		opacity: opacity.value,
-	}));
-
-	const shimmerStyle = useAnimatedStyle(() => ({
-		opacity: shimmerOpacity.value,
-	}));
-
-	return (
-		<View style={[style, { backgroundColor, overflow: "hidden" }]}>
-			{!loaded && (
-				<Animated.View
-					style={[StyleSheet.absoluteFill, { backgroundColor: shimmerColor }, shimmerStyle]}
-				/>
-			)}
-			<Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
-				<Image
-					source={{ uri }}
-					style={StyleSheet.absoluteFill}
-					resizeMode="contain"
-					onLoad={() => {
-						setLoaded(true);
-						opacity.value = withTiming(1, { duration: 200 });
-					}}
-					onError={onError}
-				/>
-			</Animated.View>
-		</View>
 	);
 }
 
@@ -311,7 +259,7 @@ export default function Search() {
 								)}
 							</View>
 						) : (
-							<FadeImage
+							<CardImage
 								uri={item.image}
 								style={styles.cardImage}
 								backgroundColor={colors.card}
