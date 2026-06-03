@@ -9,7 +9,7 @@ import {
 	DarkTheme,
 	DefaultTheme,
 	ThemeProvider as NavigationThemeProvider,
-} from "@react-navigation/native";
+} from "expo-router/react-navigation";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { router, SplashScreen, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
