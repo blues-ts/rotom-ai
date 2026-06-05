@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useState } from "react";
 import {
+	ActionSheetIOS,
 	Alert,
 	Dimensions,
 	FlatList,
 	Keyboard,
+	Platform,
 	Pressable,
 	RefreshControl,
 	StyleSheet,
@@ -49,6 +51,29 @@ const CONDITION_ABBREVS: Record<string, string> = {
 	DAMAGED: "DMG",
 };
 
+type SortOption = "dateAdded" | "nameAsc" | "valueDesc" | "valueAsc";
+
+const SORT_LABELS: Record<SortOption, string> = {
+	valueDesc: "Value (high to low)",
+	valueAsc: "Value (low to high)",
+	nameAsc: "Name (A–Z)",
+	dateAdded: "Date added (newest)",
+};
+
+function sortCards(cards: CollectionCard[], by: SortOption): CollectionCard[] {
+	const arr = cards.slice();
+	switch (by) {
+		case "dateAdded":
+			return arr.sort((a, b) => b.addedAt.localeCompare(a.addedAt));
+		case "nameAsc":
+			return arr.sort((a, b) => a.cardName.localeCompare(b.cardName));
+		case "valueDesc":
+			return arr.sort((a, b) => b.cardValue * b.quantity - a.cardValue * a.quantity);
+		case "valueAsc":
+			return arr.sort((a, b) => a.cardValue * a.quantity - b.cardValue * b.quantity);
+	}
+}
+
 function CardPressable({
 	children,
 	onPress,
@@ -79,18 +104,25 @@ function CardPressable({
 
 export default function CollectionDetail() {
 	const { id } = useLocalSearchParams<{ id: string }>();
-	const { colors } = useTheme();
+	const { colors, theme } = useTheme();
 	const { renameCollection } = useCollections();
 	const refreshPrices = useRefreshCollectionPrices();
 	const { data: collection } = useCollectionDetail(id);
 	const { data: cards } = useCollectionCards(id);
 	const [filterQuery, setFilterQuery] = useState("");
+	const [sortBy, setSortBy] = useState<SortOption>("valueDesc");
+
+	const sortScale = useSharedValue(1);
+	const sortAnimatedStyle = useAnimatedStyle(() => ({
+		transform: [{ scale: sortScale.value }],
+	}));
 
 	const filteredCards = useMemo(() => {
 		if (!cards) return [];
+		const sorted = sortCards(cards, sortBy);
 		const q = filterQuery.trim().toLowerCase();
-		if (!q) return cards;
-		return cards.filter((c) => {
+		if (!q) return sorted;
+		return sorted.filter((c) => {
 			const isGraded = c.pricingType === "Graded";
 			const haystack = [
 				c.cardName,
@@ -111,7 +143,7 @@ export default function CollectionDetail() {
 				.replace(/_/g, " ");
 			return haystack.includes(q);
 		});
-	}, [cards, filterQuery]);
+	}, [cards, filterQuery, sortBy]);
 
 	const handleRename = useCallback(() => {
 		if (!collection) return;
@@ -267,6 +299,7 @@ export default function CollectionDetail() {
 					<View
 						style={[
 							styles.filterBar,
+							styles.filterBarFlex,
 							{
 								backgroundColor: colors.card,
 								borderColor: colors.border,
@@ -299,6 +332,49 @@ export default function CollectionDetail() {
 							</Pressable>
 						)}
 					</View>
+					<AnimatedPressable
+						onPressIn={() => {
+							sortScale.value = withTiming(0.9, { duration: 80 });
+						}}
+						onPressOut={() => {
+							sortScale.value = withTiming(1, { duration: 140 });
+						}}
+						onPress={() => {
+							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+							if (Platform.OS !== "ios") return;
+							const opts = Object.keys(SORT_LABELS) as SortOption[];
+							ActionSheetIOS.showActionSheetWithOptions(
+								{
+									title: "Sort by",
+									options: [
+										...opts.map((o) =>
+											sortBy === o ? `✓  ${SORT_LABELS[o]}` : SORT_LABELS[o],
+										),
+										"Cancel",
+									],
+									cancelButtonIndex: opts.length,
+									userInterfaceStyle: theme === "dark" ? "dark" : "light",
+								},
+								(idx) => {
+									if (idx < opts.length) setSortBy(opts[idx]);
+								},
+							);
+						}}
+						style={[
+							styles.sortButton,
+							{
+								backgroundColor: colors.card,
+								borderColor: colors.border,
+							},
+							sortAnimatedStyle,
+						]}
+					>
+						<Ionicons
+							name="swap-vertical"
+							size={20}
+							color={colors.primary}
+						/>
+					</AnimatedPressable>
 				</View>
 
 				{/* Summary row */}
@@ -422,6 +498,9 @@ const styles = StyleSheet.create({
 		padding: 8,
 	},
 	filterContainer: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
 		paddingHorizontal: 16,
 		paddingTop: 8,
 		paddingBottom: 12,
@@ -434,6 +513,17 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 12,
 		height: 40,
 		gap: 8,
+	},
+	filterBarFlex: {
+		flex: 1,
+	},
+	sortButton: {
+		width: 40,
+		height: 40,
+		borderRadius: 10,
+		borderWidth: 1,
+		alignItems: "center",
+		justifyContent: "center",
 	},
 	filterInput: {
 		flex: 1,
