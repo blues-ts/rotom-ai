@@ -10,10 +10,12 @@ import { useCollections } from "@/hooks/useCollections";
 export default function AddToCollection() {
   const { colors } = useTheme();
 
-  const { cardId, cardName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany, gradedGrade, pricePaid } =
+  const { cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany, gradedGrade, pricePaid } =
     useLocalSearchParams<{
       cardId: string;
       cardName: string;
+      cardNumber?: string;
+      setName?: string;
       cardImageUrl: string;
       cardValue: string;
       pricingType: string;
@@ -43,6 +45,8 @@ export default function AddToCollection() {
           collectionId,
           cardId,
           cardName,
+          cardNumber: cardNumber || undefined,
+          setName: setName || undefined,
           cardImageUrl: cardImageUrl ?? "",
           cardValue: parseFloat(cardValue ?? "0") || 0,
           pricingType: pricingType ?? "Raw",
@@ -69,7 +73,7 @@ export default function AddToCollection() {
         },
       );
     },
-    [cardId, cardName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany, gradedGrade, pricePaid, addCardToCollection, collections],
+    [cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany, gradedGrade, pricePaid, addCardToCollection, collections],
   );
 
   return (

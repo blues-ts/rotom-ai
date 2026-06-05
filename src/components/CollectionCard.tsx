@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
+import { formatCurrency } from "@/lib/format";
 import * as Haptics from "expo-haptics";
 import {
 	Dimensions,
@@ -33,9 +34,6 @@ interface CollectionCardProps {
 	onPress?: () => void;
 }
 
-function formatPrice(price: number): string {
-	return `$${price.toFixed(2)}`;
-}
 
 export default function CollectionCard({
 	name,
@@ -92,7 +90,7 @@ export default function CollectionCard({
 						Total value
 					</Text>
 					<Text style={[styles.value, { color: colors.foreground }]}>
-						{formatPrice(totalValue)}
+						{formatCurrency(totalValue)}
 					</Text>
 				</View>
 			</View>

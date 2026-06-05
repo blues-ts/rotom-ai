@@ -29,6 +29,7 @@ import {
 } from "@/hooks/useCollections";
 import RefreshingPill from "@/components/RefreshingPill";
 import CardImage from "@/components/CardImage";
+import { formatCurrency } from "@/lib/format";
 import type { CollectionCard } from "@/types/collection";
 
 const COLUMNS = 3;
@@ -39,6 +40,14 @@ const imageWidth = (screenWidth - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 const imageHeight = imageWidth * 1.4;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+const CONDITION_ABBREVS: Record<string, string> = {
+	NEAR_MINT: "NM",
+	LIGHTLY_PLAYED: "LP",
+	MODERATELY_PLAYED: "MP",
+	HEAVILY_PLAYED: "HP",
+	DAMAGED: "DMG",
+};
 
 function CardPressable({
 	children,
@@ -68,10 +77,6 @@ function CardPressable({
 	);
 }
 
-function formatPrice(value: number): string {
-	return `$${value.toFixed(2)}`;
-}
-
 export default function CollectionDetail() {
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const { colors } = useTheme();
@@ -83,9 +88,29 @@ export default function CollectionDetail() {
 
 	const filteredCards = useMemo(() => {
 		if (!cards) return [];
-		if (!filterQuery.trim()) return cards;
-		const q = filterQuery.toLowerCase();
-		return cards.filter((c) => c.cardName.toLowerCase().includes(q));
+		const q = filterQuery.trim().toLowerCase();
+		if (!q) return cards;
+		return cards.filter((c) => {
+			const isGraded = c.pricingType === "Graded";
+			const haystack = [
+				c.cardName,
+				c.cardNumber ?? "",
+				c.setName ?? "",
+				c.pricingType,
+				c.source,
+				c.condition,
+				CONDITION_ABBREVS[c.condition] ?? "",
+				isGraded ? (c.gradedCompany ?? "") : "",
+				isGraded ? (c.gradedGrade ?? "") : "",
+				isGraded && c.gradedCompany && c.gradedGrade
+					? `${c.gradedCompany} ${c.gradedGrade}`
+					: "",
+			]
+				.join(" ")
+				.toLowerCase()
+				.replace(/_/g, " ");
+			return haystack.includes(q);
+		});
 	}, [cards, filterQuery]);
 
 	const handleRename = useCallback(() => {
@@ -294,7 +319,7 @@ export default function CollectionDetail() {
 									{ color: colors.foreground },
 								]}
 							>
-								{formatPrice(collection.totalValue)}
+								{formatCurrency(collection.totalValue)}
 							</Text>
 						</View>
 						<View style={styles.summaryRight}>
@@ -338,6 +363,22 @@ export default function CollectionDetail() {
 							/>
 						}
 					/>
+				) : filterQuery.trim().length > 0 ? (
+					<View style={styles.emptyStateCentered}>
+						<Ionicons
+							name="search-outline"
+							size={48}
+							color={colors.mutedForeground}
+						/>
+						<Text
+							style={[
+								styles.emptyTitle,
+								{ color: colors.foreground },
+							]}
+						>
+							No matching cards
+						</Text>
+					</View>
 				) : (
 					<View style={styles.emptyState}>
 						<Ionicons
@@ -472,6 +513,14 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		paddingHorizontal: 32,
 		gap: 10,
+	},
+	emptyStateCentered: {
+		flex: 1,
+		justifyContent: "center",
+		alignItems: "center",
+		paddingHorizontal: 32,
+		gap: 10,
+		paddingBottom: 120,
 	},
 	emptyTitle: {
 		fontSize: 20,

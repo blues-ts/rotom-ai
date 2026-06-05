@@ -105,6 +105,8 @@ export function useCollections() {
       collectionId,
       cardId,
       cardName,
+      cardNumber,
+      setName,
       cardImageUrl,
       cardValue,
       pricingType = "Raw",
@@ -117,6 +119,8 @@ export function useCollections() {
       collectionId: string;
       cardId: string;
       cardName: string;
+      cardNumber?: string;
+      setName?: string;
       cardImageUrl: string;
       cardValue: number;
       pricingType?: string;
@@ -148,8 +152,8 @@ export function useCollections() {
       } else {
         const id = Date.now().toString();
         db.runSync(
-          "INSERT INTO collection_cards (id, collection_id, card_id, card_name, card_image_url, card_value, pricing_type, source, condition, graded_company, graded_grade, quantity, price_paid, card_value_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
-          [id, collectionId, cardId, cardName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany ?? null, gradedGrade ?? null, pricePaid ?? null, new Date().toISOString()],
+          "INSERT INTO collection_cards (id, collection_id, card_id, card_name, card_number, set_name, card_image_url, card_value, pricing_type, source, condition, graded_company, graded_grade, quantity, price_paid, card_value_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
+          [id, collectionId, cardId, cardName, cardNumber ?? null, setName ?? null, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany ?? null, gradedGrade ?? null, pricePaid ?? null, new Date().toISOString()],
         );
       }
       return Promise.resolve();
@@ -332,6 +336,8 @@ interface CollectionCardRow {
   collection_id: string;
   card_id: string;
   card_name: string;
+  card_number: string | null;
+  set_name: string | null;
   card_image_url: string;
   card_value: number;
   added_at: string;
@@ -392,6 +398,23 @@ export function useRefreshCollectionPrices() {
       for (const row of rows) {
         const card = cardMap.get(row.card_id);
         if (!card) continue;
+
+        // Backfill card_number if missing and the API returned one.
+        if (!row.card_number && card.cardNumber) {
+          db.runSync(
+            "UPDATE collection_cards SET card_number = ? WHERE id = ?",
+            [card.cardNumber, row.id],
+          );
+        }
+
+        // Backfill set_name if missing and the API returned one.
+        if (!row.set_name && card.set?.name) {
+          db.runSync(
+            "UPDATE collection_cards SET set_name = ? WHERE id = ?",
+            [card.set.name, row.id],
+          );
+        }
+
         const price = resolvePriceForRow(card, row);
         if (price === undefined || price === null) continue;
         db.runSync(
@@ -430,6 +453,8 @@ export function useCollectionCards(collectionId: string) {
         collectionId: row.collection_id,
         cardId: row.card_id,
         cardName: row.card_name,
+        cardNumber: row.card_number ?? undefined,
+        setName: row.set_name ?? undefined,
         cardImageUrl: row.card_image_url,
         cardValue: row.card_value,
         addedAt: row.added_at,

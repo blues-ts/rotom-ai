@@ -12,6 +12,8 @@ export interface CollectionCard {
   collectionId: string;
   cardId: string;
   cardName: string;
+  cardNumber?: string;
+  setName?: string;
   cardImageUrl: string;
   cardValue: number;
   addedAt: string;

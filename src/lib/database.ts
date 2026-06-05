@@ -51,6 +51,22 @@ export function getDatabase(): SQLite.SQLiteDatabase {
     if (!columns.includes("card_value_updated_at")) {
       db.execSync(`ALTER TABLE collection_cards ADD COLUMN card_value_updated_at TEXT;`);
     }
+    if (!columns.includes("card_number")) {
+      db.execSync(`ALTER TABLE collection_cards ADD COLUMN card_number TEXT;`);
+    }
+    if (!columns.includes("set_name")) {
+      db.execSync(`ALTER TABLE collection_cards ADD COLUMN set_name TEXT;`);
+    }
+
+    // Cleanup: an earlier version of the card detail page leaked auto-selected
+    // gradedCompany/gradedGrade onto Raw cards. Wipe those values so search
+    // and row identity don't accidentally treat Raw cards as graded.
+    db.runSync(
+      `UPDATE collection_cards
+         SET graded_company = NULL, graded_grade = NULL
+       WHERE pricing_type = 'Raw'
+         AND (graded_company IS NOT NULL OR graded_grade IS NOT NULL)`,
+    );
 
     // Update unique index to include config so same card with different config = different entry
     db.execSync(`

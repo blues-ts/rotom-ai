@@ -10,6 +10,7 @@ import {
 import { LineChart } from "react-native-wagmi-charts";
 import * as Haptics from "expo-haptics";
 import { useTheme } from "@/context/ThemeContext";
+import { formatCurrency } from "@/lib/format";
 import { ProGate } from "@/components/ProGate";
 import {
 	useCollectionValueHistory,
@@ -28,10 +29,6 @@ const PERIOD_LABELS: Record<ValueHistoryPeriod, string> = {
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CHART_WIDTH = SCREEN_WIDTH - 64; // 16 screen pad × 2 + 16 card pad × 2
-
-function formatPrice(value: number): string {
-	return `$${value.toFixed(2)}`;
-}
 
 export default function CollectionValueChart() {
 	const { colors } = useTheme();
@@ -52,7 +49,7 @@ export default function CollectionValueChart() {
 	const up = delta >= 0;
 	const deltaColor = up ? colors.chart2 : colors.destructive;
 	const deltaSign = up ? "+" : "−";
-	const deltaText = `${deltaSign}$${Math.abs(delta).toFixed(2)} (${Math.abs(deltaPct).toFixed(1)}%) ${PERIOD_LABELS[period]}`;
+	const deltaText = `${deltaSign}${formatCurrency(Math.abs(delta))} (${Math.abs(deltaPct).toFixed(1)}%) ${PERIOD_LABELS[period]}`;
 
 	return (
 		<ProGate
@@ -69,7 +66,7 @@ export default function CollectionValueChart() {
 			</View>
 
 			<Text style={[styles.totalValue, { color: colors.foreground }]}>
-				{formatPrice(current)}
+				{formatCurrency(current)}
 			</Text>
 
 			{data && data.length > 1 && (
@@ -108,7 +105,9 @@ export default function CollectionValueChart() {
 									if (!value) return "";
 									const n = Number(value);
 									if (!isFinite(n)) return "—";
-									return `$${n.toFixed(2)}`;
+									const [intPart, decPart] = n.toFixed(2).split(".");
+									const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+									return `$${withCommas}.${decPart}`;
 								}}
 								style={[
 									styles.chartHoverPrice,

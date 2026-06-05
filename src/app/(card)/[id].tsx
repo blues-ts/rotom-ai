@@ -25,9 +25,12 @@ import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
 import { LineChart } from "react-native-wagmi-charts";
 import { useApi } from "@/lib/axios";
+import { formatCurrency } from "@/lib/format";
 import { useTheme } from "@/context/ThemeContext";
 import { useCollections } from "@/hooks/useCollections";
 import { useRevenueCat } from "@/context/RevenueCatContext";
+import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
+import RevenueCatUI from "react-native-purchases-ui";
 import { Image } from "expo-image";
 import { ProGate } from "@/components/ProGate";
 import CardImage from "@/components/CardImage";
@@ -42,8 +45,7 @@ const CHART_WIDTH = SCREEN_WIDTH - 72;
 
 function formatPrice(price: number | undefined, currency = "USD"): string {
 	if (price === undefined || price === null) return "—";
-	const symbol = currency === "EUR" ? "€" : "$";
-	return `${symbol}${price.toFixed(2)}`;
+	return formatCurrency(price, currency);
 }
 
 function formatTierLabel(tier: string): string {
@@ -982,8 +984,8 @@ export default function CardDetail() {
 				pricingType: pricingTab,
 				source: rawSource,
 				condition: pricingTab === "Graded" ? "GRADED" : rawCondition,
-				gradedCompany: gradedCompany ?? undefined,
-				gradedGrade: gradedGrade ?? undefined,
+				gradedCompany: pricingTab === "Graded" ? (gradedCompany ?? undefined) : undefined,
+				gradedGrade: pricingTab === "Graded" ? (gradedGrade ?? undefined) : undefined,
 				pricePaid: isNaN(parsed) ? null : parsed,
 			});
 		}, 600);
@@ -1013,6 +1015,12 @@ export default function CardDetail() {
 							hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
 							onPress={() => {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								if (!isPro) {
+									void RevenueCatUI.presentPaywallIfNeeded({
+										requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
+									});
+									return;
+								}
 								const parsedPricePaid =
 									pricePaid.trim().length > 0
 										? parseFloat(pricePaid)
@@ -1023,13 +1031,15 @@ export default function CardDetail() {
 											collectionId: collectionId!,
 											cardId: id,
 											cardName: name ?? "",
+											cardNumber: card?.cardNumber ?? undefined,
+											setName: card?.set?.name ?? undefined,
 											cardImageUrl: card?.image ?? "",
 											cardValue: heroPrice ?? 0,
 											pricingType: pricingTab,
 											source: rawSource,
 											condition: pricingTab === "Graded" ? "GRADED" : rawCondition,
-											gradedCompany: gradedCompany ?? undefined,
-											gradedGrade: gradedGrade ?? undefined,
+											gradedCompany: pricingTab === "Graded" ? (gradedCompany ?? undefined) : undefined,
+											gradedGrade: pricingTab === "Graded" ? (gradedGrade ?? undefined) : undefined,
 											pricePaid:
 												parsedPricePaid !== undefined &&
 												!isNaN(parsedPricePaid)
@@ -1055,13 +1065,15 @@ export default function CardDetail() {
 										params: {
 											cardId: id,
 											cardName: name ?? "",
+											cardNumber: card?.cardNumber ?? "",
+											setName: card?.set?.name ?? "",
 											cardImageUrl: card?.image ?? "",
 											cardValue: String(heroPrice ?? 0),
 											pricingType: pricingTab,
 											source: rawSource,
 											condition: pricingTab === "Graded" ? "GRADED" : rawCondition,
-											gradedCompany: gradedCompany ?? "",
-											gradedGrade: gradedGrade ?? "",
+											gradedCompany: pricingTab === "Graded" ? (gradedCompany ?? "") : "",
+											gradedGrade: pricingTab === "Graded" ? (gradedGrade ?? "") : "",
 											pricePaid:
 												parsedPricePaid !== undefined &&
 												!isNaN(parsedPricePaid)
@@ -1611,7 +1623,9 @@ export default function CardDetail() {
 													if (!value) return "";
 													const n = Number(value);
 													if (!isFinite(n)) return "—";
-													return `${currencySymbol}${n.toFixed(2)}`;
+													const [intPart, decPart] = n.toFixed(2).split(".");
+													const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+													return `${currencySymbol}${withCommas}.${decPart}`;
 												}}
 												style={[
 													styles.chartHoverPrice,
