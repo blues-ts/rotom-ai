@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { PRIVACY_URL, TERMS_URL } from "@/constants/links";
 import { useRevenueCat } from "@/context/RevenueCatContext";
+import { useToast } from "@/context/ToastContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useApi } from "@/lib/axios";
 import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
@@ -32,6 +34,12 @@ export default function Settings() {
 	const { isPro, refresh } = useRevenueCat();
 	const api = useApi();
 	const queryClient = useQueryClient();
+	const toast = useToast();
+	const [crashTest, setCrashTest] = useState(false);
+
+	if (crashTest) {
+		throw new Error("Test crash from Settings dev tools");
+	}
 
 	const handleSignOut = () => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -372,6 +380,63 @@ export default function Settings() {
 								]}
 							>
 								Clear History
+							</Text>
+						</Pressable>
+						<Pressable
+							style={[
+								styles.signOutButton,
+								{ backgroundColor: colors.card },
+							]}
+							onPress={() => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								toast.show("Test error toast — something failed.");
+							}}
+						>
+							<Text
+								style={[
+									styles.label,
+									{ color: colors.foreground },
+								]}
+							>
+								Show Error Toast
+							</Text>
+						</Pressable>
+						<Pressable
+							style={[
+								styles.signOutButton,
+								{ backgroundColor: colors.card },
+							]}
+							onPress={() => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								toast.show("Test success toast — all good!", "success");
+							}}
+						>
+							<Text
+								style={[
+									styles.label,
+									{ color: colors.foreground },
+								]}
+							>
+								Show Success Toast
+							</Text>
+						</Pressable>
+						<Pressable
+							style={[
+								styles.signOutButton,
+								{ backgroundColor: colors.card },
+							]}
+							onPress={() => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+								setCrashTest(true);
+							}}
+						>
+							<Text
+								style={[
+									styles.label,
+									{ color: colors.destructive },
+								]}
+							>
+								Trigger Test Crash
 							</Text>
 						</Pressable>
 					</View>
