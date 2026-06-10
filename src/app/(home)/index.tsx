@@ -7,10 +7,10 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import RevenueCatUI from "react-native-purchases-ui";
 import Animated, {
+	FadeIn,
+	FadeOut,
 	interpolate,
 	useAnimatedStyle,
-	useSharedValue,
-	withTiming,
 } from "react-native-reanimated";
 import {
 	KeyboardAvoidingView,
@@ -33,7 +33,6 @@ export default function Home() {
 	const { isPro } = useRevenueCat();
 	const { bottom } = useSafeAreaInsets();
 	const chatListRef = useRef<ChatMessageListRef>(null);
-	const gradientOpacity = useSharedValue(1);
 	const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
 
 	const bottomSpacerStyle = useAnimatedStyle(() => ({
@@ -54,16 +53,6 @@ export default function Home() {
 	} = useChat();
 
 	const hasMessages = messages.length > 0 || isStreaming;
-
-	useEffect(() => {
-		gradientOpacity.value = withTiming(hasMessages ? 0 : 1, {
-			duration: 500,
-		});
-	}, [hasMessages]);
-
-	const gradientStyle = useAnimatedStyle(() => ({
-		opacity: gradientOpacity.value,
-	}));
 
 	const handleNewChat = () => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -89,14 +78,21 @@ export default function Home() {
 
 	return (
 		<>
-			{/* Background Gradient */}
-			<Animated.View style={[StyleSheet.absoluteFill, gradientStyle]}>
-				<LinearGradient
-					colors={[colors.primary, colors.background]}
-					accessibilityRespondsToUserInteraction={false}
+			{/* Background Gradient — fades in on empty state, out when messages exist */}
+			{!hasMessages && (
+				<Animated.View
 					style={StyleSheet.absoluteFill}
-				/>
-			</Animated.View>
+					entering={FadeIn.duration(500)}
+					exiting={FadeOut.duration(500)}
+					pointerEvents="none"
+				>
+					<LinearGradient
+						colors={[colors.primary, colors.background]}
+						accessibilityRespondsToUserInteraction={false}
+						style={StyleSheet.absoluteFill}
+					/>
+				</Animated.View>
+			)}
 
 			{/* Toolbar */}
 			<Stack.Toolbar placement="left">

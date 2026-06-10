@@ -425,15 +425,16 @@ export function useRefreshCollectionPrices() {
       }
       return { updated };
     },
-    onSuccess: (_data, collectionId) => {
+    onSuccess: () => {
       recordCollectionValueSnapshot();
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
       queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
       queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
-      if (collectionId) {
-        queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
-        queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
-      }
+      // Prefix-invalidate so EVERY collection's detail and card list refetches —
+      // covers per-collection pull-to-refresh AND the all-collections sweep
+      // (24h auto-refresh and the collections-list pull-to-refresh).
+      queryClient.invalidateQueries({ queryKey: ["collection"] });
+      queryClient.invalidateQueries({ queryKey: ["collectionCards"] });
     },
   });
 }

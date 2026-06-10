@@ -194,7 +194,63 @@ export default function CollectionDetail() {
 						});
 					}}
 				>
-					<View>
+					<View style={styles.cardCell}>
+						{/* Info panel rendered first so the image overlays its top edge */}
+						<View
+							style={[
+								styles.infoPanel,
+								{
+									backgroundColor: colors.card,
+									borderColor: colors.border,
+								},
+							]}
+						>
+							<Text
+								style={[styles.infoName, { color: colors.foreground }]}
+								numberOfLines={1}
+							>
+								{item.cardName}
+							</Text>
+							{!!item.cardNumber && (
+								<Text
+									style={[
+										styles.infoNumber,
+										{ color: colors.primary },
+									]}
+									numberOfLines={1}
+								>
+									#{item.cardNumber}
+								</Text>
+							)}
+							<View style={styles.infoValueRow}>
+								<Text
+									style={[
+										styles.infoValue,
+										{ color: colors.foreground },
+									]}
+									numberOfLines={1}
+								>
+									{formatCurrency(item.cardValue)}
+								</Text>
+								<Text
+									style={[
+										styles.infoCondition,
+										{ color: colors.primary },
+									]}
+									numberOfLines={1}
+								>
+									{item.pricingType === "Graded" &&
+									item.gradedCompany &&
+									item.gradedGrade
+										? `${item.gradedCompany} ${item.gradedGrade}`
+										: CONDITION_ABBREVS[item.condition] ??
+											item.condition.replace(/_/g, " ")}
+									{item.quantity > 1 ? ` ×${item.quantity}` : ""}
+								</Text>
+							</View>
+						</View>
+
+						{/* Image overlaid on top, kept fully rounded so its bottom curve sits on the info card */}
 						{item.cardImageUrl ? (
 							<CardImage
 								uri={item.cardImageUrl}
@@ -215,29 +271,8 @@ export default function CollectionDetail() {
 									size={24}
 									color={colors.mutedForeground}
 								/>
-								<Text
-									style={[
-										styles.placeholderName,
-										{ color: colors.foreground },
-									]}
-									numberOfLines={2}
-								>
-									{item.cardName}
-								</Text>
 							</View>
 						)}
-						<View style={styles.configOverlay}>
-							<View style={[styles.configPill, { backgroundColor: "rgba(0,0,0,0.7)" }]}>
-								<Text style={styles.configText}>
-									{item.pricingType === "Graded"
-										? `${item.gradedCompany} ${item.gradedGrade}`
-										: item.condition.replace(/_/g, " ").split(" ").map((w: string) => w[0]).join("")}
-								</Text>
-								{item.quantity > 1 && (
-									<Text style={styles.configQty}>×{item.quantity}</Text>
-								)}
-							</View>
-						</View>
 					</View>
 				</CardPressable>
 			</Animated.View>
@@ -555,47 +590,60 @@ const styles = StyleSheet.create({
 		gap: GAP,
 		marginBottom: GAP,
 	},
+	cardCell: {
+		width: imageWidth,
+		position: "relative",
+	},
 	cardImage: {
+		position: "absolute",
+		top: 0,
+		left: 0,
 		width: imageWidth,
 		height: imageHeight,
 		borderRadius: 8,
 	},
-	configOverlay: {
-		position: "absolute",
-		bottom: 4,
-		left: 4,
-		right: 4,
-		flexDirection: "row",
-		justifyContent: "center",
-	},
-	configPill: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 3,
-		paddingHorizontal: 6,
-		paddingVertical: 2,
-		borderRadius: 6,
-	},
-	configText: {
-		color: "white",
-		fontSize: 9,
-		fontWeight: "700",
-	},
-	configQty: {
-		color: "rgba(255,255,255,0.7)",
-		fontSize: 9,
-		fontWeight: "600",
-	},
 	placeholder: {
 		alignItems: "center",
 		justifyContent: "center",
-		paddingHorizontal: 8,
+	},
+	infoPanel: {
+		// Push the info card down so the image (positioned absolutely at top:0)
+		// overlays its top edge by INFO_OVERLAP pixels. Content padding pushes
+		// the text below the image bottom; the BG/rounded corners peek out for
+		// the smooth "card-behind-card" transition.
+		marginTop: imageHeight - 12,
+		paddingHorizontal: 6,
+		paddingTop: 12 + 4,
+		paddingBottom: 6,
+		gap: 1,
+		borderRadius: 8,
+		borderWidth: StyleSheet.hairlineWidth,
+	},
+	infoName: {
+		fontSize: 11,
+		fontWeight: "700",
+	},
+	infoNumber: {
+		fontSize: 9,
+		fontWeight: "500",
+	},
+	infoValueRow: {
+		flexDirection: "row",
+		justifyContent: "space-between",
+		alignItems: "baseline",
+		marginTop: 2,
 		gap: 4,
 	},
-	placeholderName: {
-		fontSize: 11,
+	infoValue: {
+		fontSize: 12,
+		fontWeight: "700",
+		fontVariant: ["tabular-nums"],
+		flexShrink: 1,
+	},
+	infoCondition: {
+		fontSize: 9,
 		fontWeight: "600",
-		textAlign: "center",
+		flexShrink: 0,
 	},
 	emptyState: {
 		flex: 1,
