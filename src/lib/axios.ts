@@ -4,6 +4,10 @@ import { useEffect } from "react";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
+// Request never reached the server (offline, DNS, timeout) — as opposed to an HTTP error.
+export const isNetworkError = (error: unknown): boolean =>
+  axios.isAxiosError(error) && !error.response;
+
 const api = axios.create({
   baseURL: API_URL,
   headers: {

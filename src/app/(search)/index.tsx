@@ -28,6 +28,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/context/ThemeContext";
 import { useApi } from "@/lib/axios";
 import CardImage from "@/components/CardImage";
+import ErrorState from "@/components/ErrorState";
 
 interface CardResult {
 	id: string;
@@ -170,6 +171,8 @@ export default function Search() {
 	const {
 		data,
 		isLoading,
+		isError,
+		refetch,
 		isFetchingNextPage,
 		hasNextPage,
 		fetchNextPage,
@@ -279,7 +282,8 @@ export default function Search() {
 	const isSearching = debouncedQuery.trim().length > 0;
 	const showHint = !searchQuery.trim() && !isSearching && displayCards.length === 0;
 	const showSkeleton = isSearching && isLoading && displayCards.length === 0;
-	const showNoResults = isSearching && !isLoading && cards.length === 0 && displayCards.length === 0;
+	const showError = isSearching && isError && displayCards.length === 0;
+	const showNoResults = isSearching && !isLoading && !isError && cards.length === 0 && displayCards.length === 0;
 
 	return (
 		<>
@@ -314,6 +318,14 @@ export default function Search() {
 						columnWrapperStyle={styles.row}
 						scrollEnabled={false}
 					/>
+				)}
+				{showError && (
+					<Animated.View entering={FadeIn.duration(200)} style={{ flex: 1 }}>
+						<ErrorState
+							title="Search failed"
+							onRetry={() => refetch()}
+						/>
+					</Animated.View>
 				)}
 				{showNoResults && (
 					<Text style={[styles.empty, { color: colors.mutedForeground, marginTop: insets.top + 20 }]}>

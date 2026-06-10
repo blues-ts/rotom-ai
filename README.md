@@ -1,56 +1,54 @@
-# Welcome to your Expo app 👋
+# River AI
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Pokemon TCG companion app: scan cards with the camera, track collection value, and chat with River, an AI assistant for pricing and collecting. Built with Expo (SDK 56), expo-router, Clerk, RevenueCat, and a local SQLite store.
 
 ## Get started
 
 1. Install dependencies
 
    ```bash
-   npm install
+   bun install
    ```
 
-2. Start the app
+2. Configure environment
 
    ```bash
-   npx expo start
+   cp .env.example .env
    ```
 
-In the output, you'll find options to open the app in a
+   Fill in the values (see `.env.example` for where each key comes from). The backend API lives in the `rotom-services` repo.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+3. Start the app
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+   ```bash
+   bun expo start
+   ```
 
-## Get a fresh project
+   The project includes native `ios/` and `android/` directories — use a development build or simulator, not Expo Go.
 
-When you're ready, run:
+## Environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk auth (Google/Apple OAuth) |
+| `EXPO_PUBLIC_API_URL` | rotom-services API base URL |
+| `EXPO_PUBLIC_REVENUECAT_IOS_KEY` | RevenueCat public SDK key (iOS) |
+| `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY` | RevenueCat public SDK key (Android) |
+
+Local dev reads `.env`. **EAS builds do not** — `EXPO_PUBLIC_*` vars are inlined at build time, so set them per environment with `eas env:create` before building.
+
+## Builds
+
+EAS profiles are defined in `eas.json`:
 
 ```bash
-npm run reset-project
+eas build --profile development --platform ios   # dev client
+eas build --profile preview --platform ios       # internal/TestFlight testing
+eas build --profile production --platform ios    # store build (auto-increments build number)
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+First-time setup requires `eas init` to link the project to your Expo account.
 
-### Other setup steps
+## Architecture
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full technical overview.

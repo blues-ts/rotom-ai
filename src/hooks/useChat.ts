@@ -13,6 +13,25 @@ import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const DRAIN_INTERVAL_MS = 16;
 const CHARS_PER_TICK = 4;
+// Abort the stream only after this long with no incoming data, so long
+// responses aren't cut off by a fixed total timeout.
+const STREAM_INACTIVITY_TIMEOUT_MS = 30000;
+
+function errorCopy(error: Error): string {
+	if (error.message === "Request timed out") {
+		return "The response took too long. Please try again.";
+	}
+	if (error.message === "Network error") {
+		return "You appear to be offline. Check your connection and try again.";
+	}
+	if (error.message === "HTTP 401") {
+		return "Your session has expired. Please sign out and back in.";
+	}
+	if (error.message === "HTTP 429") {
+		return "You're sending messages too quickly. Wait a moment and try again.";
+	}
+	return "Sorry, something went wrong. Please try again.";
+}
 
 export function useChat() {
 	const { getToken } = useAuth();
@@ -27,6 +46,9 @@ export function useChat() {
 	} | null>(null);
 
 	const abortRef = useRef<{ abort: () => void } | null>(null);
+	// Mirror of `messages` so retryLast/sendMessage can read the latest list
+	// without stale-closure issues.
+	const messagesRef = useRef<Message[]>([]);
 	const bufferRef = useRef("");
 	const fullMarkdownRef = useRef("");
 	const displayedLenRef = useRef(0);
@@ -75,6 +97,10 @@ export function useChat() {
 
 	// Clean up on unmount
 	useEffect(() => clearDrainInterval, [clearDrainInterval]);
+
+	useEffect(() => {
+		messagesRef.current = messages;
+	}, [messages]);
 
 	const handleEvent = useCallback(
 		(event: ParsedEvent) => {
@@ -133,6 +159,10 @@ export function useChat() {
 				createdAt: new Date().toISOString(),
 			};
 
+			// Snapshot before setMessages so the request body can't pick up
+			// the new user message twice once messagesRef syncs.
+			const history = [...messagesRef.current, userMessage];
+
 			setMessages((prev) => [...prev, userMessage]);
 			setIsStreaming(true);
 			setStreamingContent("");
@@ -152,9 +182,27 @@ export function useChat() {
 					if (token) {
 						xhr.setRequestHeader("Authorization", `Bearer ${token}`);
 					}
-					xhr.timeout = 60000;
+
+					let inactivityTimer: ReturnType<typeof setTimeout> | null =
+						null;
+					let timedOut = false;
+					const clearInactivityTimer = () => {
+						if (inactivityTimer) {
+							clearTimeout(inactivityTimer);
+							inactivityTimer = null;
+						}
+					};
+					const resetInactivityTimer = () => {
+						clearInactivityTimer();
+						inactivityTimer = setTimeout(() => {
+							timedOut = true;
+							xhr.abort();
+						}, STREAM_INACTIVITY_TIMEOUT_MS);
+					};
+					resetInactivityTimer();
 
 					xhr.onprogress = () => {
+						resetInactivityTimer();
 						// Extract only the new chunk since last read
 						const newChunk = xhr.responseText.slice(
 							lastIndexRef.current,
@@ -168,6 +216,7 @@ export function useChat() {
 					};
 
 					xhr.onload = () => {
+						clearInactivityTimer();
 						if (xhr.status >= 200 && xhr.status < 300) {
 							// Process any remaining data
 							const remaining = xhr.responseText.slice(
@@ -201,18 +250,26 @@ export function useChat() {
 					};
 
 					xhr.onabort = () => {
+						clearInactivityTimer();
+						if (timedOut) {
+							reject(new Error("Request timed out"));
+							return;
+						}
 						const err = new Error("Aborted");
 						err.name = "AbortError";
 						reject(err);
 					};
 
-					xhr.onerror = () => reject(new Error("Network error"));
+					xhr.onerror = () => {
+						clearInactivityTimer();
+						reject(new Error("Network error"));
+					};
 					xhr.ontimeout = () =>
 						reject(new Error("Request timed out"));
 
 					xhr.send(
 						JSON.stringify({
-							messages: [...messages, userMessage].map((m) => ({
+							messages: history.map((m) => ({
 								role: m.role,
 								content: m.content,
 							})),
@@ -225,12 +282,16 @@ export function useChat() {
 			} catch (error) {
 				if ((error as Error).name === "AbortError") return;
 
+				// Keep whatever streamed before the failure instead of
+				// discarding it.
+				const partial = bufferRef.current.trim();
+				const copy = errorCopy(error as Error);
 				const errorMessage: Message = {
 					id: (Date.now() + 1).toString(),
 					role: "assistant",
-					content: "Sorry, something went wrong. Please try again.",
+					content: partial ? `${partial}\n\n_${copy}_` : copy,
 					createdAt: new Date().toISOString(),
-					status: "complete",
+					status: "error",
 				};
 				setMessages((prev) => [...prev, errorMessage]);
 			} finally {
@@ -240,7 +301,6 @@ export function useChat() {
 		[
 			isStreaming,
 			isPro,
-			messages,
 			getToken,
 			handleEvent,
 			flushBuffer,
@@ -248,6 +308,20 @@ export function useChat() {
 			collectionSnapshot,
 		],
 	);
+
+	// Re-send the last user message after a failed response. Drops the failed
+	// exchange from history first so it isn't replayed to the API.
+	const retryLast = useCallback(() => {
+		if (isStreaming) return;
+		const current = messagesRef.current;
+		const lastUserIndex = current.map((m) => m.role).lastIndexOf("user");
+		if (lastUserIndex === -1) return;
+		const text = current[lastUserIndex].content;
+		const trimmed = current.slice(0, lastUserIndex);
+		messagesRef.current = trimmed;
+		setMessages(trimmed);
+		void sendMessage(text);
+	}, [isStreaming, sendMessage]);
 
 	const startNewChat = useCallback(() => {
 		if (abortRef.current) {
@@ -263,6 +337,7 @@ export function useChat() {
 		isStreaming,
 		activeTool,
 		sendMessage,
+		retryLast,
 		startNewChat,
 	};
 }

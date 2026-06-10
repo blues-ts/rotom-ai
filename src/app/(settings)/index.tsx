@@ -1,3 +1,4 @@
+import { PRIVACY_URL, TERMS_URL } from "@/constants/links";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useApi } from "@/lib/axios";
@@ -15,6 +16,7 @@ import Purchases from "react-native-purchases";
 import RevenueCatUI from "react-native-purchases-ui";
 import {
 	Alert,
+	Linking,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -223,6 +225,43 @@ export default function Settings() {
 								style={[styles.label, { color: colors.foreground }]}
 							>
 								Restore purchases
+							</Text>
+						</Pressable>
+					</View>
+				</View>
+
+				{/* Legal */}
+				<View style={styles.section}>
+					<Text
+						style={[
+							styles.sectionTitle,
+							{ color: colors.mutedForeground },
+						]}
+					>
+						Legal
+					</Text>
+					<View style={[styles.card, { backgroundColor: colors.card }]}>
+						<Pressable
+							style={[
+								styles.row,
+								{ borderBottomColor: colors.border },
+							]}
+							onPress={() => Linking.openURL(TERMS_URL)}
+						>
+							<Text
+								style={[styles.label, { color: colors.foreground }]}
+							>
+								Terms of Service
+							</Text>
+						</Pressable>
+						<Pressable
+							style={styles.row}
+							onPress={() => Linking.openURL(PRIVACY_URL)}
+						>
+							<Text
+								style={[styles.label, { color: colors.foreground }]}
+							>
+								Privacy Policy
 							</Text>
 						</Pressable>
 					</View>

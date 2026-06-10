@@ -11,6 +11,7 @@ interface ChatMessageListProps {
 	messages: Message[];
 	streamingContent: string;
 	isStreaming: boolean;
+	onRetry?: () => void;
 }
 
 export interface ChatMessageListRef {
@@ -18,7 +19,7 @@ export interface ChatMessageListRef {
 }
 
 const ChatMessageList = forwardRef<ChatMessageListRef, ChatMessageListProps>(
-	({ messages, streamingContent, isStreaming }, ref) => {
+	({ messages, streamingContent, isStreaming, onRetry }, ref) => {
 		const listRef = useRef<FlatList<Message>>(null);
 
 		useImperativeHandle(ref, () => ({
@@ -47,7 +48,14 @@ const ChatMessageList = forwardRef<ChatMessageListRef, ChatMessageListProps>(
 				inverted
 				data={data}
 				keyExtractor={(item) => item.id}
-				renderItem={({ item }) => <ChatMessage message={item} />}
+				renderItem={({ item, index }) => (
+					<ChatMessage
+						message={item}
+						// Only the most recent message (index 0, inverted list)
+						// is retryable.
+						onRetry={index === 0 ? onRetry : undefined}
+					/>
+				)}
 				ListHeaderComponent={headerComponent}
 				style={styles.list}
 				contentContainerStyle={styles.content}

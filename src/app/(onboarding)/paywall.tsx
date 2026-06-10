@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OnboardingHeader } from "@/components/onboarding/OnboardingHeader";
 import { PrimaryCTA, TextLink } from "@/components/onboarding/PrimaryCTA";
+import { PRIVACY_URL, TERMS_URL } from "@/constants/links";
 import { STEP_NUMBERS } from "@/constants/onboarding";
 import { useTheme } from "@/context/ThemeContext";
 import { useRevenueCat } from "@/context/RevenueCatContext";
@@ -184,14 +185,14 @@ export default function Paywall() {
             </Text>
             <TextLink
               title="Terms"
-              onPress={() => Linking.openURL("https://example.com/terms")}
+              onPress={() => Linking.openURL(TERMS_URL)}
             />
             <Text style={[styles.legalDot, { color: colors.mutedForeground }]}>
               ·
             </Text>
             <TextLink
               title="Privacy"
-              onPress={() => Linking.openURL("https://example.com/privacy")}
+              onPress={() => Linking.openURL(PRIVACY_URL)}
             />
           </View>
         </Animated.View>

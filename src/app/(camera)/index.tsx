@@ -1,4 +1,5 @@
 import { useAnalyzeCard } from "@/hooks/useAnalyzeCard";
+import { isNetworkError } from "@/lib/axios";
 import { Ionicons } from "@expo/vector-icons";
 import {
 	CameraView,
@@ -12,6 +13,7 @@ import {
 	ActivityIndicator,
 	Alert,
 	Dimensions,
+	Linking,
 	Pressable,
 	StyleSheet,
 	Text,
@@ -197,8 +199,8 @@ export default function Camera() {
 
 				const cardData = result.data ?? result;
 				router.push({
-					pathname: `/(card)/${cardData.id}`,
-					params: { name: cardData.name },
+					pathname: "/(card)/[id]",
+					params: { id: cardData.id, name: cardData.name },
 				});
 
 				navigationTimeoutRef.current = setTimeout(() => {
@@ -207,11 +209,12 @@ export default function Camera() {
 					setTorchEnabled(false);
 				}, 400);
 			} catch (error: any) {
-				const errorMessage =
-					error?.response?.data?.error?.message ||
-					error?.response?.data?.message ||
-					error?.message ||
-					"Failed to analyze the card. Please try again.";
+				const errorMessage = isNetworkError(error)
+					? "No internet connection. Check your connection and try again."
+					: error?.response?.data?.error?.message ||
+						error?.response?.data?.message ||
+						error?.message ||
+						"Failed to analyze the card. Please try again.";
 				Alert.alert("Error", errorMessage);
 				stopStatusProgression();
 				setIsProcessing(false);
@@ -228,6 +231,7 @@ export default function Camera() {
 
 	// Permission not granted
 	if (permission && !permission.granted) {
+		const mustOpenSettings = !permission.canAskAgain;
 		return (
 			<View style={styles.container}>
 				<View style={styles.permissionContainer}>
@@ -238,16 +242,29 @@ export default function Camera() {
 					<Pressable
 						style={styles.permissionButton}
 						onPress={async () => {
+							if (mustOpenSettings) {
+								Linking.openSettings();
+								return;
+							}
 							const result = await requestPermission();
-							if (!result.granted) {
+							if (!result.granted && !result.canAskAgain) {
 								Alert.alert(
 									"Permission Required",
 									"Camera permission is required. Please enable it in your device settings.",
+									[
+										{ text: "Cancel", style: "cancel" },
+										{
+											text: "Open Settings",
+											onPress: () => Linking.openSettings(),
+										},
+									],
 								);
 							}
 						}}
 					>
-						<Text style={styles.permissionButtonText}>Grant Permission</Text>
+						<Text style={styles.permissionButtonText}>
+							{mustOpenSettings ? "Open Settings" : "Grant Permission"}
+						</Text>
 					</Pressable>
 				</View>
 			</View>

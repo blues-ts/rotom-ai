@@ -6,6 +6,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { useAutoRefreshStalePrices, useCollections } from "@/hooks/useCollections";
 import { recordCollectionValueSnapshot } from "@/lib/collectionValueHistory";
 import CollectionCard from "@/components/CollectionCard";
+import ErrorState from "@/components/ErrorState";
 import CollectionValueChart from "@/components/CollectionValueChart";
 import RefreshingPill from "@/components/RefreshingPill";
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -15,7 +16,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Collections() {
 	const { colors } = useTheme();
-	const { collections, deleteCollection } = useCollections();
+	const { collections, isLoading, isError, refetch, deleteCollection } =
+		useCollections();
 	const refreshPrices = useAutoRefreshStalePrices();
 	const queryClient = useQueryClient();
 
@@ -40,7 +42,14 @@ export default function Collections() {
 					/>
 				}
 			>
-				{collections.length === 0 ? (
+				{isError ? (
+					<ErrorState
+						title="Couldn't load collections"
+						message="Something went wrong reading your collections."
+						onRetry={() => refetch()}
+					/>
+				) : collections.length === 0 ? (
+					isLoading ? null : (
 					<View style={styles.emptyState}>
 						<Ionicons
 							name="folder-open-outline"
@@ -65,6 +74,7 @@ export default function Collections() {
 							cards
 						</Text>
 					</View>
+					)
 				) : (
 					<>
 					<CollectionValueChart />

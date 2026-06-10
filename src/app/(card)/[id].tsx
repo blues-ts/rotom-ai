@@ -34,6 +34,7 @@ import RevenueCatUI from "react-native-purchases-ui";
 import { Image } from "expo-image";
 import { ProGate } from "@/components/ProGate";
 import CardImage from "@/components/CardImage";
+import ErrorState from "@/components/ErrorState";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const IMAGE_WIDTH = SCREEN_WIDTH * 0.9;
@@ -780,7 +781,7 @@ export default function CardDetail() {
 	const [salesExpanded, setSalesExpanded] = useState(false);
 
 	// Card data
-	const { data: card, isLoading } = useQuery({
+	const { data: card, isLoading, isError, refetch } = useQuery({
 		queryKey: ["card", id],
 		queryFn: async () => {
 			const res = await api.get(`/api/pricing/cards/${id}`);
@@ -1360,16 +1361,22 @@ export default function CardDetail() {
 							<View style={[styles.quantityBadge, { backgroundColor: colors.card + "D9", borderColor: colors.border }]}>
 								<Pressable
 									onPress={() => {
+										// At 1 the "Remove from Collection" button takes over;
+										// decrementing further would leave a 0-quantity row.
+										if (quantity <= 1) return;
 										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-										decrementCardQuantity.mutate({
-											collectionId: collectionId!,
-											cardId: id,
-											pricingType: pricingType || "Raw",
-											source: source || "TCGPlayer",
-											condition: condition || "NEAR_MINT",
-											gradedCompany: initGradedCompany || undefined,
-											gradedGrade: initGradedGrade || undefined,
-										});
+										decrementCardQuantity.mutate(
+											{
+												collectionId: collectionId!,
+												cardId: id,
+												pricingType: pricingType || "Raw",
+												source: source || "TCGPlayer",
+												condition: condition || "NEAR_MINT",
+												gradedCompany: initGradedCompany || undefined,
+												gradedGrade: initGradedGrade || undefined,
+											},
+											{ onError: () => setQuantity((q) => q + 1) },
+										);
 										setQuantity((q) => q - 1);
 									}}
 									style={[styles.qtyButton, { backgroundColor: colors.muted }]}
@@ -1383,15 +1390,18 @@ export default function CardDetail() {
 								<Pressable
 									onPress={() => {
 										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-										incrementCardQuantity.mutate({
-											collectionId: collectionId!,
-											cardId: id,
-											pricingType: pricingType || "Raw",
-											source: source || "TCGPlayer",
-											condition: condition || "NEAR_MINT",
-											gradedCompany: initGradedCompany || undefined,
-											gradedGrade: initGradedGrade || undefined,
-										});
+										incrementCardQuantity.mutate(
+											{
+												collectionId: collectionId!,
+												cardId: id,
+												pricingType: pricingType || "Raw",
+												source: source || "TCGPlayer",
+												condition: condition || "NEAR_MINT",
+												gradedCompany: initGradedCompany || undefined,
+												gradedGrade: initGradedGrade || undefined,
+											},
+											{ onError: () => setQuantity((q) => q - 1) },
+										);
 										setQuantity((q) => q + 1);
 									}}
 									style={[styles.qtyButton, { backgroundColor: colors.muted }]}
@@ -1905,9 +1915,16 @@ export default function CardDetail() {
 						{ backgroundColor: colors.background },
 					]}
 				>
-					<Text style={{ color: colors.mutedForeground }}>
-						Card not found
-					</Text>
+					{isError ? (
+						<ErrorState
+							title="Couldn't load card"
+							onRetry={() => refetch()}
+						/>
+					) : (
+						<Text style={{ color: colors.mutedForeground }}>
+							Card not found
+						</Text>
+					)}
 				</View>
 			)}
 		</>

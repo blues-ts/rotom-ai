@@ -29,7 +29,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan Pokemon cards."
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan Pokemon cards.",
+          "microphonePermission": false
         }
       ],
       "expo-router",

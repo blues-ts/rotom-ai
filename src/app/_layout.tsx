@@ -2,6 +2,7 @@ import AuthSync from "@/components/AuthSync";
 import { queryClient } from "@/config/queryClient";
 import { RevenueCatProvider, useRevenueCat } from "@/context/RevenueCatContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
+import { ToastProvider } from "@/context/ToastContext";
 import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
 import { ClerkLoaded, ClerkProvider } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
@@ -11,10 +12,15 @@ import {
 	ThemeProvider as NavigationThemeProvider,
 } from "expo-router/react-navigation";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { router, SplashScreen, Stack } from "expo-router";
+import {
+	router,
+	SplashScreen,
+	Stack,
+	type ErrorBoundaryProps,
+} from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
-import { Pressable } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import RevenueCatUI from "react-native-purchases-ui";
@@ -24,6 +30,59 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 SplashScreen.preventAutoHideAsync();
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
+
+// Hardcoded colors: this can render outside ThemeProvider when the root errors.
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+	if (__DEV__) {
+		console.error("[ErrorBoundary]", error);
+	}
+
+	return (
+		<View style={errorStyles.container}>
+			<Text style={errorStyles.title}>Something went wrong</Text>
+			<Text style={errorStyles.subtitle}>
+				An unexpected error occurred. Please try again.
+			</Text>
+			<Pressable style={errorStyles.button} onPress={retry}>
+				<Text style={errorStyles.buttonText}>Try Again</Text>
+			</Pressable>
+		</View>
+	);
+}
+
+const errorStyles = StyleSheet.create({
+	container: {
+		flex: 1,
+		alignItems: "center",
+		justifyContent: "center",
+		paddingHorizontal: 32,
+		gap: 10,
+		backgroundColor: "#000000",
+	},
+	title: {
+		fontSize: 20,
+		fontWeight: "700",
+		color: "#e7e9ea",
+	},
+	subtitle: {
+		fontSize: 15,
+		textAlign: "center",
+		lineHeight: 21,
+		color: "#8b8f94",
+	},
+	button: {
+		paddingHorizontal: 20,
+		paddingVertical: 12,
+		borderRadius: 12,
+		marginTop: 8,
+		backgroundColor: "#1c9cf0",
+	},
+	buttonText: {
+		fontSize: 15,
+		fontWeight: "600",
+		color: "#ffffff",
+	},
+});
 
 function AppContent() {
 	const { theme, colors } = useTheme();
@@ -190,7 +249,9 @@ export default function RootLayout() {
 						>
 							<ClerkLoaded>
 								<RevenueCatProvider>
-									<AppContent />
+									<ToastProvider>
+										<AppContent />
+									</ToastProvider>
 								</RevenueCatProvider>
 							</ClerkLoaded>
 						</ClerkProvider>

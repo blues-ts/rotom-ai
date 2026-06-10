@@ -49,6 +49,7 @@ export default function Home() {
 		streamingContent,
 		isStreaming,
 		sendMessage,
+		retryLast,
 		startNewChat,
 	} = useChat();
 
@@ -154,6 +155,7 @@ export default function Home() {
 							messages={messages}
 							streamingContent={streamingContent}
 							isStreaming={isStreaming}
+							onRetry={retryLast}
 						/>
 					</View>
 				)}

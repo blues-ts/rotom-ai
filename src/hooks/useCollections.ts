@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
 import { AppState } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as Haptics from "expo-haptics";
 import { getDatabase } from "@/lib/database";
 import { useApi } from "@/lib/axios";
 import { recordCollectionValueSnapshot } from "@/lib/collectionValueHistory";
+import { useToast } from "@/context/ToastContext";
 import type { Collection, CollectionCard } from "@/types/collection";
 
 const STALE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -34,6 +36,12 @@ function mapRow(row: CollectionRow): Collection {
 export function useCollections() {
   const queryClient = useQueryClient();
   const db = getDatabase();
+  const toast = useToast();
+
+  const onMutationError = useCallback(() => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    toast.show("Couldn't save change. Please try again.");
+  }, [toast]);
 
   const query = useQuery({
     queryKey: COLLECTIONS_KEY,
@@ -73,6 +81,7 @@ export function useCollections() {
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
       queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
     },
+    onError: onMutationError,
   });
 
   const deleteCollection = useMutation({
@@ -86,6 +95,7 @@ export function useCollections() {
       queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
       queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
     },
+    onError: onMutationError,
   });
 
   const renameCollection = useMutation({
@@ -98,6 +108,7 @@ export function useCollections() {
       queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
       queryClient.invalidateQueries({ queryKey: ["collection", id] });
     },
+    onError: onMutationError,
   });
 
   const addCardToCollection = useMutation({
@@ -166,6 +177,7 @@ export function useCollections() {
       queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
       queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
     },
+    onError: onMutationError,
   });
 
   const removeCardFromCollection = useMutation({
@@ -184,6 +196,7 @@ export function useCollections() {
       queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
       queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
     },
+    onError: onMutationError,
   });
 
   const incrementCardQuantity = useMutation({
@@ -220,6 +233,7 @@ export function useCollections() {
       queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
       queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
     },
+    onError: onMutationError,
   });
 
   const decrementCardQuantity = useMutation({
@@ -256,6 +270,7 @@ export function useCollections() {
       queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
       queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
     },
+    onError: onMutationError,
   });
 
   const updateCardPricePaid = useMutation({
@@ -289,11 +304,14 @@ export function useCollections() {
     onSuccess: (_data, { collectionId }) => {
       queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
     },
+    onError: onMutationError,
   });
 
   return {
     collections: query.data ?? [],
     isLoading: query.isLoading,
+    isError: query.isError,
+    refetch: query.refetch,
     createCollection,
     deleteCollection,
     renameCollection,
@@ -368,6 +386,7 @@ export function useRefreshCollectionPrices() {
   const queryClient = useQueryClient();
   const db = getDatabase();
   const api = useApi();
+  const toast = useToast();
 
   return useMutation({
     mutationFn: async (collectionId?: string) => {
@@ -392,6 +411,13 @@ export function useRefreshCollectionPrices() {
         }),
       );
       const cardMap = new Map(results);
+
+      // Per-card failures are tolerated, but if every fetch failed we're
+      // offline (or the API is down) — surface it instead of silently
+      // reporting a no-op refresh.
+      if (results.every(([, card]) => !card)) {
+        throw new Error("Price refresh failed for all cards");
+      }
 
       const now = new Date().toISOString();
       let updated = 0;
@@ -435,6 +461,10 @@ export function useRefreshCollectionPrices() {
       // (24h auto-refresh and the collections-list pull-to-refresh).
       queryClient.invalidateQueries({ queryKey: ["collection"] });
       queryClient.invalidateQueries({ queryKey: ["collectionCards"] });
+    },
+    onError: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      toast.show("Couldn't refresh prices — check your connection.");
     },
   });
 }

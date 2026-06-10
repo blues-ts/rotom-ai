@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useMarkdown } from "react-native-marked";
 
 import { useTheme } from "@/context/ThemeContext";
@@ -10,6 +11,7 @@ import { ColoredRenderer } from "./ColoredRenderer";
 
 interface ChatMessageProps {
 	message: Message;
+	onRetry?: () => void;
 }
 
 function getMarkdownStyles(colors: ThemeColors): MarkedStyles {
@@ -101,7 +103,7 @@ function getMarkdownStyles(colors: ThemeColors): MarkedStyles {
 	};
 }
 
-function ChatMessage({ message }: ChatMessageProps) {
+function ChatMessage({ message, onRetry }: ChatMessageProps) {
 	const { colors } = useTheme();
 	const isUser = message.role === "user";
 
@@ -139,6 +141,32 @@ function ChatMessage({ message }: ChatMessageProps) {
 			) : (
 				<View style={styles.markdownContainer}>
 					{elements}
+					{message.status === "error" && onRetry ? (
+						<Pressable
+							style={[
+								styles.retryButton,
+								{
+									backgroundColor: colors.card,
+									borderColor: colors.border,
+								},
+							]}
+							onPress={onRetry}
+						>
+							<Ionicons
+								name="refresh"
+								size={14}
+								color={colors.foreground}
+							/>
+							<Text
+								style={[
+									styles.retryText,
+									{ color: colors.foreground },
+								]}
+							>
+								Retry
+							</Text>
+						</Pressable>
+					) : null}
 				</View>
 			)}
 		</View>
@@ -170,5 +198,20 @@ const styles = StyleSheet.create({
 	},
 	markdownContainer: {
 		width: "100%",
+	},
+	retryButton: {
+		flexDirection: "row",
+		alignItems: "center",
+		alignSelf: "flex-start",
+		gap: 6,
+		paddingHorizontal: 12,
+		paddingVertical: 8,
+		borderRadius: 16,
+		borderWidth: 1,
+		marginTop: 8,
+	},
+	retryText: {
+		fontSize: 13,
+		fontWeight: "600",
 	},
 });

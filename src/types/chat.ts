@@ -3,7 +3,7 @@ export interface Message {
 	role: "user" | "assistant";
 	content: string;
 	createdAt: string;
-	status?: "streaming" | "complete";
+	status?: "streaming" | "complete" | "error";
 	tool?: {
 		name: string;
 		status: "loading" | "done";

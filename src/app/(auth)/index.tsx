@@ -6,6 +6,7 @@ import * as WebBrowser from "expo-web-browser";
 import { AnimatedButton } from "react-native-3d-animated-buttons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { PRIVACY_URL, TERMS_URL } from "@/constants/links";
 import { useTheme } from "@/context/ThemeContext";
 import useSocialAuth from "@/hooks/useSocialAuth";
 import { useWarmUpBrowser } from "@/hooks/useWarmUpBrowser";
@@ -70,14 +71,14 @@ const Index = () => {
           By continuing, you agree to our{" "}
           <Text
             style={[styles.legalLink, { color: colors.primary }]}
-            onPress={() => Linking.openURL("https://example.com/terms")}
+            onPress={() => Linking.openURL(TERMS_URL)}
           >
             Terms of Service
           </Text>{" "}
           and{" "}
           <Text
             style={[styles.legalLink, { color: colors.primary }]}
-            onPress={() => Linking.openURL("https://example.com/privacy")}
+            onPress={() => Linking.openURL(PRIVACY_URL)}
           >
             Privacy Policy
           </Text>

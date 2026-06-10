@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import Purchases, {
   LOG_LEVEL,
   type CustomerInfo,
@@ -11,15 +12,19 @@ let configured = false;
 export function configureRevenueCat(): void {
   if (configured) return;
 
-  const apiKey = process.env.EXPO_PUBLIC_REVENUE_CAT;
+  const apiKey = Platform.select({
+    ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY,
+    android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY,
+  });
   if (!apiKey) {
-    throw new Error("Missing EXPO_PUBLIC_REVENUE_CAT in .env");
+    throw new Error(
+      `Missing EXPO_PUBLIC_REVENUECAT_${Platform.OS === "ios" ? "IOS" : "ANDROID"}_KEY in .env`,
+    );
   }
 
   if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.DEBUG);
 
   // Configure anonymously; identify with Clerk ID after sign-in via logInRevenueCat().
-  // TODO(prod): split into EXPO_PUBLIC_REVENUECAT_IOS_KEY / _ANDROID_KEY and pick by Platform.OS.
   Purchases.configure({ apiKey });
   configured = true;
 }

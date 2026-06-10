@@ -31,6 +31,7 @@ import {
 } from "@/hooks/useCollections";
 import RefreshingPill from "@/components/RefreshingPill";
 import CardImage from "@/components/CardImage";
+import ErrorState from "@/components/ErrorState";
 import { formatCurrency } from "@/lib/format";
 import type { CollectionCard } from "@/types/collection";
 
@@ -107,8 +108,17 @@ export default function CollectionDetail() {
 	const { colors, theme } = useTheme();
 	const { renameCollection } = useCollections();
 	const refreshPrices = useRefreshCollectionPrices();
-	const { data: collection } = useCollectionDetail(id);
-	const { data: cards } = useCollectionCards(id);
+	const {
+		data: collection,
+		isError: collectionError,
+		refetch: refetchCollection,
+	} = useCollectionDetail(id);
+	const {
+		data: cards,
+		isLoading: cardsLoading,
+		isError: cardsError,
+		refetch: refetchCards,
+	} = useCollectionCards(id);
 	const [filterQuery, setFilterQuery] = useState("");
 	const [sortBy, setSortBy] = useState<SortOption>("valueDesc");
 
@@ -176,8 +186,9 @@ export default function CollectionDetail() {
 						Keyboard.dismiss();
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 						router.push({
-							pathname: `/(card)/${item.cardId}`,
+							pathname: "/(card)/[id]",
 							params: {
+								id: item.cardId,
 								name: item.cardName,
 								pricingType: item.pricingType,
 								source: item.source,
@@ -455,7 +466,16 @@ export default function CollectionDetail() {
 				)}
 
 				{/* Card grid or empty state */}
-				{filteredCards.length > 0 ? (
+				{collectionError || cardsError ? (
+					<ErrorState
+						title="Couldn't load collection"
+						message="Something went wrong reading this collection."
+						onRetry={() => {
+							refetchCollection();
+							refetchCards();
+						}}
+					/>
+				) : filteredCards.length > 0 ? (
 					<FlatList
 						data={filteredCards}
 						keyExtractor={(item) => item.id}
@@ -490,7 +510,7 @@ export default function CollectionDetail() {
 							No matching cards
 						</Text>
 					</View>
-				) : (
+				) : cardsLoading ? null : (
 					<View style={styles.emptyState}>
 						<Ionicons
 							name="folder-open-outline"
