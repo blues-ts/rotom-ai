@@ -29,8 +29,7 @@ import { formatCurrency } from "@/lib/format";
 import { useTheme } from "@/context/ThemeContext";
 import { useCollections } from "@/hooks/useCollections";
 import { useRevenueCat } from "@/context/RevenueCatContext";
-import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
-import RevenueCatUI from "react-native-purchases-ui";
+import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { Image } from "expo-image";
 import { ProGate } from "@/components/ProGate";
 import CardImage from "@/components/CardImage";
@@ -1017,9 +1016,7 @@ export default function CardDetail() {
 							onPress={() => {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 								if (!isPro) {
-									void RevenueCatUI.presentPaywallIfNeeded({
-										requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
-									});
+									void presentProPaywallIfNeeded();
 									return;
 								}
 								const parsedPricePaid =

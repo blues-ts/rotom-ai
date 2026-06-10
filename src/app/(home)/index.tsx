@@ -5,7 +5,6 @@ import { router, Stack } from "expo-router";
 
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import RevenueCatUI from "react-native-purchases-ui";
 import Animated, {
 	FadeIn,
 	FadeOut,
@@ -26,7 +25,7 @@ import EmptyChat from "@/components/EmptyChat";
 import { useTheme } from "@/context/ThemeContext";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { useChat } from "@/hooks/useChat";
-import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
+import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 
 export default function Home() {
 	const { colors } = useTheme();
@@ -123,9 +122,7 @@ export default function Home() {
 					onPress={() => {
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 						if (!isPro) {
-							void RevenueCatUI.presentPaywallIfNeeded({
-								requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
-							});
+							void presentProPaywallIfNeeded();
 							return;
 						}
 						router.push("/(camera)");

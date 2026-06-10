@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@clerk/clerk-expo";
-import RevenueCatUI from "react-native-purchases-ui";
 
 import type { Message } from "@/types/chat";
 import { parseSSE } from "@/lib/parseSSE";
 import type { ParsedEvent } from "@/lib/parseSSE";
 import { useCollectionSnapshot } from "@/hooks/useCollectionSnapshot";
 import { useRevenueCat } from "@/context/RevenueCatContext";
-import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
+import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const DRAIN_INTERVAL_MS = 16;
@@ -146,9 +145,7 @@ export function useChat() {
 					status: "complete",
 				};
 				setMessages((prev) => [...prev, gateMessage]);
-				void RevenueCatUI.presentPaywallIfNeeded({
-					requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
-				});
+				void presentProPaywallIfNeeded();
 				return;
 			}
 

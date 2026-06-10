@@ -4,6 +4,7 @@ import Purchases, {
   type CustomerInfo,
   type PurchasesOffering,
 } from "react-native-purchases";
+import RevenueCatUI, { type PAYWALL_RESULT } from "react-native-purchases-ui";
 
 export const PRO_ENTITLEMENT_ID = "River AI Pro";
 
@@ -27,6 +28,24 @@ export function configureRevenueCat(): void {
   // Configure anonymously; identify with Clerk ID after sign-in via logInRevenueCat().
   Purchases.configure({ apiKey });
   configured = true;
+}
+
+export function isRevenueCatConfigured(): boolean {
+  return configured;
+}
+
+// Single entry point for the Pro paywall. Guards against an unconfigured SDK
+// (e.g. missing EXPO_PUBLIC_REVENUECAT_*_KEY), which crashes natively if hit.
+export async function presentProPaywallIfNeeded(): Promise<PAYWALL_RESULT | null> {
+  if (!configured) {
+    console.warn(
+      "[RevenueCat] Not configured — check EXPO_PUBLIC_REVENUECAT_IOS_KEY / _ANDROID_KEY. Skipping paywall.",
+    );
+    return null;
+  }
+  return RevenueCatUI.presentPaywallIfNeeded({
+    requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
+  });
 }
 
 export async function logInRevenueCat(appUserId: string): Promise<CustomerInfo> {

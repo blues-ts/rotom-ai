@@ -3,7 +3,7 @@ import { queryClient } from "@/config/queryClient";
 import { RevenueCatProvider, useRevenueCat } from "@/context/RevenueCatContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { ToastProvider } from "@/context/ToastContext";
-import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
+import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { ClerkLoaded, ClerkProvider } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import {
@@ -23,7 +23,6 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import RevenueCatUI from "react-native-purchases-ui";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
@@ -144,9 +143,7 @@ function AppContent() {
 									onPress={() => {
 										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 										if (!isPro) {
-											void RevenueCatUI.presentPaywallIfNeeded({
-												requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
-											});
+											void presentProPaywallIfNeeded();
 											return;
 										}
 										router.push("/create-collection");

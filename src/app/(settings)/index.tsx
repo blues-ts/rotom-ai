@@ -4,7 +4,11 @@ import { useRevenueCat } from "@/context/RevenueCatContext";
 import { useToast } from "@/context/ToastContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useApi } from "@/lib/axios";
-import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
+import {
+	isRevenueCatConfigured,
+	PRO_ENTITLEMENT_ID,
+	presentProPaywallIfNeeded,
+} from "@/lib/revenuecat";
 import {
 	clearCollectionValueHistory,
 	seedCollectionValueHistory,
@@ -58,6 +62,10 @@ export default function Settings() {
 
 	const handleManageSubscription = async () => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		if (!isRevenueCatConfigured()) {
+			console.warn("[Settings] RevenueCat not configured");
+			return;
+		}
 		try {
 			await RevenueCatUI.presentCustomerCenter();
 			await refresh();
@@ -69,9 +77,7 @@ export default function Settings() {
 	const handleUpgrade = async () => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 		try {
-			await RevenueCatUI.presentPaywallIfNeeded({
-				requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
-			});
+			await presentProPaywallIfNeeded();
 			await refresh();
 		} catch (err) {
 			console.warn("[Settings] presentPaywall failed:", err);

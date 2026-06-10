@@ -10,11 +10,10 @@ import {
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import RevenueCatUI from "react-native-purchases-ui";
 
 import { useTheme } from "@/context/ThemeContext";
 import { useRevenueCat } from "@/context/RevenueCatContext";
-import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
+import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 
 interface ProGateProps {
 	children: React.ReactNode;
@@ -34,9 +33,7 @@ export function ProGate({
 
 	const handleUnlock = useCallback(() => {
 		void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-		void RevenueCatUI.presentPaywallIfNeeded({
-			requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
-		});
+		void presentProPaywallIfNeeded();
 	}, []);
 
 	if (isPro) {

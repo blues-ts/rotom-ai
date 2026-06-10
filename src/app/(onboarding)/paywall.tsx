@@ -4,7 +4,7 @@ import { router, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
 import Purchases from "react-native-purchases";
-import RevenueCatUI, { PAYWALL_RESULT } from "react-native-purchases-ui";
+import { PAYWALL_RESULT } from "react-native-purchases-ui";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -14,7 +14,10 @@ import { PRIVACY_URL, TERMS_URL } from "@/constants/links";
 import { STEP_NUMBERS } from "@/constants/onboarding";
 import { useTheme } from "@/context/ThemeContext";
 import { useRevenueCat } from "@/context/RevenueCatContext";
-import { PRO_ENTITLEMENT_ID } from "@/lib/revenuecat";
+import {
+  PRO_ENTITLEMENT_ID,
+  presentProPaywallIfNeeded,
+} from "@/lib/revenuecat";
 
 const ONBOARDING_KEY = "onboarding_complete";
 
@@ -36,9 +39,14 @@ export default function Paywall() {
   const present = useCallback(async () => {
     try {
       setStage("presenting");
-      const result = await RevenueCatUI.presentPaywallIfNeeded({
-        requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
-      });
+      const result = await presentProPaywallIfNeeded();
+
+      if (result === null) {
+        // SDK not configured (missing platform key) — fail closed.
+        setErrorMessage("Purchases are unavailable right now.");
+        setStage("error");
+        return;
+      }
 
       switch (result) {
         case PAYWALL_RESULT.PURCHASED:
