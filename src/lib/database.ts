@@ -61,12 +61,49 @@ export function getDatabase(): SQLite.SQLiteDatabase {
     // Cleanup: an earlier version of the card detail page leaked auto-selected
     // gradedCompany/gradedGrade onto Raw cards. Wipe those values so search
     // and row identity don't accidentally treat Raw cards as graded.
-    db.runSync(
-      `UPDATE collection_cards
-         SET graded_company = NULL, graded_grade = NULL
-       WHERE pricing_type = 'Raw'
-         AND (graded_company IS NOT NULL OR graded_grade IS NOT NULL)`,
+    // Done row-by-row: a blind UPDATE violates idx_collection_card when a
+    // clean duplicate of the row already exists, so merge into it instead.
+    const leakedRows = db.getAllSync<{
+      id: string;
+      collection_id: string;
+      card_id: string;
+      source: string;
+      condition: string;
+      quantity: number;
+    }>(
+      `SELECT id, collection_id, card_id, source, condition, quantity
+         FROM collection_cards
+        WHERE pricing_type = 'Raw'
+          AND (graded_company IS NOT NULL OR graded_grade IS NOT NULL)`,
     );
+    if (leakedRows.length > 0) {
+      db.withTransactionSync(() => {
+        for (const row of leakedRows) {
+          const twin = db!.getFirstSync<{ id: string }>(
+            `SELECT id FROM collection_cards
+              WHERE collection_id = ? AND card_id = ? AND pricing_type = 'Raw'
+                AND source = ? AND condition = ?
+                AND graded_company IS NULL AND graded_grade IS NULL
+                AND id != ?`,
+            [row.collection_id, row.card_id, row.source, row.condition, row.id],
+          );
+          if (twin) {
+            db!.runSync(
+              "UPDATE collection_cards SET quantity = quantity + ? WHERE id = ?",
+              [row.quantity, twin.id],
+            );
+            db!.runSync("DELETE FROM collection_cards WHERE id = ?", [row.id]);
+          } else {
+            // Once nulled, this row becomes the clean twin for any
+            // remaining leaked duplicates of the same key.
+            db!.runSync(
+              "UPDATE collection_cards SET graded_company = NULL, graded_grade = NULL WHERE id = ?",
+              [row.id],
+            );
+          }
+        }
+      });
+    }
 
     // Update unique index to include config so same card with different config = different entry
     db.execSync(`
