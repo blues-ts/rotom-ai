@@ -34,7 +34,7 @@ export default function Toast({
 			translateY.value = withTiming(HIDDEN_Y, { duration: 220 });
 			opacity.value = withTiming(0, { duration: 180 });
 		}
-	}, [visible]);
+	}, [visible, translateY, opacity]);
 
 	const style = useAnimatedStyle(() => ({
 		transform: [{ translateY: translateY.value }],
