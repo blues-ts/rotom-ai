@@ -33,6 +33,7 @@ import RefreshingPill from "@/components/RefreshingPill";
 import CardImage from "@/components/CardImage";
 import ErrorState from "@/components/ErrorState";
 import { formatCurrency } from "@/lib/format";
+import { CONDITION_LABELS, formatVariantLabel } from "@/lib/scrydex";
 import type { CollectionCard } from "@/types/collection";
 
 const COLUMNS = 3;
@@ -43,14 +44,6 @@ const imageWidth = (screenWidth - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 const imageHeight = imageWidth * 1.4;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-const CONDITION_ABBREVS: Record<string, string> = {
-	NEAR_MINT: "NM",
-	LIGHTLY_PLAYED: "LP",
-	MODERATELY_PLAYED: "MP",
-	HEAVILY_PLAYED: "HP",
-	DAMAGED: "DMG",
-};
 
 type SortOption = "dateAdded" | "nameAsc" | "valueDesc" | "valueAsc";
 
@@ -139,9 +132,10 @@ export default function CollectionDetail() {
 				c.cardNumber ?? "",
 				c.setName ?? "",
 				c.pricingType,
-				c.source,
+				c.productType === "sealed" ? "sealed" : "",
+				formatVariantLabel(c.variant),
 				c.condition,
-				CONDITION_ABBREVS[c.condition] ?? "",
+				CONDITION_LABELS[c.condition] ?? "",
 				isGraded ? (c.gradedCompany ?? "") : "",
 				isGraded ? (c.gradedGrade ?? "") : "",
 				isGraded && c.gradedCompany && c.gradedGrade
@@ -185,13 +179,30 @@ export default function CollectionDetail() {
 					onPress={() => {
 						Keyboard.dismiss();
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+						if (item.productType === "sealed") {
+							router.push({
+								pathname: "/(sealed)/[id]",
+								params: {
+									id: item.cardId,
+									name: item.cardName,
+									variant: item.variant,
+									collectionId: item.collectionId,
+									quantity: String(item.quantity),
+									pricePaid:
+										item.pricePaid !== undefined
+											? String(item.pricePaid)
+											: "",
+								},
+							});
+							return;
+						}
 						router.push({
 							pathname: "/(card)/[id]",
 							params: {
 								id: item.cardId,
 								name: item.cardName,
 								pricingType: item.pricingType,
-								source: item.source,
+								variant: item.variant,
 								condition: item.condition,
 								gradedCompany: item.gradedCompany ?? "",
 								gradedGrade: item.gradedGrade ?? "",
@@ -222,17 +233,21 @@ export default function CollectionDetail() {
 							>
 								{item.cardName}
 							</Text>
-							{!!item.cardNumber && (
-								<Text
-									style={[
-										styles.infoNumber,
-										{ color: colors.primary },
-									]}
-									numberOfLines={1}
-								>
-									#{item.cardNumber}
-								</Text>
-							)}
+							{/* Middle line always renders so card and sealed tiles
+							    keep identical heights. */}
+							<Text
+								style={[
+									styles.infoNumber,
+									{ color: colors.primary },
+								]}
+								numberOfLines={1}
+							>
+								{item.productType === "sealed"
+									? item.setName || " "
+									: item.cardNumber
+										? `#${item.cardNumber}`
+										: " "}
+							</Text>
 							<View style={styles.infoValueRow}>
 								<Text
 									style={[
@@ -250,19 +265,37 @@ export default function CollectionDetail() {
 									]}
 									numberOfLines={1}
 								>
-									{item.pricingType === "Graded" &&
-									item.gradedCompany &&
-									item.gradedGrade
-										? `${item.gradedCompany} ${item.gradedGrade}`
-										: CONDITION_ABBREVS[item.condition] ??
-											item.condition.replace(/_/g, " ")}
+									{item.productType === "sealed"
+										? "Sealed"
+										: item.pricingType === "Graded" &&
+											  item.gradedCompany &&
+											  item.gradedGrade
+											? `${item.gradedCompany} ${item.gradedGrade}`
+											: item.condition}
 									{item.quantity > 1 ? ` ×${item.quantity}` : ""}
 								</Text>
 							</View>
 						</View>
 
 						{/* Image overlaid on top, kept fully rounded so its bottom curve sits on the info card */}
-						{item.cardImageUrl ? (
+						{item.cardImageUrl && item.productType === "sealed" ? (
+							// Sealed art comes in arbitrary aspect ratios — inset it on the
+							// tile background so the tile keeps the same card silhouette.
+							<View
+								style={[
+									styles.cardImage,
+									styles.sealedTile,
+									{ backgroundColor: colors.card },
+								]}
+							>
+								<CardImage
+									uri={item.cardImageUrl}
+									style={styles.sealedImage}
+									backgroundColor="transparent"
+									shimmerColor={colors.border}
+								/>
+							</View>
+						) : item.cardImageUrl ? (
 							<CardImage
 								uri={item.cardImageUrl}
 								style={styles.cardImage}
@@ -625,6 +658,13 @@ const styles = StyleSheet.create({
 	placeholder: {
 		alignItems: "center",
 		justifyContent: "center",
+	},
+	sealedTile: {
+		padding: 10,
+	},
+	sealedImage: {
+		flex: 1,
+		borderRadius: 4,
 	},
 	infoPanel: {
 		// Push the info card down so the image (positioned absolutely at top:0)

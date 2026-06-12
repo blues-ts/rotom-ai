@@ -18,7 +18,8 @@ interface CollectionCardRow {
 	card_value: number;
 	added_at: string;
 	pricing_type: string;
-	source: string;
+	product_type: string;
+	variant: string;
 	condition: string;
 	graded_company: string | null;
 	graded_grade: string | null;
@@ -61,7 +62,8 @@ export function useCollectionSnapshot() {
 					cardValue: row.card_value,
 					addedAt: row.added_at,
 					pricingType: row.pricing_type,
-					source: row.source,
+					productType: row.product_type,
+					variant: row.variant,
 					condition: row.condition,
 					gradedCompany: row.graded_company ?? undefined,
 					gradedGrade: row.graded_grade ?? undefined,

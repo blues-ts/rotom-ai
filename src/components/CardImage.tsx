@@ -16,6 +16,8 @@ interface CardImageProps {
 	shimmerColor: string;
 	contentFit?: "contain" | "cover";
 	onError?: () => void;
+	/** Reports the image's natural pixel dimensions once loaded. */
+	onImageLoad?: (dims: { width: number; height: number }) => void;
 	fallback?: React.ReactNode;
 }
 
@@ -26,6 +28,7 @@ export default function CardImage({
 	shimmerColor,
 	contentFit = "contain",
 	onError,
+	onImageLoad,
 	fallback,
 }: CardImageProps) {
 	const [loaded, setLoaded] = useState(false);
@@ -72,7 +75,12 @@ export default function CardImage({
 				contentFit={contentFit}
 				transition={200}
 				cachePolicy="memory-disk"
-				onLoad={() => setLoaded(true)}
+				onLoad={(e) => {
+					setLoaded(true);
+					if (e.source?.width && e.source?.height) {
+						onImageLoad?.({ width: e.source.width, height: e.source.height });
+					}
+				}}
 				onError={() => {
 					setErrored(true);
 					onError?.();

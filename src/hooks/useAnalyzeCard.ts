@@ -1,21 +1,10 @@
 import { useApi } from "@/lib/axios";
 import { useMutation } from "@tanstack/react-query";
+import type { ScrydexCard } from "@/types/scrydex";
 
 interface CardAnalysisResponse {
 	success: true;
-	data: {
-		id: string;
-		name: string;
-		cardNumber: string;
-		setName: string;
-		setSlug: string;
-		rarity: string;
-		image: string;
-		variant: string;
-		currency: string;
-		prices: Record<string, any>;
-		lastUpdated: string;
-	};
+	data: ScrydexCard;
 	scannedData: {
 		name: string;
 		cardNumber: string;

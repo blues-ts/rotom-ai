@@ -197,7 +197,7 @@ export default function Camera() {
 				stopStatusProgression();
 				setProcessingStatus("Card found!");
 
-				const cardData = result.data ?? result;
+				const cardData = result.data;
 				router.push({
 					pathname: "/(card)/[id]",
 					params: { id: cardData.id, name: cardData.name },

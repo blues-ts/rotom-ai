@@ -18,7 +18,8 @@ export interface CollectionCard {
   cardValue: number;
   addedAt: string;
   pricingType: string;
-  source: string;
+  productType: string; // 'card' | 'sealed'
+  variant: string;
   condition: string;
   gradedCompany?: string;
   gradedGrade?: string;

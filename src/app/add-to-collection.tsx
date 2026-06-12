@@ -10,7 +10,7 @@ import { useCollections } from "@/hooks/useCollections";
 export default function AddToCollection() {
   const { colors } = useTheme();
 
-  const { cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany, gradedGrade, pricePaid } =
+  const { cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade, pricePaid } =
     useLocalSearchParams<{
       cardId: string;
       cardName: string;
@@ -19,7 +19,8 @@ export default function AddToCollection() {
       cardImageUrl: string;
       cardValue: string;
       pricingType: string;
-      source: string;
+      productType?: string;
+      variant: string;
       condition: string;
       gradedCompany: string;
       gradedGrade: string;
@@ -50,8 +51,9 @@ export default function AddToCollection() {
           cardImageUrl: cardImageUrl ?? "",
           cardValue: parseFloat(cardValue ?? "0") || 0,
           pricingType: pricingType ?? "Raw",
-          source: source ?? "TCGPlayer",
-          condition: condition ?? "NEAR_MINT",
+          productType: productType === "sealed" ? "sealed" : "card",
+          variant: variant ?? "normal",
+          condition: condition ?? "NM",
           gradedCompany: gradedCompany || undefined,
           gradedGrade: gradedGrade || undefined,
           pricePaid:
@@ -67,13 +69,20 @@ export default function AddToCollection() {
               [{ text: "OK", onPress: () => router.back() }],
             );
           },
-          onError: () => {
-            Alert.alert("Error", "This card is already in that collection.");
+          onError: (error) => {
+            // Duplicate configs increment quantity instead of erroring, so any
+            // failure here is a real one — surface it.
+            Alert.alert(
+              "Error",
+              error instanceof Error
+                ? error.message
+                : "Couldn't add to collection. Please try again.",
+            );
           },
         },
       );
     },
-    [cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany, gradedGrade, pricePaid, addCardToCollection, collections],
+    [cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade, pricePaid, addCardToCollection, collections],
   );
 
   return (

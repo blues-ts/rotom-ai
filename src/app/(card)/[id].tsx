@@ -3,6 +3,7 @@ import {
 	Alert,
 	Dimensions,
 	LayoutChangeEvent,
+	Linking,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -25,6 +26,20 @@ import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
 import { LineChart } from "react-native-wagmi-charts";
 import { useApi } from "@/lib/axios";
+import { getCard, getCardHistory, getCardListings } from "@/lib/api/pricing";
+import {
+	CONDITION_LABELS,
+	PERIOD_TO_DAYS,
+	formatVariantLabel,
+	getCardImage,
+	getCardNumber,
+	getConditionOptions,
+	getGradedOptions,
+	getVariantNames,
+	historyToChartPoints,
+	isLikelyGradedListing,
+	selectPrice,
+} from "@/lib/scrydex";
 import { formatCurrency } from "@/lib/format";
 import { useTheme } from "@/context/ThemeContext";
 import { useCollections } from "@/hooks/useCollections";
@@ -48,21 +63,8 @@ function formatPrice(price: number | undefined, currency = "USD"): string {
 	return formatCurrency(price, currency);
 }
 
-function formatTierLabel(tier: string): string {
-	return tier
-		.replace(/_/g, " ")
-		.toLowerCase()
-		.replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function parseGradedTier(tier: string): { company: string; grade: string } {
-	const parts = tier.split("_");
-	if (parts.length >= 2) {
-		const company = parts[0].toUpperCase();
-		const grade = parts.slice(1).join(".");
-		return { company, grade };
-	}
-	return { company: tier, grade: "" };
+function formatConditionLabel(condition: string): string {
+	return CONDITION_LABELS[condition] ?? condition;
 }
 
 function buildGradedTierKey(company: string, grade: string): string {
@@ -275,7 +277,7 @@ function LabeledPillToggle({
 
 // --- Period Toggle ---
 
-const PERIODS = ["7d", "30d", "90d", "1y", "all"] as const;
+const PERIODS = ["7d", "30d", "90d", "1y"] as const;
 
 function PeriodToggle({
 	selected,
@@ -394,8 +396,6 @@ function TabBar({
 function SlidingTabs({
 	activeTab,
 	hasGraded,
-	rawSource,
-	setRawSource,
 	rawCondition,
 	setRawCondition,
 	conditionOptions,
@@ -409,8 +409,6 @@ function SlidingTabs({
 }: {
 	activeTab: string;
 	hasGraded: boolean;
-	rawSource: string;
-	setRawSource: (v: string) => void;
 	rawCondition: string;
 	setRawCondition: (v: string) => void;
 	conditionOptions: { label: string; value: string }[];
@@ -482,23 +480,6 @@ function SlidingTabs({
 					style={[
 						styles.toggleLabel,
 						{ color: colors.mutedForeground },
-					]}
-				>
-					Source
-				</Text>
-				<PillToggle
-					options={["TCGPlayer", "eBay"]}
-					selected={rawSource}
-					onSelect={setRawSource}
-					colors={colors}
-				/>
-				<Text
-					style={[
-						styles.toggleLabel,
-						{
-							color: colors.mutedForeground,
-							marginTop: 12,
-						},
 					]}
 				>
 					Condition
@@ -740,11 +721,11 @@ function LoadingSkeleton({ colors, isFromCollection }: { colors: any; isFromColl
 export default function CardDetail() {
 	const { colors } = useTheme();
 	const { isPro } = useRevenueCat();
-	const { id, name, pricingType, source, condition, gradedCompany: initGradedCompany, gradedGrade: initGradedGrade, collectionId, quantity: initQuantity, pricePaid: initPricePaid } = useLocalSearchParams<{
+	const { id, name, pricingType, variant: initVariant, condition, gradedCompany: initGradedCompany, gradedGrade: initGradedGrade, collectionId, quantity: initQuantity, pricePaid: initPricePaid } = useLocalSearchParams<{
 		id: string;
 		name: string;
 		pricingType?: string;
-		source?: string;
+		variant?: string;
 		condition?: string;
 		gradedCompany?: string;
 		gradedGrade?: string;
@@ -759,10 +740,10 @@ export default function CardDetail() {
 	// Tab state
 	const [pricingTab, setPricingTab] = useState(pricingType || "Raw");
 
-	// Raw state
-	const [rawSource, setRawSource] = useState<string>(source || "TCGPlayer");
+	// Variant state — shared by Raw and Graded tabs
+	const [variant, setVariant] = useState<string>(initVariant || "");
 	const [rawCondition, setRawCondition] = useState(
-		pricingType === "Graded" ? "NEAR_MINT" : (condition || "NEAR_MINT"),
+		pricingType === "Graded" ? "NM" : (condition || "NM"),
 	);
 
 	// Graded state
@@ -776,202 +757,186 @@ export default function CardDetail() {
 	const { incrementCardQuantity, addCardToCollection, removeCardFromCollection, decrementCardQuantity, updateCardPricePaid } = useCollections();
 
 	// History
-	const [historyPeriod, setHistoryPeriod] = useState("all");
+	const [historyPeriod, setHistoryPeriod] = useState("30d");
 	const [salesExpanded, setSalesExpanded] = useState(false);
 
 	// Card data
 	const { data: card, isLoading, isError, refetch } = useQuery({
 		queryKey: ["card", id],
-		queryFn: async () => {
-			const res = await api.get(`/api/pricing/cards/${id}`);
-			return res.data.data;
-		},
+		queryFn: () => getCard(api, id),
 		enabled: !!id,
 	});
 
-	// Derived: available grading companies and grades
-	const gradedCompanies = useMemo(() => {
-		if (!card?.gradedOptions) return [];
-		const companies = new Set<string>();
-		for (const tier of card.gradedOptions) {
-			const { company } = parseGradedTier(tier);
-			companies.add(company);
+	// Variants — auto-select the first when none was passed in
+	const variantNames = useMemo(
+		() => (card ? getVariantNames(card) : []),
+		[card],
+	);
+
+	useEffect(() => {
+		if (variantNames.length === 0) return;
+		if (!variant || !variantNames.includes(variant)) {
+			setVariant(variantNames[0]);
 		}
-		const arr = Array.from(companies);
-		arr.sort((a, b) => (a === "PSA" ? -1 : b === "PSA" ? 1 : 0));
-		return arr;
-	}, [card?.gradedOptions]);
+	}, [variantNames]);
+
+	// Derived: available grading companies and grades for the selected variant
+	const gradedOptions = useMemo(
+		() => (card && variant ? getGradedOptions(card, variant) : []),
+		[card, variant],
+	);
+	const gradedCompanies = useMemo(
+		() => gradedOptions.map((o) => o.company),
+		[gradedOptions],
+	);
 
 	const gradedGrades = useMemo(() => {
-		if (!card?.gradedOptions || !gradedCompany) return [];
-		return card.gradedOptions
-			.map((tier: string) => parseGradedTier(tier))
-			.filter((p: any) => p.company === gradedCompany)
-			.map((p: any) => p.grade)
-			.sort((a: string, b: string) => parseFloat(b) - parseFloat(a));
-	}, [card?.gradedOptions, gradedCompany]);
+		if (!gradedCompany) return [];
+		return gradedOptions.find((o) => o.company === gradedCompany)?.grades ?? [];
+	}, [gradedOptions, gradedCompany]);
 
-	// Auto-select first company and highest grade
+	// Auto-select first company and highest grade (re-validating on variant change)
 	useEffect(() => {
-		if (gradedCompanies.length > 0 && !gradedCompany) {
+		if (gradedCompanies.length === 0) return;
+		if (!gradedCompany || !gradedCompanies.includes(gradedCompany)) {
 			setGradedCompany(gradedCompanies[0]);
 		}
 	}, [gradedCompanies]);
 
 	useEffect(() => {
-		if (gradedGrades.length > 0 && !gradedGrade) {
+		if (gradedGrades.length === 0) return;
+		if (!gradedGrade || !gradedGrades.includes(gradedGrade)) {
 			setGradedGrade(gradedGrades[0]);
 		}
 	}, [gradedGrades]);
 
-	// Condition options
+	// Condition options for the selected variant
 	const conditionOptions = useMemo(() => {
-		if (!card?.conditionOptions)
-			return [{ label: "Near Mint", value: "NEAR_MINT" }];
-		return card.conditionOptions.map((c: string) => ({
-			label: formatTierLabel(c),
+		const conditions =
+			card && variant ? getConditionOptions(card, variant) : [];
+		if (conditions.length === 0)
+			return [{ label: "Near Mint", value: "NM" }];
+		return conditions.map((c) => ({
+			label: formatConditionLabel(c),
 			value: c,
 		}));
-	}, [card?.conditionOptions]);
+	}, [card, variant]);
+
+	useEffect(() => {
+		if (!conditionOptions.some((o) => o.value === rawCondition)) {
+			setRawCondition(conditionOptions[0].value);
+		}
+	}, [conditionOptions]);
 
 	// Determine if graded tab is available
 	const hasGraded = gradedCompanies.length > 0;
 	const availableTabs = hasGraded ? ["Raw", "Graded"] : ["Raw"];
 
 	// Get current prices
-	const rawSourceKey = rawSource === "eBay" ? "ebay" : "tcgplayer";
-	const rawPrice = card?.prices?.[rawSourceKey]?.[rawCondition]?.avg;
+	const rawPrice =
+		card && variant
+			? selectPrice(card, variant, { kind: "raw", condition: rawCondition })?.value
+			: undefined;
 
 	const gradedTierKey =
 		gradedCompany && gradedGrade
 			? buildGradedTierKey(gradedCompany, gradedGrade)
 			: null;
-	const gradedPrice = gradedTierKey
-		? (card?.prices?.ebay?.[gradedTierKey]?.avg ??
-			card?.prices?.tcgplayer?.[gradedTierKey]?.avg)
-		: undefined;
+	const gradedPrice =
+		card && variant && gradedCompany && gradedGrade
+			? selectPrice(card, variant, {
+					kind: "graded",
+					company: gradedCompany,
+					grade: gradedGrade,
+				})?.value
+			: undefined;
 
 	// The hero price: show whichever tab is active
 	const heroPrice = pricingTab === "Graded" ? gradedPrice : rawPrice;
-	const heroLabel =
-		pricingTab === "Graded"
-			? `${gradedCompany} ${gradedGrade}`
-			: `${rawSource} · ${formatTierLabel(rawCondition)}`;
+
+	// Display fields
+	const cardImage = card ? getCardImage(card, variant || undefined, "large") : undefined;
+	const cardNumber = card ? getCardNumber(card) : undefined;
 
 	// History queries
+	const historyDays = PERIOD_TO_DAYS[historyPeriod] ?? 30;
+
 	const { data: rawHistory, isLoading: rawHistoryLoading } = useQuery({
 		queryKey: ["history", id, rawCondition, historyPeriod],
-		queryFn: async () => {
-			const res = await api.get(
-				`/api/pricing/cards/${id}/history/${rawCondition}`,
-				{
-					params: { period: historyPeriod, limit: 365 },
-				},
-			);
-			return res.data.data ?? [];
-		},
-		enabled: !!id && !!rawCondition,
+		queryFn: () => getCardHistory(api, id, rawCondition, historyDays),
+		enabled: !!id && !!rawCondition && pricingTab !== "Graded",
 	});
 
 	const { data: gradedHistory, isLoading: gradedHistoryLoading } = useQuery({
 		queryKey: ["history", id, gradedTierKey, historyPeriod],
-		queryFn: async () => {
-			const res = await api.get(
-				`/api/pricing/cards/${id}/history/${gradedTierKey}`,
-				{
-					params: { period: historyPeriod, limit: 365 },
-				},
-			);
-			return res.data.data ?? [];
-		},
-		enabled: !!id && !!gradedTierKey,
+		queryFn: () => getCardHistory(api, id, gradedTierKey!, historyDays),
+		enabled: !!id && !!gradedTierKey && pricingTab === "Graded",
 	});
 
-	// Filter history by selected source
-	const filteredRawHistory = useMemo(() => {
-		if (!rawHistory) return [];
-		return rawHistory
-			.filter((e: any) => e.source === rawSourceKey)
-			.sort(
-				(a: any, b: any) =>
-					new Date(a.date).getTime() - new Date(b.date).getTime(),
-			);
-	}, [rawHistory, rawSourceKey]);
-
-	const filteredGradedHistory = useMemo(() => {
-		if (!gradedHistory) return [];
-		return gradedHistory
-			.filter((e: any) => e.source === "ebay")
-			.sort(
-				(a: any, b: any) =>
-					new Date(a.date).getTime() - new Date(b.date).getTime(),
-			);
-	}, [gradedHistory]);
-
-	// Chart data — show data for the active tab (wagmi-charts format)
+	// Chart data — flatten history days for the active variant/tier (wagmi-charts format)
 	const chartData = useMemo(() => {
-		const source =
-			pricingTab === "Graded"
-				? filteredGradedHistory
-				: filteredRawHistory;
-		return source
-			.filter((e: any) => e.avg !== undefined && e.avg !== null)
-			.map((e: any) => ({
-				timestamp: new Date(e.date).getTime(),
-				value: Number(e.avg),
-			}));
-	}, [pricingTab, filteredRawHistory, filteredGradedHistory]);
-
-	const currencySymbol = card?.currency === "EUR" ? "€" : "$";
-
-	// History list for the active tab
-	const historyList = useMemo(() => {
+		if (!variant) return [];
 		if (pricingTab === "Graded") {
-			return filteredGradedHistory
-				.map((e: any) => ({
-					date: e.date,
-					source: "eBay",
-					type: gradedCompany
-						? `${gradedCompany} ${gradedGrade}`
-						: "Graded",
-					avg: e.avg,
-					saleCount: e.saleCount,
-				}))
-				.sort(
-					(a: any, b: any) =>
-						new Date(b.date).getTime() -
-						new Date(a.date).getTime(),
-				);
+			if (!gradedCompany || !gradedGrade) return [];
+			return historyToChartPoints(gradedHistory ?? [], variant, {
+				kind: "graded",
+				company: gradedCompany,
+				grade: gradedGrade,
+			});
 		}
-		return filteredRawHistory
-			.map((e: any) => ({
-				date: e.date,
-				source: rawSource,
-				type: formatTierLabel(rawCondition),
-				avg: e.avg,
-				saleCount: e.saleCount,
-			}))
-			.sort(
-				(a: any, b: any) =>
-					new Date(b.date).getTime() - new Date(a.date).getTime(),
-			);
+		return historyToChartPoints(rawHistory ?? [], variant, {
+			kind: "raw",
+			condition: rawCondition,
+		});
 	}, [
 		pricingTab,
-		filteredRawHistory,
-		filteredGradedHistory,
-		rawSource,
+		rawHistory,
+		gradedHistory,
+		variant,
 		rawCondition,
 		gradedCompany,
 		gradedGrade,
 	]);
 
+	const currencySymbol = "$";
+
+	// Recent sales — real eBay sold listings
+	const { data: listings } = useQuery({
+		queryKey: [
+			"listings",
+			id,
+			pricingTab === "Graded" ? gradedCompany : null,
+			pricingTab === "Graded" ? gradedGrade : null,
+		],
+		queryFn: () =>
+			getCardListings(api, id, {
+				pageSize: 25,
+				orderBy: "-sold_at",
+				company: pricingTab === "Graded" ? (gradedCompany ?? undefined) : undefined,
+				grade: pricingTab === "Graded" ? (gradedGrade ?? undefined) : undefined,
+			}),
+		enabled: !!id && (pricingTab !== "Graded" || !!gradedTierKey),
+	});
+
+	const salesList = useMemo(() => {
+		if (!listings) return [];
+		return listings.filter((l) => {
+			if (l.currency !== "USD") return false;
+			if (l.is_signed || l.is_error || l.is_perfect) return false;
+			// Raw tab: only ungraded sales. Scrydex misses slabs from smaller
+			// graders (company unset), so also screen listing titles.
+			if (pricingTab !== "Graded" && isLikelyGradedListing(l)) return false;
+			return true;
+		});
+	}, [listings, pricingTab]);
+
 	const configMatches = isFromCollection &&
 		pricingTab === (pricingType || "Raw") &&
+		variant === (initVariant || "") &&
 		(pricingTab === "Graded"
 			? (gradedCompany ?? "") === (initGradedCompany || "") &&
 				(gradedGrade ?? "") === (initGradedGrade || "")
-			: rawSource === (source || "TCGPlayer") &&
-				rawCondition === (condition || "NEAR_MINT"));
+			: rawCondition === (condition || "NM"));
 
 	useEffect(() => {
 		if (!isFromCollection || !configMatches) return;
@@ -982,7 +947,7 @@ export default function CardDetail() {
 				collectionId: collectionId!,
 				cardId: id,
 				pricingType: pricingTab,
-				source: rawSource,
+				variant,
 				condition: pricingTab === "Graded" ? "GRADED" : rawCondition,
 				gradedCompany: pricingTab === "Graded" ? (gradedCompany ?? undefined) : undefined,
 				gradedGrade: pricingTab === "Graded" ? (gradedGrade ?? undefined) : undefined,
@@ -998,7 +963,7 @@ export default function CardDetail() {
 		collectionId,
 		id,
 		pricingTab,
-		rawSource,
+		variant,
 		rawCondition,
 		gradedCompany,
 		gradedGrade,
@@ -1029,12 +994,12 @@ export default function CardDetail() {
 											collectionId: collectionId!,
 											cardId: id,
 											cardName: name ?? "",
-											cardNumber: card?.cardNumber ?? undefined,
-											setName: card?.set?.name ?? undefined,
-											cardImageUrl: card?.image ?? "",
+											cardNumber: cardNumber ?? undefined,
+											setName: card?.expansion?.name ?? undefined,
+											cardImageUrl: cardImage ?? "",
 											cardValue: heroPrice ?? 0,
 											pricingType: pricingTab,
-											source: rawSource,
+											variant,
 											condition: pricingTab === "Graded" ? "GRADED" : rawCondition,
 											gradedCompany: pricingTab === "Graded" ? (gradedCompany ?? undefined) : undefined,
 											gradedGrade: pricingTab === "Graded" ? (gradedGrade ?? undefined) : undefined,
@@ -1049,7 +1014,7 @@ export default function CardDetail() {
 												Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 												const configLabel = pricingTab === "Graded"
 													? `${gradedCompany} ${gradedGrade}`
-													: `${rawSource} · ${rawCondition.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (ch: string) => ch.toUpperCase())}`;
+													: `${formatVariantLabel(variant)} · ${formatConditionLabel(rawCondition)}`;
 												Alert.alert(
 													"Added!",
 													`${configLabel} configuration added to collection.`,
@@ -1063,12 +1028,12 @@ export default function CardDetail() {
 										params: {
 											cardId: id,
 											cardName: name ?? "",
-											cardNumber: card?.cardNumber ?? "",
-											setName: card?.set?.name ?? "",
-											cardImageUrl: card?.image ?? "",
+											cardNumber: cardNumber ?? "",
+											setName: card?.expansion?.name ?? "",
+											cardImageUrl: cardImage ?? "",
 											cardValue: String(heroPrice ?? 0),
 											pricingType: pricingTab,
-											source: rawSource,
+											variant,
 											condition: pricingTab === "Graded" ? "GRADED" : rawCondition,
 											gradedCompany: pricingTab === "Graded" ? (gradedCompany ?? "") : "",
 											gradedGrade: pricingTab === "Graded" ? (gradedGrade ?? "") : "",
@@ -1111,9 +1076,9 @@ export default function CardDetail() {
 						{ backgroundColor: colors.background },
 					]}
 				>
-					{card.image && (
+					{cardImage && (
 						<Image
-							source={{ uri: card.image }}
+							source={{ uri: cardImage }}
 							style={StyleSheet.absoluteFill}
 							contentFit="cover"
 							blurRadius={30}
@@ -1135,7 +1100,7 @@ export default function CardDetail() {
 						{/* Card Image */}
 						<View style={styles.imageContainer}>
 							<CardImage
-								uri={card.image ?? ""}
+								uri={cardImage ?? ""}
 								style={{
 									width: IMAGE_WIDTH,
 									height: IMAGE_HEIGHT,
@@ -1171,14 +1136,14 @@ export default function CardDetail() {
 												{card.name}
 											</Text>
 										)}
-										{card.cardNumber && (
+										{cardNumber && (
 											<Text
 												style={{
 													color: colors.mutedForeground,
 													fontSize: 11,
 												}}
 											>
-												#{card.cardNumber}
+												#{cardNumber}
 											</Text>
 										)}
 									</View>
@@ -1205,7 +1170,7 @@ export default function CardDetail() {
 								ESTIMATED VALUE
 							</Text>
 							<TickerText
-								value={formatPrice(heroPrice, card.currency)}
+								value={formatPrice(heroPrice)}
 								style={[
 									styles.heroPrice,
 									{ color: colors.foreground },
@@ -1314,7 +1279,7 @@ export default function CardDetail() {
 													},
 												]}
 											>
-												{rawSource}
+												{variant ? formatVariantLabel(variant) : "—"}
 											</Text>
 										</View>
 										<View
@@ -1345,7 +1310,7 @@ export default function CardDetail() {
 													},
 												]}
 											>
-												{formatTierLabel(rawCondition)}
+												{formatConditionLabel(rawCondition)}
 											</Text>
 										</View>
 									</>
@@ -1367,8 +1332,8 @@ export default function CardDetail() {
 												collectionId: collectionId!,
 												cardId: id,
 												pricingType: pricingType || "Raw",
-												source: source || "TCGPlayer",
-												condition: condition || "NEAR_MINT",
+												variant: initVariant || "normal",
+												condition: condition || "NM",
 												gradedCompany: initGradedCompany || undefined,
 												gradedGrade: initGradedGrade || undefined,
 											},
@@ -1392,8 +1357,8 @@ export default function CardDetail() {
 												collectionId: collectionId!,
 												cardId: id,
 												pricingType: pricingType || "Raw",
-												source: source || "TCGPlayer",
-												condition: condition || "NEAR_MINT",
+												variant: initVariant || "normal",
+												condition: condition || "NM",
 												gradedCompany: initGradedCompany || undefined,
 												gradedGrade: initGradedGrade || undefined,
 											},
@@ -1426,7 +1391,7 @@ export default function CardDetail() {
 									]}
 								>
 									{card.name}
-									{card.cardNumber ? (
+									{cardNumber ? (
 										<Text
 											style={{
 												color: colors.foreground,
@@ -1435,7 +1400,7 @@ export default function CardDetail() {
 											}}
 										>
 											{" "}
-											#{card.cardNumber}
+											#{cardNumber}
 										</Text>
 									) : null}
 								</Text>
@@ -1445,7 +1410,7 @@ export default function CardDetail() {
 										{ color: colors.foreground, opacity: 0.7 },
 									]}
 								>
-									{card.set?.name}
+									{card.expansion?.name}
 								</Text>
 							</View>
 							<View style={styles.pillRow}>
@@ -1457,12 +1422,9 @@ export default function CardDetail() {
 										borderColor={colors.primary + "55"}
 									/>
 								)}
-								{card.variant && (
+								{!!variant && (
 									<InfoPill
-										label={card.variant.replace(
-											/_/g,
-											" ",
-										)}
+										label={formatVariantLabel(variant)}
 										color={colors.foreground}
 										bgColor={colors.primary + "33"}
 										borderColor={colors.primary + "55"}
@@ -1489,6 +1451,27 @@ export default function CardDetail() {
 							>
 								Pricing Options
 							</Text>
+							{variantNames.length > 1 && (
+								<View style={styles.variantBlock}>
+									<Text
+										style={[
+											styles.toggleLabel,
+											{ color: colors.mutedForeground },
+										]}
+									>
+										Variant
+									</Text>
+									<LabeledPillToggle
+										options={variantNames.map((v) => ({
+											label: formatVariantLabel(v),
+											value: v,
+										}))}
+										selected={variant}
+										onSelect={setVariant}
+										colors={colors}
+									/>
+								</View>
+							)}
 							{hasGraded && (
 								<TabBar
 									tabs={availableTabs}
@@ -1501,8 +1484,6 @@ export default function CardDetail() {
 							<SlidingTabs
 								activeTab={pricingTab}
 								hasGraded={hasGraded}
-								rawSource={rawSource}
-								setRawSource={setRawSource}
 								rawCondition={rawCondition}
 								setRawCondition={setRawCondition}
 								conditionOptions={conditionOptions}
@@ -1510,22 +1491,10 @@ export default function CardDetail() {
 								gradedCompany={gradedCompany}
 								setGradedCompany={(val: string) => {
 									setGradedCompany(val);
-									const grades = (
-										card.gradedOptions ?? []
-									)
-										.map((t: string) =>
-											parseGradedTier(t),
-										)
-										.filter(
-											(p: any) =>
-												p.company === val,
-										)
-										.map((p: any) => p.grade)
-										.sort(
-											(a: string, b: string) =>
-												parseFloat(b) -
-												parseFloat(a),
-										);
+									const grades =
+										gradedOptions.find(
+											(o) => o.company === val,
+										)?.grades ?? [];
 									setGradedGrade(grades[0] ?? null);
 								}}
 								gradedGrades={gradedGrades}
@@ -1612,7 +1581,7 @@ export default function CardDetail() {
 								/>
 							</View>
 
-							{rawHistoryLoading || gradedHistoryLoading ? (
+							{(pricingTab === "Graded" ? gradedHistoryLoading : rawHistoryLoading) ? (
 								<View style={styles.chartPlaceholder}>
 									<Skeleton
 										width="100%"
@@ -1702,7 +1671,7 @@ export default function CardDetail() {
 						</ProGate>
 
 						{/* Recent Sales */}
-						{historyList.length > 0 && (
+						{salesList.length > 0 && (
 							isPro ? (
 								<AnimatedCollapsible
 									title="Recent Sales"
@@ -1712,18 +1681,25 @@ export default function CardDetail() {
 									}
 									colors={colors}
 								>
-									{historyList.slice(0, 20).map((item: any, i: number) => (
-										<View
-											key={`${item.date}-${item.type}-${i}`}
+									{salesList.slice(0, 20).map((item, i) => (
+										<Pressable
+											key={item.id}
+											disabled={!item.url}
+											onPress={() => {
+												if (item.url) {
+													Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+													Linking.openURL(item.url);
+												}
+											}}
 											style={[
 												styles.historyRow,
-												i < Math.min(historyList.length, 20) - 1 && {
+												i < Math.min(salesList.length, 20) - 1 && {
 													borderBottomWidth: 1,
 													borderBottomColor: colors.foreground + "14",
 												},
 											]}
 										>
-											<View style={{ flex: 1 }}>
+											<View style={{ flex: 1, paddingRight: 12 }}>
 												<Text
 													style={[
 														styles.historyDate,
@@ -1733,7 +1709,7 @@ export default function CardDetail() {
 													]}
 												>
 													{new Date(
-														item.date,
+														item.sold_at.replace(/\//g, "-"),
 													).toLocaleDateString()}
 												</Text>
 												<Text
@@ -1744,8 +1720,9 @@ export default function CardDetail() {
 															opacity: 0.6,
 														},
 													]}
+													numberOfLines={1}
 												>
-													{item.type} · {item.source}
+													{item.title}
 												</Text>
 											</View>
 											<View
@@ -1759,30 +1736,23 @@ export default function CardDetail() {
 														},
 													]}
 												>
-													{formatPrice(
-														item.avg,
-														card.currency,
-													)}
+													{formatPrice(item.price)}
 												</Text>
-												{item.saleCount !== undefined &&
-													item.saleCount > 0 && (
-														<Text
-															style={[
-																styles.historyMeta,
-																{
-																	color: colors.foreground,
-																	opacity: 0.6,
-																},
-															]}
-														>
-															{item.saleCount} sale
-															{item.saleCount !== 1
-																? "s"
-																: ""}
-														</Text>
-													)}
+												{item.company && (
+													<Text
+														style={[
+															styles.historyMeta,
+															{
+																color: colors.foreground,
+																opacity: 0.6,
+															},
+														]}
+													>
+														{item.company} {item.grade}
+													</Text>
+												)}
 											</View>
-										</View>
+										</Pressable>
 									))}
 								</AnimatedCollapsible>
 							) : (
@@ -1810,33 +1780,34 @@ export default function CardDetail() {
 											color={colors.mutedForeground}
 										/>
 									</View>
-									{historyList.slice(0, 3).map((item: any, i: number) => (
+									{salesList.slice(0, 3).map((item, i) => (
 										<View
-											key={`${item.date}-${item.type}-${i}`}
+											key={item.id}
 											style={[
 												styles.historyRow,
-												i < Math.min(historyList.length, 3) - 1 && {
+												i < Math.min(salesList.length, 3) - 1 && {
 													borderBottomWidth: 1,
 													borderBottomColor: colors.foreground + "14",
 												},
 											]}
 										>
-											<View style={{ flex: 1 }}>
+											<View style={{ flex: 1, paddingRight: 12 }}>
 												<Text
 													style={[
 														styles.historyDate,
 														{ color: colors.foreground },
 													]}
 												>
-													{new Date(item.date).toLocaleDateString()}
+													{new Date(item.sold_at.replace(/\//g, "-")).toLocaleDateString()}
 												</Text>
 												<Text
 													style={[
 														styles.historyMeta,
 														{ color: colors.foreground, opacity: 0.6 },
 													]}
+													numberOfLines={1}
 												>
-													{item.type} · {item.source}
+													{item.title}
 												</Text>
 											</View>
 											<Text
@@ -1845,27 +1816,12 @@ export default function CardDetail() {
 													{ color: colors.foreground },
 												]}
 											>
-												{formatPrice(item.avg, card.currency)}
+												{formatPrice(item.price)}
 											</Text>
 										</View>
 									))}
 								</ProGate>
 							)
-						)}
-
-						{/* Last Updated */}
-						{card.lastUpdated && (
-							<Text
-								style={[
-									styles.lastUpdated,
-									{ color: colors.mutedForeground },
-								]}
-							>
-								Last updated{" "}
-								{new Date(
-									card.lastUpdated,
-								).toLocaleDateString()}
-							</Text>
 						)}
 
 						{/* Remove from collection */}
@@ -2142,6 +2098,9 @@ const styles = StyleSheet.create({
 	},
 
 	// Toggles
+	variantBlock: {
+		marginBottom: 16,
+	},
 	toggleRow: {
 		flexDirection: "row",
 		gap: 8,
@@ -2239,10 +2198,5 @@ const styles = StyleSheet.create({
 		fontSize: 15,
 		fontWeight: "700",
 		fontVariant: ["tabular-nums"],
-	},
-	lastUpdated: {
-		fontSize: 12,
-		textAlign: "center",
-		marginTop: 16,
 	},
 });

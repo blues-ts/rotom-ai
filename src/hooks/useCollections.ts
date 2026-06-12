@@ -4,6 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { getDatabase } from "@/lib/database";
 import { useApi } from "@/lib/axios";
+import { getCard, getSealedProduct } from "@/lib/api/pricing";
+import { getCardImage, getCardNumber, selectPrice, type PriceSelector } from "@/lib/scrydex";
+import type { ScrydexCard, ScrydexSealedProduct } from "@/types/scrydex";
 import { recordCollectionValueSnapshot } from "@/lib/collectionValueHistory";
 import { useToast } from "@/context/ToastContext";
 import type { Collection, CollectionCard } from "@/types/collection";
@@ -121,8 +124,9 @@ export function useCollections() {
       cardImageUrl,
       cardValue,
       pricingType = "Raw",
-      source = "TCGPlayer",
-      condition = "NEAR_MINT",
+      productType = "card",
+      variant = "normal",
+      condition = "NM",
       gradedCompany,
       gradedGrade,
       pricePaid,
@@ -135,7 +139,8 @@ export function useCollections() {
       cardImageUrl: string;
       cardValue: number;
       pricingType?: string;
-      source?: string;
+      productType?: string;
+      variant?: string;
       condition?: string;
       gradedCompany?: string;
       gradedGrade?: string;
@@ -144,9 +149,9 @@ export function useCollections() {
       // Check if this exact config already exists
       const existing = db.getFirstSync<{ id: string }>(
         `SELECT id FROM collection_cards
-         WHERE collection_id = ? AND card_id = ? AND pricing_type = ? AND source = ? AND condition = ?
+         WHERE collection_id = ? AND card_id = ? AND pricing_type = ? AND variant = ? AND condition = ?
          AND COALESCE(graded_company, '') = ? AND COALESCE(graded_grade, '') = ?`,
-        [collectionId, cardId, pricingType, source, condition, gradedCompany ?? "", gradedGrade ?? ""],
+        [collectionId, cardId, pricingType, variant, condition, gradedCompany ?? "", gradedGrade ?? ""],
       );
       if (existing) {
         if (pricePaid !== undefined) {
@@ -163,8 +168,8 @@ export function useCollections() {
       } else {
         const id = Date.now().toString();
         db.runSync(
-          "INSERT INTO collection_cards (id, collection_id, card_id, card_name, card_number, set_name, card_image_url, card_value, pricing_type, source, condition, graded_company, graded_grade, quantity, price_paid, card_value_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
-          [id, collectionId, cardId, cardName, cardNumber ?? null, setName ?? null, cardImageUrl, cardValue, pricingType, source, condition, gradedCompany ?? null, gradedGrade ?? null, pricePaid ?? null, new Date().toISOString()],
+          "INSERT INTO collection_cards (id, collection_id, card_id, card_name, card_number, set_name, card_image_url, card_value, pricing_type, product_type, variant, condition, graded_company, graded_grade, quantity, price_paid, card_value_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
+          [id, collectionId, cardId, cardName, cardNumber ?? null, setName ?? null, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany ?? null, gradedGrade ?? null, pricePaid ?? null, new Date().toISOString()],
         );
       }
       return Promise.resolve();
@@ -204,24 +209,24 @@ export function useCollections() {
       collectionId,
       cardId,
       pricingType = "Raw",
-      source = "TCGPlayer",
-      condition = "NEAR_MINT",
+      variant = "normal",
+      condition = "NM",
       gradedCompany,
       gradedGrade,
     }: {
       collectionId: string;
       cardId: string;
       pricingType?: string;
-      source?: string;
+      variant?: string;
       condition?: string;
       gradedCompany?: string;
       gradedGrade?: string;
     }) => {
       db.runSync(
         `UPDATE collection_cards SET quantity = quantity + 1
-         WHERE collection_id = ? AND card_id = ? AND pricing_type = ? AND source = ? AND condition = ?
+         WHERE collection_id = ? AND card_id = ? AND pricing_type = ? AND variant = ? AND condition = ?
          AND COALESCE(graded_company, '') = ? AND COALESCE(graded_grade, '') = ?`,
-        [collectionId, cardId, pricingType, source, condition, gradedCompany ?? "", gradedGrade ?? ""],
+        [collectionId, cardId, pricingType, variant, condition, gradedCompany ?? "", gradedGrade ?? ""],
       );
       return Promise.resolve();
     },
@@ -241,24 +246,24 @@ export function useCollections() {
       collectionId,
       cardId,
       pricingType = "Raw",
-      source = "TCGPlayer",
-      condition = "NEAR_MINT",
+      variant = "normal",
+      condition = "NM",
       gradedCompany,
       gradedGrade,
     }: {
       collectionId: string;
       cardId: string;
       pricingType?: string;
-      source?: string;
+      variant?: string;
       condition?: string;
       gradedCompany?: string;
       gradedGrade?: string;
     }) => {
       db.runSync(
         `UPDATE collection_cards SET quantity = quantity - 1
-         WHERE collection_id = ? AND card_id = ? AND pricing_type = ? AND source = ? AND condition = ?
+         WHERE collection_id = ? AND card_id = ? AND pricing_type = ? AND variant = ? AND condition = ?
          AND COALESCE(graded_company, '') = ? AND COALESCE(graded_grade, '') = ?`,
-        [collectionId, cardId, pricingType, source, condition, gradedCompany ?? "", gradedGrade ?? ""],
+        [collectionId, cardId, pricingType, variant, condition, gradedCompany ?? "", gradedGrade ?? ""],
       );
       return Promise.resolve();
     },
@@ -278,8 +283,8 @@ export function useCollections() {
       collectionId,
       cardId,
       pricingType = "Raw",
-      source = "TCGPlayer",
-      condition = "NEAR_MINT",
+      variant = "normal",
+      condition = "NM",
       gradedCompany,
       gradedGrade,
       pricePaid,
@@ -287,7 +292,7 @@ export function useCollections() {
       collectionId: string;
       cardId: string;
       pricingType?: string;
-      source?: string;
+      variant?: string;
       condition?: string;
       gradedCompany?: string;
       gradedGrade?: string;
@@ -295,9 +300,9 @@ export function useCollections() {
     }) => {
       db.runSync(
         `UPDATE collection_cards SET price_paid = ?
-         WHERE collection_id = ? AND card_id = ? AND pricing_type = ? AND source = ? AND condition = ?
+         WHERE collection_id = ? AND card_id = ? AND pricing_type = ? AND variant = ? AND condition = ?
          AND COALESCE(graded_company, '') = ? AND COALESCE(graded_grade, '') = ?`,
-        [pricePaid, collectionId, cardId, pricingType, source, condition, gradedCompany ?? "", gradedGrade ?? ""],
+        [pricePaid, collectionId, cardId, pricingType, variant, condition, gradedCompany ?? "", gradedGrade ?? ""],
       );
       return Promise.resolve();
     },
@@ -360,7 +365,8 @@ interface CollectionCardRow {
   card_value: number;
   added_at: string;
   pricing_type: string;
-  source: string;
+  product_type: string;
+  variant: string;
   condition: string;
   graded_company: string | null;
   graded_grade: string | null;
@@ -369,17 +375,15 @@ interface CollectionCardRow {
   card_value_updated_at: string | null;
 }
 
-function resolvePriceForRow(card: any, row: CollectionCardRow): number | undefined {
-  if (!card?.prices) return undefined;
-  if (row.pricing_type === "Graded" && row.graded_company && row.graded_grade) {
-    const tierKey = `${row.graded_company.toUpperCase()}_${row.graded_grade.replace(/\./g, "_")}`;
-    return (
-      card.prices.ebay?.[tierKey]?.avg ??
-      card.prices.tcgplayer?.[tierKey]?.avg
-    );
-  }
-  const sourceKey = row.source === "eBay" ? "ebay" : "tcgplayer";
-  return card.prices[sourceKey]?.[row.condition]?.avg;
+function resolvePriceForRow(
+  card: ScrydexCard | ScrydexSealedProduct,
+  row: CollectionCardRow,
+): number | undefined {
+  const selector: PriceSelector =
+    row.pricing_type === "Graded" && row.graded_company && row.graded_grade
+      ? { kind: "graded", company: row.graded_company, grade: row.graded_grade }
+      : { kind: "raw", condition: row.condition };
+  return selectPrice(card, row.variant, selector)?.value;
 }
 
 export function useRefreshCollectionPrices() {
@@ -399,18 +403,22 @@ export function useRefreshCollectionPrices() {
 
       if (rows.length === 0) return { updated: 0 };
 
+      const productTypeById = new Map(rows.map((r) => [r.card_id, r.product_type]));
       const uniqueCardIds = Array.from(new Set(rows.map((r) => r.card_id)));
       const results = await Promise.all(
         uniqueCardIds.map(async (cardId) => {
           try {
-            const res = await api.get(`/api/pricing/cards/${cardId}`);
-            return [cardId, res.data?.data] as const;
+            const card =
+              productTypeById.get(cardId) === "sealed"
+                ? await getSealedProduct(api, cardId)
+                : await getCard(api, cardId);
+            return [cardId, card ?? null] as const;
           } catch {
             return [cardId, null] as const;
           }
         }),
       );
-      const cardMap = new Map(results);
+      const cardMap = new Map<string, ScrydexCard | ScrydexSealedProduct | null>(results);
 
       // Per-card failures are tolerated, but if every fetch failed we're
       // offline (or the API is down) — surface it instead of silently
@@ -425,19 +433,30 @@ export function useRefreshCollectionPrices() {
         const card = cardMap.get(row.card_id);
         if (!card) continue;
 
-        // Backfill card_number if missing and the API returned one.
-        if (!row.card_number && card.cardNumber) {
+        // Backfill card_number if missing and the API returned one
+        // (sealed products have no card number).
+        const freshNumber = "number" in card ? getCardNumber(card) : undefined;
+        if (!row.card_number && freshNumber) {
           db.runSync(
             "UPDATE collection_cards SET card_number = ? WHERE id = ?",
-            [card.cardNumber, row.id],
+            [freshNumber, row.id],
           );
         }
 
         // Backfill set_name if missing and the API returned one.
-        if (!row.set_name && card.set?.name) {
+        if (!row.set_name && card.expansion?.name) {
           db.runSync(
             "UPDATE collection_cards SET set_name = ? WHERE id = ?",
-            [card.set.name, row.id],
+            [card.expansion.name, row.id],
+          );
+        }
+
+        // Refresh the stored image URL so stale links self-heal.
+        const freshImage = getCardImage(card, row.variant, "medium");
+        if (freshImage && freshImage !== row.card_image_url) {
+          db.runSync(
+            "UPDATE collection_cards SET card_image_url = ? WHERE id = ?",
+            [freshImage, row.id],
           );
         }
 
@@ -490,7 +509,8 @@ export function useCollectionCards(collectionId: string) {
         cardValue: row.card_value,
         addedAt: row.added_at,
         pricingType: row.pricing_type,
-        source: row.source,
+        productType: row.product_type,
+        variant: row.variant,
         condition: row.condition,
         gradedCompany: row.graded_company ?? undefined,
         gradedGrade: row.graded_grade ?? undefined,
