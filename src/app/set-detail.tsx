@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-	ActionSheetIOS,
 	Dimensions,
 	FlatList,
 	Keyboard,
-	Platform,
 	Pressable,
 	StyleSheet,
 	Text,
-	TextInput,
 	View,
 } from "react-native";
 import Animated, {
@@ -21,16 +18,24 @@ import Animated, {
 	withTiming,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/context/ThemeContext";
 import { useApi } from "@/lib/axios";
-import { searchCards } from "@/lib/api/pricing";
-import { buildSetCardsQ, getCardImage, getCardNumber, toNumber } from "@/lib/scrydex";
+import { searchCards, searchSealed } from "@/lib/api/pricing";
+import { buildSetCardsQ, getCardDisplayName, getCardImage, getCardNumber, toNumber } from "@/lib/scrydex";
 import CardImage from "@/components/CardImage";
 import ErrorState from "@/components/ErrorState";
-import type { ApiListResponse, ScrydexCard } from "@/types/scrydex";
+import type {
+	ApiListResponse,
+	ScrydexCard,
+	ScrydexSealedProduct,
+} from "@/types/scrydex";
+
+type SetItem = ScrydexCard | ScrydexSealedProduct;
 
 const COLUMNS = 3;
 const GAP = 8;
@@ -53,27 +58,50 @@ const SORT_LABELS: Record<SortOption, string> = {
 	valueAsc: "Value (low to high)",
 };
 
-// Scrydex order_by silently ignores price fields, so number/name sorts run
-// server-side while value sorts fetch the whole set with prices and sort here.
+// Scrydex order_by silently ignores price fields, and its name ordering uses
+// the printed (Japanese) name while we display English translations — so only
+// number sorts run server-side. Name and value sorts fetch the whole set and
+// sort here.
 const SORT_ORDER_BY: Record<string, string> = {
 	number: "number",
 	numberDesc: "-number",
-	nameAsc: "name",
 };
 
-/** Sort value: the card's NM market price (highest NM across variants). */
-function cardSortValue(card: ScrydexCard): number {
-	let best = 0;
-	for (const v of card.variants ?? []) {
+/**
+ * The item's market price and which variant it comes from (highest across
+ * variants; NM for cards, U/unopened for sealed) — the sort key for value
+ * ordering, and the variant the detail page should open on so the price the
+ * user tapped is the price they see. USD preferred; when a card has no USD
+ * raw rows at all (Japanese search payloads are JPY-only) the JPY market is
+ * used so JA sets still rank correctly relative to themselves.
+ */
+function bestMarketPrice(
+	item: SetItem,
+	condition: "NM" | "U",
+): { value: number; variant?: string } {
+	let bestUsd = 0;
+	let bestUsdVariant: string | undefined;
+	let bestOther = 0;
+	let bestOtherVariant: string | undefined;
+	for (const v of item.variants ?? []) {
 		for (const p of v.prices ?? []) {
-			if (p.type !== "raw" || p.condition !== "NM" || p.currency !== "USD")
-				continue;
+			if (p.type !== "raw" || p.condition !== condition) continue;
 			if (p.is_signed || p.is_error || p.is_perfect) continue;
 			const value = toNumber(p.market) ?? 0;
-			if (value > best) best = value;
+			if (p.currency === "USD") {
+				if (value > bestUsd) {
+					bestUsd = value;
+					bestUsdVariant = v.name;
+				}
+			} else if (value > bestOther) {
+				bestOther = value;
+				bestOtherVariant = v.name;
+			}
 		}
 	}
-	return best;
+	return bestUsd > 0
+		? { value: bestUsd, variant: bestUsdVariant }
+		: { value: bestOther, variant: bestOtherVariant };
 }
 
 function CardPressable({
@@ -173,18 +201,28 @@ function SkeletonCard({ color }: { color: string }) {
 }
 
 export default function SetDetail() {
-	const { id, name } = useLocalSearchParams<{ id: string; name?: string }>();
-	const { colors, theme } = useTheme();
+	const { id, name, mode, releaseDate, total, logo } = useLocalSearchParams<{
+		id: string;
+		name?: string;
+		mode?: string;
+		releaseDate?: string;
+		total?: string;
+		logo?: string;
+	}>();
+	const isSealedMode = mode === "sealed";
+	const { colors } = useTheme();
+	const insets = useSafeAreaInsets();
 	const api = useApi();
+	// Explicit header offset: contentInsetAdjustmentBehavior applies its inset
+	// a frame after mount, which made the summary jump down on every list
+	// remount (initial load, sort changes).
+	const topPadding = insets.top + 20;
 	const [filterQuery, setFilterQuery] = useState("");
 	const [debouncedFilter, setDebouncedFilter] = useState("");
-	const [sortBy, setSortBy] = useState<SortOption>("number");
+	const [sortBy, setSortBy] = useState<SortOption>(
+		isSealedMode ? "nameAsc" : "number",
+	);
 	const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
-
-	const sortScale = useSharedValue(1);
-	const sortAnimatedStyle = useAnimatedStyle(() => ({
-		transform: [{ scale: sortScale.value }],
-	}));
 
 	useEffect(() => {
 		const timer = setTimeout(() => {
@@ -194,6 +232,10 @@ export default function SetDetail() {
 	}, [filterQuery]);
 
 	const isValueSort = sortBy === "valueDesc" || sortBy === "valueAsc";
+	// Name and value sorts run client-side over the whole set: Scrydex can't
+	// order by price, and its name ordering uses printed (Japanese) names
+	// while we display English translations.
+	const isClientSort = isValueSort || sortBy === "nameAsc";
 
 	const {
 		data,
@@ -203,47 +245,50 @@ export default function SetDetail() {
 		isFetchingNextPage,
 		hasNextPage,
 		fetchNextPage,
-	} = useInfiniteQuery<ApiListResponse<ScrydexCard>>({
-		queryKey: ["setCards", id, debouncedFilter, sortBy],
-		queryFn: ({ pageParam }) =>
-			searchCards(api, {
+	} = useInfiniteQuery<ApiListResponse<SetItem>>({
+		queryKey: ["setCards", id, isSealedMode, debouncedFilter, sortBy],
+		queryFn: ({ pageParam }) => {
+			const search = isSealedMode ? searchSealed : searchCards;
+			return search(api, {
 				q: buildSetCardsQ(id, debouncedFilter),
 				page: pageParam as number,
 				pageSize: 60,
 				orderBy: SORT_ORDER_BY[sortBy],
-			}),
+			});
+		},
 		initialPageParam: 1,
 		getNextPageParam: (lastPage) =>
 			lastPage.page * lastPage.page_size < lastPage.total_count
 				? lastPage.page + 1
 				: undefined,
-		enabled: !!id && !isValueSort,
+		enabled: !!id && !isClientSort,
 	});
 
-	// Value sorting: Scrydex can't order by price, so pull the whole set
-	// (with prices) once and sort locally. Sets top out around ~300 cards.
+	// Whole-set fetch for client-side sorts. Sets top out around ~300 cards;
+	// prices are only included when the sort needs them.
 	const {
 		data: allCards,
 		isLoading: allLoading,
 		isError: allError,
 		refetch: refetchAll,
 	} = useQuery({
-		queryKey: ["setCardsAll", id, debouncedFilter],
-		queryFn: async () => {
+		queryKey: ["setCardsAll", id, isSealedMode, debouncedFilter, isValueSort],
+		queryFn: async (): Promise<SetItem[]> => {
 			const q = buildSetCardsQ(id, debouncedFilter);
-			const first = await searchCards(api, {
+			const search = isSealedMode ? searchSealed : searchCards;
+			const first = await search(api, {
 				q,
 				pageSize: 100,
-				includePrices: true,
+				includePrices: isValueSort,
 			});
-			const all = [...first.data];
+			const all: SetItem[] = [...first.data];
 			let page = 2;
 			while (all.length < first.total_count && page <= 6) {
-				const next = await searchCards(api, {
+				const next = await search(api, {
 					q,
 					page,
 					pageSize: 100,
-					includePrices: true,
+					includePrices: isValueSort,
 				});
 				if (next.data.length === 0) break;
 				all.push(...next.data);
@@ -251,35 +296,101 @@ export default function SetDetail() {
 			}
 			return all;
 		},
-		enabled: !!id && isValueSort,
+		enabled: !!id && isClientSort,
 		staleTime: 5 * 60 * 1000,
 	});
 
-	const isLoading = isValueSort ? allLoading : pagedLoading;
-	const isError = isValueSort ? allError : pagedError;
-	const refetch = isValueSort ? refetchAll : refetchPaged;
+	const isLoading = isClientSort ? allLoading : pagedLoading;
+	const isError = isClientSort ? allError : pagedError;
+	const refetch = isClientSort ? refetchAll : refetchPaged;
+
+	const sortCondition = isSealedMode ? "U" : "NM";
 
 	const cards = useMemo(() => {
 		if (isValueSort) {
 			const sorted = (allCards ?? [])
 				.slice()
-				.sort((a, b) => cardSortValue(b) - cardSortValue(a));
+				.sort(
+					(a, b) =>
+						bestMarketPrice(b, sortCondition).value -
+						bestMarketPrice(a, sortCondition).value,
+				);
 			return sortBy === "valueAsc" ? sorted.reverse() : sorted;
 		}
+		if (sortBy === "nameAsc") {
+			return (allCards ?? [])
+				.slice()
+				.sort((a, b) => {
+					const nameA = "number" in a ? getCardDisplayName(a) : a.name;
+					const nameB = "number" in b ? getCardDisplayName(b) : b.name;
+					return nameA.localeCompare(nameB);
+				});
+		}
 		return data?.pages.flatMap((p) => p.data) ?? [];
-	}, [isValueSort, allCards, sortBy, data]);
+	}, [isValueSort, allCards, sortBy, data, sortCondition]);
 
 	const handleEndReached = useCallback(() => {
-		if (!isValueSort && hasNextPage && !isFetchingNextPage) {
+		if (!isClientSort && hasNextPage && !isFetchingNextPage) {
 			fetchNextPage();
 		}
-	}, [isValueSort, hasNextPage, isFetchingNextPage, fetchNextPage]);
+	}, [isClientSort, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+	// The expansion's `total` is its card count; in sealed mode the product
+	// count comes from the first unfiltered response instead.
+	const [sealedTotal, setSealedTotal] = useState<number | null>(null);
+	useEffect(() => {
+		if (!isSealedMode || debouncedFilter !== "") return;
+		const t = data?.pages[0]?.total_count ?? allCards?.length;
+		if (t !== undefined) setSealedTotal(t);
+	}, [isSealedMode, debouncedFilter, data, allCards]);
+
+	const releaseYear = releaseDate ? releaseDate.slice(0, 4) : "—";
+	const countValue = isSealedMode ? (sealedTotal ?? "—") : (total || "—");
+
+	// Rendered inside the FlatList so native header insets (translucent header
+	// + attached search bar) position it correctly instead of hiding it.
+	const summaryHeader = (
+		<View style={styles.summaryRow}>
+			<View style={styles.summarySide}>
+				<Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>
+					Released
+				</Text>
+				<Text style={[styles.summaryValue, { color: colors.foreground }]}>
+					{releaseYear}
+				</Text>
+			</View>
+			{!!logo && (
+				<Image
+					source={{ uri: logo }}
+					style={styles.summaryLogo}
+					contentFit="contain"
+					transition={150}
+					cachePolicy="memory-disk"
+				/>
+			)}
+			<View style={[styles.summarySide, styles.summaryRight]}>
+				<Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>
+					{isSealedMode ? "Products" : "Cards"}
+				</Text>
+				<Text style={[styles.summaryValue, { color: colors.foreground }]}>
+					{countValue}
+				</Text>
+			</View>
+		</View>
+	);
 
 	const renderItem = useCallback(
-		({ item, index }: { item: ScrydexCard; index: number }) => {
+		({ item, index }: { item: SetItem; index: number }) => {
 			const image = getCardImage(item, undefined, "small") ?? "";
-			const cardNumber = getCardNumber(item);
+			const cardNumber = "number" in item ? getCardNumber(item) : "";
+			const displayName =
+				"number" in item ? getCardDisplayName(item) : item.name;
 			const showPlaceholder = !image || failedImages.has(item.id);
+			// In value mode, open the item on the variant that drove its sort
+			// position so the hero price matches the ranking.
+			const bestVariant = isValueSort
+				? bestMarketPrice(item, sortCondition).variant
+				: undefined;
 			return (
 				<Animated.View
 					entering={FadeIn.delay(Math.min(index * 20, 240)).duration(200)}
@@ -288,9 +399,14 @@ export default function SetDetail() {
 						onPress={() => {
 							Keyboard.dismiss();
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-							router.push(
-								`/(card)/${item.id}?name=${encodeURIComponent(item.name)}`,
-							);
+							router.push({
+								pathname: isSealedMode ? "/(sealed)/[id]" : "/(card)/[id]",
+								params: {
+									id: item.id,
+									name: displayName,
+									...(bestVariant ? { variant: bestVariant } : {}),
+								},
+							});
 						}}
 					>
 						{showPlaceholder ? (
@@ -302,7 +418,7 @@ export default function SetDetail() {
 								]}
 							>
 								<Ionicons
-									name="image-outline"
+									name={isSealedMode ? "cube-outline" : "image-outline"}
 									size={24}
 									color={colors.mutedForeground}
 								/>
@@ -310,7 +426,7 @@ export default function SetDetail() {
 									style={[styles.placeholderName, { color: colors.foreground }]}
 									numberOfLines={2}
 								>
-									{item.name}
+									{displayName}
 								</Text>
 								{!!cardNumber && (
 									<Text
@@ -322,6 +438,26 @@ export default function SetDetail() {
 										#{cardNumber}
 									</Text>
 								)}
+							</View>
+						) : isSealedMode ? (
+							// Sealed art comes in arbitrary aspect ratios — inset it on
+							// the tile background so the tile keeps the card silhouette.
+							<View
+								style={[
+									styles.cardImage,
+									styles.sealedTile,
+									{ backgroundColor: colors.card },
+								]}
+							>
+								<CardImage
+									uri={image}
+									style={styles.sealedImage}
+									backgroundColor="transparent"
+									shimmerColor={colors.border}
+									onError={() => {
+										setFailedImages((prev) => new Set(prev).add(item.id));
+									}}
+								/>
 							</View>
 						) : (
 							<CardImage
@@ -338,7 +474,7 @@ export default function SetDetail() {
 				</Animated.View>
 			);
 		},
-		[colors, failedImages],
+		[colors, failedImages, isValueSort, isSealedMode, sortCondition],
 	);
 
 	return (
@@ -360,73 +496,40 @@ export default function SetDetail() {
 				}}
 			/>
 
-			<View style={[styles.container, { backgroundColor: colors.background }]}>
-				{/* Filter + sort row */}
-				<View style={styles.filterContainer}>
-					<View
-						style={[
-							styles.filterBar,
-							styles.filterBarFlex,
-							{ backgroundColor: colors.card, borderColor: colors.border },
-						]}
-					>
-						<Ionicons name="search" size={18} color={colors.mutedForeground} />
-						<TextInput
-							style={[styles.filterInput, { color: colors.foreground }]}
-							placeholder="Search this set..."
-							placeholderTextColor={colors.mutedForeground}
-							value={filterQuery}
-							onChangeText={setFilterQuery}
-							returnKeyType="search"
-						/>
-						{filterQuery.length > 0 && (
-							<Pressable onPress={() => setFilterQuery("")} hitSlop={8}>
-								<Ionicons
-									name="close-circle"
-									size={18}
-									color={colors.mutedForeground}
-								/>
-							</Pressable>
-						)}
-					</View>
-					<AnimatedPressable
-						onPressIn={() => {
-							sortScale.value = withTiming(0.9, { duration: 80 });
-						}}
-						onPressOut={() => {
-							sortScale.value = withTiming(1, { duration: 140 });
-						}}
-						onPress={() => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-							if (Platform.OS !== "ios") return;
-							const opts = Object.keys(SORT_LABELS) as SortOption[];
-							ActionSheetIOS.showActionSheetWithOptions(
-								{
-									title: "Sort by",
-									options: [
-										...opts.map((o) =>
-											sortBy === o ? `✓  ${SORT_LABELS[o]}` : SORT_LABELS[o],
-										),
-										"Cancel",
-									],
-									cancelButtonIndex: opts.length,
-									userInterfaceStyle: theme === "dark" ? "dark" : "light",
-								},
-								(idx) => {
-									if (idx < opts.length) setSortBy(opts[idx]);
-								},
-							);
-						}}
-						style={[
-							styles.sortButton,
-							{ backgroundColor: colors.card, borderColor: colors.border },
-							sortAnimatedStyle,
-						]}
-					>
-						<Ionicons name="swap-vertical" size={20} color={colors.primary} />
-					</AnimatedPressable>
-				</View>
+			<Stack.SearchBar
+				placeholder={isSealedMode ? "Search products..." : "Search this set..."}
+				onChangeText={(e) => setFilterQuery(e.nativeEvent.text)}
+			/>
 
+			<Stack.Toolbar placement="bottom">
+				<Stack.Toolbar.SearchBarSlot />
+				<Stack.Toolbar.Menu icon="arrow.up.arrow.down">
+					{/* Sealed products have no collector numbers */}
+					{(isSealedMode
+						? (["nameAsc", "valueDesc", "valueAsc"] as SortOption[])
+						: ([
+								"number",
+								"numberDesc",
+								"nameAsc",
+								"valueDesc",
+								"valueAsc",
+							] as SortOption[])
+					).map((o) => (
+						<Stack.Toolbar.MenuAction
+							key={o}
+							isOn={sortBy === o}
+							onPress={() => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								setSortBy(o);
+							}}
+						>
+							{SORT_LABELS[o]}
+						</Stack.Toolbar.MenuAction>
+					))}
+				</Stack.Toolbar.Menu>
+			</Stack.Toolbar>
+
+			<View style={[styles.container, { backgroundColor: colors.background }]}>
 				{isError ? (
 					<ErrorState title="Couldn't load set" onRetry={() => refetch()} />
 				) : isLoading ? (
@@ -435,7 +538,8 @@ export default function SetDetail() {
 						keyExtractor={(item) => item.id}
 						numColumns={COLUMNS}
 						renderItem={() => <SkeletonCard color={colors.border} />}
-						contentContainerStyle={styles.grid}
+						ListHeaderComponent={summaryHeader}
+						contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}
 						columnWrapperStyle={styles.row}
 						scrollEnabled={false}
 					/>
@@ -452,11 +556,15 @@ export default function SetDetail() {
 					</View>
 				) : (
 					<FlatList
+						// Remount on sort change so the list snaps back to the top —
+						// otherwise the reorder happens off-screen and looks broken.
+						key={sortBy}
 						data={cards}
 						keyExtractor={(item) => item.id}
 						numColumns={COLUMNS}
 						renderItem={renderItem}
-						contentContainerStyle={styles.grid}
+						ListHeaderComponent={summaryHeader}
+						contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}
 						columnWrapperStyle={styles.row}
 						showsVerticalScrollIndicator={false}
 						keyboardDismissMode="on-drag"
@@ -485,38 +593,32 @@ const styles = StyleSheet.create({
 	container: {
 		flex: 1,
 	},
-	filterContainer: {
+	summaryRow: {
 		flexDirection: "row",
+		justifyContent: "space-between",
 		alignItems: "center",
-		gap: 8,
-		paddingHorizontal: 16,
-		paddingTop: 8,
-		paddingBottom: 8,
+		// Inside the grid's contentContainer, which already pads 12
+		paddingHorizontal: 4,
+		paddingTop: 4,
+		paddingBottom: 12,
 	},
-	filterBar: {
-		flexDirection: "row",
-		alignItems: "center",
-		borderRadius: 10,
-		borderWidth: 1,
-		paddingHorizontal: 12,
-		height: 40,
-		gap: 8,
-	},
-	filterBarFlex: {
+	summarySide: {
 		flex: 1,
 	},
-	sortButton: {
-		width: 40,
-		height: 40,
-		borderRadius: 10,
-		borderWidth: 1,
-		alignItems: "center",
-		justifyContent: "center",
+	summaryLogo: {
+		flex: 1.2,
+		height: 52,
 	},
-	filterInput: {
-		flex: 1,
-		fontSize: 15,
-		height: 40,
+	summaryRight: {
+		alignItems: "flex-end",
+	},
+	summaryLabel: {
+		fontSize: 13,
+		marginBottom: 2,
+	},
+	summaryValue: {
+		fontSize: 22,
+		fontWeight: "700",
 	},
 	footer: {
 		alignItems: "center",
@@ -534,7 +636,8 @@ const styles = StyleSheet.create({
 	},
 	grid: {
 		padding: PADDING,
-		paddingBottom: 40,
+		// Clear the bottom toolbar search bar
+		paddingBottom: 140,
 	},
 	row: {
 		gap: GAP,
@@ -550,6 +653,13 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		paddingHorizontal: 8,
 		gap: 4,
+	},
+	sealedTile: {
+		padding: 8,
+	},
+	sealedImage: {
+		flex: 1,
+		borderRadius: 4,
 	},
 	placeholderName: {
 		fontSize: 11,

@@ -12,10 +12,11 @@ import RefreshingPill from "@/components/RefreshingPill";
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function Collections() {
 	const { colors } = useTheme();
+	const insets = useSafeAreaInsets();
 	const { collections, isLoading, isError, refetch, deleteCollection } =
 		useCollections();
 	const refreshPrices = useAutoRefreshStalePrices();
@@ -33,12 +34,16 @@ export default function Collections() {
 		>
 			<RefreshingPill visible={refreshPrices.isPending} />
 			<ScrollView
-				contentContainerStyle={styles.content}
+				contentContainerStyle={[
+					styles.content,
+					{ paddingTop: insets.top + 52 },
+				]}
 				refreshControl={
 					<RefreshControl
 						refreshing={refreshPrices.isPending}
 						onRefresh={() => refreshPrices.mutate(undefined)}
 						tintColor={colors.mutedForeground}
+						progressViewOffset={insets.top + 52}
 					/>
 				}
 			>
@@ -91,7 +96,11 @@ export default function Collections() {
 								cardCount={c.cardCount}
 								totalValue={c.totalValue}
 								cardImages={c.cardImages}
-								onPress={() => router.push(`/collection-detail?id=${c.id}`)}
+								onPress={() =>
+									router.push(
+										`/collection-detail?id=${c.id}&name=${encodeURIComponent(c.name)}&totalValue=${c.totalValue}&cardCount=${c.cardCount}`,
+									)
+								}
 								onAddCards={() => router.push("/(search)")}
 								onMenuPress={() => {
 									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

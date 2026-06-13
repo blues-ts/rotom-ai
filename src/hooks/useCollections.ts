@@ -5,7 +5,7 @@ import * as Haptics from "expo-haptics";
 import { getDatabase } from "@/lib/database";
 import { useApi } from "@/lib/axios";
 import { getCard, getSealedProduct } from "@/lib/api/pricing";
-import { getCardImage, getCardNumber, selectPrice, type PriceSelector } from "@/lib/scrydex";
+import { getCardImage, getCardNumber, getExpansionDisplayName, selectPrice, type PriceSelector } from "@/lib/scrydex";
 import type { ScrydexCard, ScrydexSealedProduct } from "@/types/scrydex";
 import { recordCollectionValueSnapshot } from "@/lib/collectionValueHistory";
 import { useToast } from "@/context/ToastContext";
@@ -331,25 +331,30 @@ export function useCollections() {
 export function useCollectionDetail(id: string) {
   const db = getDatabase();
 
+  const read = () => {
+    const row = db.getFirstSync<CollectionRow>(
+      `SELECT
+        c.id,
+        c.name,
+        c.created_at,
+        COALESCE(SUM(cc.quantity), 0) as card_count,
+        COALESCE(SUM(cc.card_value * cc.quantity), 0) as total_value,
+        GROUP_CONCAT(cc.card_image_url) as card_images
+      FROM collections c
+      LEFT JOIN collection_cards cc ON cc.collection_id = c.id
+      WHERE c.id = ?
+      GROUP BY c.id`,
+      [id],
+    );
+    return row ? mapRow(row) : null;
+  };
+
   return useQuery({
     queryKey: ["collection", id],
-    queryFn: () => {
-      const row = db.getFirstSync<CollectionRow>(
-        `SELECT
-          c.id,
-          c.name,
-          c.created_at,
-          COALESCE(SUM(cc.quantity), 0) as card_count,
-          COALESCE(SUM(cc.card_value * cc.quantity), 0) as total_value,
-          GROUP_CONCAT(cc.card_image_url) as card_images
-        FROM collections c
-        LEFT JOIN collection_cards cc ON cc.collection_id = c.id
-        WHERE c.id = ?
-        GROUP BY c.id`,
-        [id],
-      );
-      return row ? mapRow(row) : null;
-    },
+    queryFn: read,
+    // SQLite reads are synchronous — hydrate on first render so the summary
+    // banner doesn't flicker in a frame later.
+    initialData: id ? read : undefined,
     enabled: !!id,
   });
 }
@@ -447,7 +452,7 @@ export function useRefreshCollectionPrices() {
         if (!row.set_name && card.expansion?.name) {
           db.runSync(
             "UPDATE collection_cards SET set_name = ? WHERE id = ?",
-            [card.expansion.name, row.id],
+            [getExpansionDisplayName(card.expansion), row.id],
           );
         }
 
@@ -491,33 +496,38 @@ export function useRefreshCollectionPrices() {
 export function useCollectionCards(collectionId: string) {
   const db = getDatabase();
 
+  const read = () => {
+    const rows = db.getAllSync<CollectionCardRow>(
+      `SELECT * FROM collection_cards WHERE collection_id = ? ORDER BY added_at DESC`,
+      [collectionId],
+    );
+    return rows.map((row): CollectionCard => ({
+      id: row.id,
+      collectionId: row.collection_id,
+      cardId: row.card_id,
+      cardName: row.card_name,
+      cardNumber: row.card_number ?? undefined,
+      setName: row.set_name ?? undefined,
+      cardImageUrl: row.card_image_url,
+      cardValue: row.card_value,
+      addedAt: row.added_at,
+      pricingType: row.pricing_type,
+      productType: row.product_type,
+      variant: row.variant,
+      condition: row.condition,
+      gradedCompany: row.graded_company ?? undefined,
+      gradedGrade: row.graded_grade ?? undefined,
+      quantity: row.quantity,
+      pricePaid: row.price_paid ?? undefined,
+    }));
+  };
+
   return useQuery({
     queryKey: ["collectionCards", collectionId],
-    queryFn: () => {
-      const rows = db.getAllSync<CollectionCardRow>(
-        `SELECT * FROM collection_cards WHERE collection_id = ? ORDER BY added_at DESC`,
-        [collectionId],
-      );
-      return rows.map((row): CollectionCard => ({
-        id: row.id,
-        collectionId: row.collection_id,
-        cardId: row.card_id,
-        cardName: row.card_name,
-        cardNumber: row.card_number ?? undefined,
-        setName: row.set_name ?? undefined,
-        cardImageUrl: row.card_image_url,
-        cardValue: row.card_value,
-        addedAt: row.added_at,
-        pricingType: row.pricing_type,
-        productType: row.product_type,
-        variant: row.variant,
-        condition: row.condition,
-        gradedCompany: row.graded_company ?? undefined,
-        gradedGrade: row.graded_grade ?? undefined,
-        quantity: row.quantity,
-        pricePaid: row.price_paid ?? undefined,
-      }));
-    },
+    queryFn: read,
+    // SQLite reads are synchronous — hydrate on first render so the grid
+    // doesn't flash a loading state.
+    initialData: collectionId ? read : undefined,
     enabled: !!collectionId,
   });
 }

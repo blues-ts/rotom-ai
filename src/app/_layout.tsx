@@ -25,6 +25,10 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import {
+	initialWindowMetrics,
+	SafeAreaProvider,
+} from "react-native-safe-area-context";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -135,7 +139,8 @@ function AppContent() {
 							headerShown: true,
 							headerTitle: "Collections",
 							headerBackButtonDisplayMode: "minimal",
-							headerStyle: { backgroundColor: colors.background },
+							headerTransparent: true,
+							headerStyle: { backgroundColor: "transparent" },
 							headerTintColor: colors.foreground,
 							headerShadowVisible: false,
 							headerRight: () => (
@@ -161,7 +166,8 @@ function AppContent() {
 						headerShown: true,
 						headerTitle: "",
 						headerBackButtonDisplayMode: "minimal",
-						headerStyle: { backgroundColor: colors.background },
+						headerTransparent: true,
+						headerStyle: { backgroundColor: "transparent" },
 						headerTintColor: colors.foreground,
 						headerShadowVisible: false,
 					}}
@@ -173,7 +179,8 @@ function AppContent() {
 						headerShown: true,
 						headerTitle: "",
 						headerBackButtonDisplayMode: "minimal",
-						headerStyle: { backgroundColor: colors.background },
+						headerTransparent: true,
+						headerStyle: { backgroundColor: "transparent" },
 						headerTintColor: colors.foreground,
 						headerShadowVisible: false,
 					}}
@@ -256,24 +263,29 @@ export default function RootLayout() {
 
 	return (
 		<GestureHandlerRootView style={{ flex: 1 }}>
-			<ThemeProvider>
-				<KeyboardProvider>
-					<QueryClientProvider client={queryClient}>
-						<ClerkProvider
-							publishableKey={publishableKey}
-							tokenCache={tokenCache}
-						>
-							<ClerkLoaded>
-								<RevenueCatProvider>
-									<ToastProvider>
-										<AppContent />
-									</ToastProvider>
-								</RevenueCatProvider>
-							</ClerkLoaded>
-						</ClerkProvider>
-					</QueryClientProvider>
-				</KeyboardProvider>
-			</ThemeProvider>
+			{/* initialMetrics from a synchronous native constant — without it,
+			    useSafeAreaInsets() returns 0 on the first frame and jumps to the
+			    real inset a frame later, making header-offset content pop down. */}
+			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
+				<ThemeProvider>
+					<KeyboardProvider>
+						<QueryClientProvider client={queryClient}>
+							<ClerkProvider
+								publishableKey={publishableKey}
+								tokenCache={tokenCache}
+							>
+								<ClerkLoaded>
+									<RevenueCatProvider>
+										<ToastProvider>
+											<AppContent />
+										</ToastProvider>
+									</RevenueCatProvider>
+								</ClerkLoaded>
+							</ClerkProvider>
+						</QueryClientProvider>
+					</KeyboardProvider>
+				</ThemeProvider>
+			</SafeAreaProvider>
 		</GestureHandlerRootView>
 	);
 }

@@ -1,5 +1,6 @@
 import { useAnalyzeCard } from "@/hooks/useAnalyzeCard";
 import { isNetworkError } from "@/lib/axios";
+import { getCardDisplayName } from "@/lib/scrydex";
 import { Ionicons } from "@expo/vector-icons";
 import {
 	CameraView,
@@ -200,7 +201,7 @@ export default function Camera() {
 				const cardData = result.data;
 				router.push({
 					pathname: "/(card)/[id]",
-					params: { id: cardData.id, name: cardData.name },
+					params: { id: cardData.id, name: getCardDisplayName(cardData) },
 				});
 
 				navigationTimeoutRef.current = setTimeout(() => {

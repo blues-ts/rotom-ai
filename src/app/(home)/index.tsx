@@ -23,13 +23,10 @@ import ChatMessageList, {
 } from "@/components/ChatMessageList";
 import EmptyChat from "@/components/EmptyChat";
 import { useTheme } from "@/context/ThemeContext";
-import { useRevenueCat } from "@/context/RevenueCatContext";
 import { useChat } from "@/hooks/useChat";
-import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 
 export default function Home() {
 	const { colors } = useTheme();
-	const { isPro } = useRevenueCat();
 	const { bottom } = useSafeAreaInsets();
 	const chatListRef = useRef<ChatMessageListRef>(null);
 	const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
@@ -115,17 +112,6 @@ export default function Home() {
 					onPress={() => {
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 						router.push("/(collections)");
-					}}
-				/>
-						<Stack.Toolbar.Button
-					icon={"camera"}
-					onPress={() => {
-						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-						if (!isPro) {
-							void presentProPaywallIfNeeded();
-							return;
-						}
-						router.push("/(camera)");
 					}}
 				/>
 				<Stack.Toolbar.Button

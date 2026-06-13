@@ -3,7 +3,6 @@ import {
 	Dimensions,
 	FlatList,
 	Keyboard,
-	Platform,
 	Pressable,
 	StyleSheet,
 	Text,
@@ -11,6 +10,7 @@ import {
 } from "react-native";
 import Animated, {
 	FadeIn,
+	FadeInDown,
 	FadeOut,
 	runOnJS,
 	useAnimatedStyle,
@@ -26,9 +26,11 @@ import * as Haptics from "expo-haptics";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/context/ThemeContext";
+import { useRevenueCat } from "@/context/RevenueCatContext";
+import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { useApi } from "@/lib/axios";
 import { searchCards, searchSealed, searchSets } from "@/lib/api/pricing";
-import { buildSearchFallbackQ, buildSearchQ, getCardImage, getCardNumber } from "@/lib/scrydex";
+import { buildSearchFallbackQ, buildSearchQ, getCardDisplayName, getCardImage, getCardNumber, getExpansionDisplayName } from "@/lib/scrydex";
 import CardImage from "@/components/CardImage";
 import ErrorState from "@/components/ErrorState";
 import { Image } from "expo-image";
@@ -36,10 +38,18 @@ import { useQuery } from "@tanstack/react-query";
 import type { ApiListResponse, ScrydexCard, ScrydexExpansion, ScrydexSealedProduct } from "@/types/scrydex";
 
 type SearchMode = "cards" | "sealed";
+type SetsLanguage = "EN" | "JA";
 
 const MODE_LABELS: Record<SearchMode, string> = {
-	cards: "Cards",
-	sealed: "Sealed",
+	cards: "⭐ Cards",
+	sealed: "📦 Sealed",
+};
+
+// JA expansions don't index is_online_only:false (same quirk as JA cards),
+// so both use the negation form to drop TCG Pocket sets.
+const SETS_LANGUAGE_Q: Record<SetsLanguage, string> = {
+	EN: "language:English -is_online_only:true",
+	JA: "language:Japanese -is_online_only:true",
 };
 
 interface CardResult {
@@ -112,6 +122,31 @@ function SkeletonCard({ color }: { color: string }) {
 	);
 }
 
+function SkeletonSetTile({ color }: { color: string }) {
+	const opacity = useSharedValue(0.3);
+
+	useEffect(() => {
+		opacity.value = withRepeat(
+			withSequence(
+				withTiming(0.7, { duration: 800 }),
+				withTiming(0.3, { duration: 800 }),
+			),
+			-1,
+		);
+	}, []);
+
+	const animatedStyle = useAnimatedStyle(() => ({
+		opacity: opacity.value,
+	}));
+
+	return (
+		<Animated.View style={[styles.setTileSkeleton, animatedStyle]}>
+			<View style={[styles.setLogoSkeleton, { backgroundColor: color }]} />
+			<View style={[styles.setNameSkeleton, { backgroundColor: color }]} />
+		</Animated.View>
+	);
+}
+
 function LoadingSpinner({ color }: { color: string }) {
 	const dot1 = useSharedValue(0);
 	const dot2 = useSharedValue(0);
@@ -156,21 +191,27 @@ function LoadingSpinner({ color }: { color: string }) {
 	);
 }
 
-function SetsBrowser() {
+function SetsBrowser({ mode, language }: { mode: SearchMode; language: SetsLanguage }) {
 	const { colors } = useTheme();
+	const insets = useSafeAreaInsets();
 	const api = useApi();
 
 	const { data: sets, isLoading, isError, refetch } = useQuery({
-		queryKey: ["expansions", "en"],
+		queryKey: ["expansions", language],
 		queryFn: async () => {
-			// English physical sets only (~180); fetch every page up front so
-			// browsing and the local name filter are instant.
-			const q = "language_code:EN is_online_only:false";
+			// Physical sets only (~180 EN / ~220 JA); fetch every page up
+			// front so browsing and the local name filter are instant.
+			const q = SETS_LANGUAGE_Q[language];
 			const first = await searchSets(api, { q, pageSize: 100, orderBy: "-release_date" });
 			const all = [...first.data];
 			let page = 2;
 			while (all.length < first.total_count && page <= 5) {
-				const next = await searchSets(api, { q, page, pageSize: 100, orderBy: "-release_date" });
+				const next = await searchSets(api, {
+					q,
+					page,
+					pageSize: 100,
+					orderBy: "-release_date",
+				});
 				if (next.data.length === 0) break;
 				all.push(...next.data);
 				page += 1;
@@ -184,14 +225,26 @@ function SetsBrowser() {
 
 	const renderSet = useCallback(
 		({ item, index }: { item: ScrydexExpansion; index: number }) => (
-			<Animated.View entering={FadeIn.delay(Math.min(index * 20, 200)).duration(200)}>
+			<Animated.View
+				entering={FadeInDown.delay(Math.min(index * 35, 400))
+					.duration(380)
+					.springify()
+					.damping(60)}
+			>
 				<CardPressable
 					onPress={() => {
 						Keyboard.dismiss();
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 						router.push({
 							pathname: "/set-detail",
-							params: { id: item.id, name: item.name },
+							params: {
+								id: item.id,
+								name: getExpansionDisplayName(item),
+								mode,
+								releaseDate: item.release_date ?? "",
+								total: item.total !== undefined ? String(item.total) : "",
+								logo: item.logo ?? "",
+							},
 						});
 					}}
 				>
@@ -222,17 +275,13 @@ function SetsBrowser() {
 							style={[styles.setName, { color: colors.foreground }]}
 							numberOfLines={1}
 						>
-							{item.name}
-						</Text>
-						<Text style={[styles.setMeta, { color: colors.mutedForeground }]}>
-							{item.total ?? "—"} cards
-							{item.release_date ? ` · ${item.release_date.slice(0, 4)}` : ""}
+							{getExpansionDisplayName(item)}
 						</Text>
 					</View>
 				</CardPressable>
 			</Animated.View>
 		),
-		[colors],
+		[colors, mode],
 	);
 
 	if (isError) {
@@ -242,11 +291,11 @@ function SetsBrowser() {
 	if (isLoading) {
 		return (
 			<FlatList
-				data={Array.from({ length: 8 }, (_, i) => ({ id: `s-${i}` }))}
+				data={Array.from({ length: 12 }, (_, i) => ({ id: `s-${i}` }))}
 				keyExtractor={(item) => item.id}
 				numColumns={2}
-				renderItem={() => <SkeletonCard color={"#88888822"} />}
-				contentContainerStyle={styles.grid}
+				renderItem={() => <SkeletonSetTile color={colors.border} />}
+				contentContainerStyle={[styles.grid, { paddingTop: insets.top + 56 }]}
 				columnWrapperStyle={styles.row}
 				scrollEnabled={false}
 			/>
@@ -255,7 +304,7 @@ function SetsBrowser() {
 
 	if (filtered.length === 0) {
 		return (
-			<Text style={[styles.empty, { color: colors.mutedForeground, marginTop: 20 }]}>
+			<Text style={[styles.empty, { color: colors.mutedForeground, marginTop: insets.top + 20 }]}>
 				No sets found
 			</Text>
 		);
@@ -263,11 +312,12 @@ function SetsBrowser() {
 
 	return (
 		<FlatList
+			key={language}
 			data={filtered}
 			keyExtractor={(item) => item.id}
 			numColumns={2}
 			renderItem={renderSet}
-			contentContainerStyle={styles.grid}
+			contentContainerStyle={[styles.grid, { paddingTop: insets.top + 56 }]}
 			columnWrapperStyle={styles.row}
 			showsVerticalScrollIndicator={false}
 			keyboardDismissMode="on-drag"
@@ -278,11 +328,13 @@ function SetsBrowser() {
 
 export default function Search() {
 	const { colors } = useTheme();
+	const { isPro } = useRevenueCat();
 	const insets = useSafeAreaInsets();
 	const api = useApi();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [debouncedQuery, setDebouncedQuery] = useState("");
 	const [mode, setMode] = useState<SearchMode>("cards");
+	const [setsLanguage, setSetsLanguage] = useState<SetsLanguage>("EN");
 	const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
 	// Debounce search input
@@ -331,7 +383,8 @@ export default function Search() {
 			data?.pages.flatMap((p) =>
 				p.data.map((item) => ({
 					id: item.id,
-					name: item.name,
+					// Japanese cards display their English translation when available
+					name: "number" in item ? getCardDisplayName(item) : item.name,
 					image: getCardImage(item, undefined, "small") ?? "",
 					// Sealed products have no card number
 					cardNumber: "number" in item ? getCardNumber(item) : "",
@@ -449,55 +502,69 @@ export default function Search() {
 				onCancelButtonPress={() => router.back()}
 			/>
 
+			<Stack.Toolbar placement="right">
+				<Stack.Toolbar.Button
+					icon="camera"
+					onPress={() => {
+						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+						if (!isPro) {
+							void presentProPaywallIfNeeded();
+							return;
+						}
+						router.push("/(camera)");
+					}}
+				/>
+			</Stack.Toolbar>
+
 			<Stack.Toolbar placement="bottom">
 				<Stack.Toolbar.SearchBarSlot />
+				<Stack.Toolbar.Menu icon="line.3.horizontal.decrease.circle">
+					<Stack.Toolbar.MenuAction
+						isOn={mode === "cards"}
+						onPress={() => {
+							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+							setMode("cards");
+						}}
+					>
+						{MODE_LABELS.cards}
+					</Stack.Toolbar.MenuAction>
+					<Stack.Toolbar.MenuAction
+						isOn={mode === "sealed"}
+						onPress={() => {
+							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+							setMode("sealed");
+						}}
+					>
+						{MODE_LABELS.sealed}
+					</Stack.Toolbar.MenuAction>
+					<Stack.Toolbar.MenuAction
+						isOn={setsLanguage === "EN"}
+						onPress={() => {
+							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+							setSetsLanguage("EN");
+						}}
+					>
+						🇺🇸 English Sets
+					</Stack.Toolbar.MenuAction>
+					<Stack.Toolbar.MenuAction
+						isOn={setsLanguage === "JA"}
+						onPress={() => {
+							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+							setSetsLanguage("JA");
+						}}
+					>
+						🇯🇵 Japanese Sets
+					</Stack.Toolbar.MenuAction>
+				</Stack.Toolbar.Menu>
 			</Stack.Toolbar>
 
 			<View
 				style={[styles.container, { backgroundColor: colors.background }]}
 			>
-				{/* Offset past the transparent nav header overlay (~44pt), which
-				    swallows touches — anything inside it can't be tapped. */}
-				<View style={[styles.modeToggleRow, { marginTop: insets.top + 52 }]}>
-					<View style={[styles.modeToggle, { backgroundColor: colors.card }]}>
-						{(["cards", "sealed"] as const).map((m) => {
-							const active = m === mode;
-							return (
-								<Pressable
-									key={m}
-									hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-									style={[
-										styles.modePill,
-										active && { backgroundColor: colors.primary },
-									]}
-									onPress={() => {
-										if (m === mode) return;
-										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-										setMode(m);
-									}}
-								>
-									<Text
-										style={[
-											styles.modeText,
-											{
-												color: active
-													? colors.primaryForeground
-													: colors.foreground,
-												opacity: active ? 1 : 0.7,
-											},
-										]}
-									>
-										{MODE_LABELS[m]}
-									</Text>
-								</Pressable>
-							);
-						})}
-					</View>
-				</View>
 				{/* Sets browser is the default content until the user types */}
 				{showHint && (
 					<Animated.View entering={FadeIn.duration(200)} style={{ flex: 1 }}>
-						<SetsBrowser />
+						<SetsBrowser mode={mode} language={setsLanguage} />
 					</Animated.View>
 				)}
 				{showSkeleton && (
@@ -506,7 +573,7 @@ export default function Search() {
 						keyExtractor={(item) => item.id}
 						numColumns={COLUMNS}
 						renderItem={() => <SkeletonCard color={colors.border} />}
-						contentContainerStyle={[styles.grid, { paddingTop: PADDING }]}
+						contentContainerStyle={[styles.grid, { paddingTop: insets.top + PADDING }]}
 						columnWrapperStyle={styles.row}
 						scrollEnabled={false}
 					/>
@@ -520,7 +587,7 @@ export default function Search() {
 					</Animated.View>
 				)}
 				{showNoResults && (
-					<Text style={[styles.empty, { color: colors.mutedForeground, marginTop: 20 }]}>
+					<Text style={[styles.empty, { color: colors.mutedForeground, marginTop: insets.top + 20 }]}>
 						{mode === "sealed" ? "No products found" : "No cards found"}
 					</Text>
 				)}
@@ -533,7 +600,7 @@ export default function Search() {
 						keyExtractor={(item) => item.id}
 						numColumns={COLUMNS}
 						renderItem={renderItem}
-						contentContainerStyle={[styles.grid, { paddingTop: PADDING }]}
+						contentContainerStyle={[styles.grid, { paddingTop: insets.top + PADDING }]}
 						columnWrapperStyle={styles.row}
 						showsVerticalScrollIndicator={false}
 						keyboardDismissMode="on-drag"
@@ -562,26 +629,6 @@ export default function Search() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-	},
-	modeToggleRow: {
-		alignItems: "center",
-		marginBottom: 4,
-	},
-	modeToggle: {
-		flexDirection: "row",
-		borderRadius: 10,
-		padding: 3,
-	},
-	modePill: {
-		paddingHorizontal: 20,
-		paddingVertical: 7,
-		borderRadius: 8,
-		minWidth: 92,
-		alignItems: "center",
-	},
-	modeText: {
-		fontSize: 13,
-		fontWeight: "600",
 	},
 	hint: {
 		flex: 1,
@@ -682,8 +729,22 @@ const styles = StyleSheet.create({
 		fontWeight: "700",
 		textAlign: "center",
 	},
-	setMeta: {
-		fontSize: 11,
-		marginTop: 2,
+	// Skeleton mirroring the set tile layout: logo box + name line
+	setTileSkeleton: {
+		width: setTileWidth,
+		borderRadius: 12,
+		padding: 12,
+		alignItems: "center",
+	},
+	setLogoSkeleton: {
+		height: 56,
+		alignSelf: "stretch",
+		borderRadius: 8,
+		marginBottom: 8,
+	},
+	setNameSkeleton: {
+		height: 14,
+		width: "70%",
+		borderRadius: 4,
 	},
 });

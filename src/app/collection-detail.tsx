@@ -1,27 +1,27 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-	ActionSheetIOS,
 	Alert,
 	Dimensions,
 	FlatList,
 	Keyboard,
-	Platform,
 	Pressable,
 	RefreshControl,
 	StyleSheet,
 	Text,
-	TextInput,
 	View,
 } from "react-native";
 import Animated, {
 	FadeIn,
 	useAnimatedStyle,
 	useSharedValue,
+	withRepeat,
+	withSequence,
 	withTiming,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/context/ThemeContext";
 import {
 	useCollectionCards,
@@ -44,6 +44,46 @@ const imageWidth = (screenWidth - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 const imageHeight = imageWidth * 1.4;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+const SKELETON_DATA = Array.from({ length: 9 }, (_, i) => ({ id: `skeleton-${i}` }));
+
+function SkeletonBlock({
+	width,
+	height,
+	color,
+	style,
+}: {
+	width: number | string;
+	height: number;
+	color: string;
+	style?: object;
+}) {
+	const opacity = useSharedValue(0.3);
+
+	useEffect(() => {
+		opacity.value = withRepeat(
+			withSequence(
+				withTiming(0.7, { duration: 800 }),
+				withTiming(0.3, { duration: 800 }),
+			),
+			-1,
+		);
+	}, []);
+
+	const animatedStyle = useAnimatedStyle(() => ({
+		opacity: opacity.value,
+	}));
+
+	return (
+		<Animated.View
+			style={[
+				{ width, height, backgroundColor: color, borderRadius: 8 },
+				animatedStyle,
+				style,
+			]}
+		/>
+	);
+}
 
 type SortOption = "dateAdded" | "nameAsc" | "valueDesc" | "valueAsc";
 
@@ -97,8 +137,22 @@ function CardPressable({
 }
 
 export default function CollectionDetail() {
-	const { id } = useLocalSearchParams<{ id: string }>();
-	const { colors, theme } = useTheme();
+	const {
+		id,
+		name: nameParam,
+		totalValue: totalValueParam,
+		cardCount: cardCountParam,
+	} = useLocalSearchParams<{
+		id: string;
+		name?: string;
+		totalValue?: string;
+		cardCount?: string;
+	}>();
+	const { colors } = useTheme();
+	const insets = useSafeAreaInsets();
+	// Explicit header offset: contentInsetAdjustmentBehavior applies its inset
+	// a frame after mount, which made the summary jump down on remounts.
+	const topPadding = insets.top + 52;
 	const { renameCollection } = useCollections();
 	const refreshPrices = useRefreshCollectionPrices();
 	const {
@@ -115,10 +169,6 @@ export default function CollectionDetail() {
 	const [filterQuery, setFilterQuery] = useState("");
 	const [sortBy, setSortBy] = useState<SortOption>("valueDesc");
 
-	const sortScale = useSharedValue(1);
-	const sortAnimatedStyle = useAnimatedStyle(() => ({
-		transform: [{ scale: sortScale.value }],
-	}));
 
 	const filteredCards = useMemo(() => {
 		if (!cards) return [];
@@ -148,6 +198,62 @@ export default function CollectionDetail() {
 			return haystack.includes(q);
 		});
 	}, [cards, filterQuery, sortBy]);
+
+	// Banner values: query data when present, falling back to route params so
+	// the banner renders fully populated on the very first frame (same
+	// params-first pattern as the set-detail banner, which never flickers).
+	const bannerValue =
+		collection?.totalValue ??
+		(totalValueParam !== undefined ? Number(totalValueParam) : undefined);
+	const bannerCount =
+		collection?.cardCount ??
+		(cardCountParam !== undefined ? Number(cardCountParam) : undefined);
+	const hasBannerData = bannerValue !== undefined && bannerCount !== undefined;
+
+	const summaryHeader = hasBannerData ? (
+		<View style={styles.summaryRow}>
+			<View>
+				<Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>
+					Collection value
+				</Text>
+				<Text style={[styles.summaryValue, { color: colors.foreground }]}>
+					{formatCurrency(bannerValue!)}
+				</Text>
+			</View>
+			<View style={styles.summaryRight}>
+				<Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>
+					Cards
+				</Text>
+				<Text style={[styles.summaryValue, { color: colors.foreground }]}>
+					{bannerCount}
+				</Text>
+			</View>
+		</View>
+	) : null;
+
+	// Banner placeholder while the collection metadata loads
+	const summarySkeleton = (
+		<View style={styles.summaryRow}>
+			<View>
+				<SkeletonBlock width={110} height={13} color={colors.border} />
+				<SkeletonBlock
+					width={90}
+					height={22}
+					color={colors.border}
+					style={{ marginTop: 4 }}
+				/>
+			</View>
+			<View style={styles.summaryRight}>
+				<SkeletonBlock width={44} height={13} color={colors.border} />
+				<SkeletonBlock
+					width={36}
+					height={22}
+					color={colors.border}
+					style={{ marginTop: 4 }}
+				/>
+			</View>
+		</View>
+	);
 
 	const handleRename = useCallback(() => {
 		if (!collection) return;
@@ -328,12 +434,11 @@ export default function CollectionDetail() {
 		<>
 			<Stack.Screen
 				options={{
-					headerShown: true,
-					headerTitle: collection?.name ?? "",
+					// Static title from a route param + no inline headerStyle —
+					// matches set-detail's transparent header exactly so content
+					// layout is stable on mount (no pop).
+					headerTitle: nameParam ?? collection?.name ?? "",
 					headerBackButtonDisplayMode: "minimal",
-					headerStyle: { backgroundColor: colors.background },
-					headerTintColor: colors.foreground,
-					headerShadowVisible: false,
 					headerRight: () => (
 						<View style={styles.headerRight}>
 							<Pressable
@@ -371,134 +476,35 @@ export default function CollectionDetail() {
 				}}
 			/>
 
+			<Stack.SearchBar
+				placeholder="Search cards..."
+				onChangeText={(e) => setFilterQuery(e.nativeEvent.text)}
+			/>
+
+			<Stack.Toolbar placement="bottom">
+				<Stack.Toolbar.SearchBarSlot />
+				<Stack.Toolbar.Menu icon="arrow.up.arrow.down">
+					{(Object.keys(SORT_LABELS) as SortOption[]).map((o) => (
+						<Stack.Toolbar.MenuAction
+							key={o}
+							isOn={sortBy === o}
+							onPress={() => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								setSortBy(o);
+							}}
+						>
+							{SORT_LABELS[o]}
+						</Stack.Toolbar.MenuAction>
+					))}
+				</Stack.Toolbar.Menu>
+			</Stack.Toolbar>
+
 			<View style={[styles.container, { backgroundColor: colors.background }]}>
 				<RefreshingPill visible={refreshPrices.isPending} />
-				{/* Filter bar */}
-				<View style={styles.filterContainer}>
-					<View
-						style={[
-							styles.filterBar,
-							styles.filterBarFlex,
-							{
-								backgroundColor: colors.card,
-								borderColor: colors.border,
-							},
-						]}
-					>
-						<Ionicons
-							name="search"
-							size={18}
-							color={colors.mutedForeground}
-						/>
-						<TextInput
-							style={[styles.filterInput, { color: colors.foreground }]}
-							placeholder="Search cards..."
-							placeholderTextColor={colors.mutedForeground}
-							value={filterQuery}
-							onChangeText={setFilterQuery}
-							returnKeyType="search"
-						/>
-						{filterQuery.length > 0 && (
-							<Pressable
-								onPress={() => setFilterQuery("")}
-								hitSlop={8}
-							>
-								<Ionicons
-									name="close-circle"
-									size={18}
-									color={colors.mutedForeground}
-								/>
-							</Pressable>
-						)}
-					</View>
-					<AnimatedPressable
-						onPressIn={() => {
-							sortScale.value = withTiming(0.9, { duration: 80 });
-						}}
-						onPressOut={() => {
-							sortScale.value = withTiming(1, { duration: 140 });
-						}}
-						onPress={() => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-							if (Platform.OS !== "ios") return;
-							const opts = Object.keys(SORT_LABELS) as SortOption[];
-							ActionSheetIOS.showActionSheetWithOptions(
-								{
-									title: "Sort by",
-									options: [
-										...opts.map((o) =>
-											sortBy === o ? `✓  ${SORT_LABELS[o]}` : SORT_LABELS[o],
-										),
-										"Cancel",
-									],
-									cancelButtonIndex: opts.length,
-									userInterfaceStyle: theme === "dark" ? "dark" : "light",
-								},
-								(idx) => {
-									if (idx < opts.length) setSortBy(opts[idx]);
-								},
-							);
-						}}
-						style={[
-							styles.sortButton,
-							{
-								backgroundColor: colors.card,
-								borderColor: colors.border,
-							},
-							sortAnimatedStyle,
-						]}
-					>
-						<Ionicons
-							name="swap-vertical"
-							size={20}
-							color={colors.primary}
-						/>
-					</AnimatedPressable>
-				</View>
 
-				{/* Summary row */}
-				{collection && (
-					<View style={styles.summaryRow}>
-						<View>
-							<Text
-								style={[
-									styles.summaryLabel,
-									{ color: colors.mutedForeground },
-								]}
-							>
-								Collection value
-							</Text>
-							<Text
-								style={[
-									styles.summaryValue,
-									{ color: colors.foreground },
-								]}
-							>
-								{formatCurrency(collection.totalValue)}
-							</Text>
-						</View>
-						<View style={styles.summaryRight}>
-							<Text
-								style={[
-									styles.summaryLabel,
-									{ color: colors.mutedForeground },
-								]}
-							>
-								Cards
-							</Text>
-							<Text
-								style={[
-									styles.summaryValue,
-									{ color: colors.foreground },
-								]}
-							>
-								{collection.cardCount}
-							</Text>
-						</View>
-					</View>
-				)}
-
-				{/* Card grid or empty state */}
+				{/* Card grid or empty state. Banner lives inside the list as its
+				    header (matching set-detail) so it shares the list's layout
+				    pass and never pops independently. */}
 				{collectionError || cardsError ? (
 					<ErrorState
 						title="Couldn't load collection"
@@ -514,7 +520,8 @@ export default function CollectionDetail() {
 						keyExtractor={(item) => item.id}
 						numColumns={COLUMNS}
 						renderItem={renderItem}
-						contentContainerStyle={styles.grid}
+						ListHeaderComponent={summaryHeader ?? summarySkeleton}
+						contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}
 						columnWrapperStyle={styles.row}
 						showsVerticalScrollIndicator={false}
 						keyboardDismissMode="on-drag"
@@ -527,46 +534,64 @@ export default function CollectionDetail() {
 							/>
 						}
 					/>
-				) : filterQuery.trim().length > 0 ? (
-					<View style={styles.emptyStateCentered}>
-						<Ionicons
-							name="search-outline"
-							size={48}
-							color={colors.mutedForeground}
-						/>
-						<Text
-							style={[
-								styles.emptyTitle,
-								{ color: colors.foreground },
-							]}
-						>
-							No matching cards
-						</Text>
-					</View>
-				) : cardsLoading ? null : (
-					<View style={styles.emptyState}>
-						<Ionicons
-							name="folder-open-outline"
-							size={48}
-							color={colors.mutedForeground}
-						/>
-						<Text
-							style={[
-								styles.emptyTitle,
-								{ color: colors.foreground },
-							]}
-						>
-							No Cards Yet
-						</Text>
-						<Text
-							style={[
-								styles.emptySubtitle,
-								{ color: colors.mutedForeground },
-							]}
-						>
-							Tap + to search and add cards to this collection
-						</Text>
-					</View>
+				) : cardsLoading ? (
+					<FlatList
+						data={SKELETON_DATA}
+						keyExtractor={(item) => item.id}
+						numColumns={COLUMNS}
+						renderItem={() => (
+							<SkeletonBlock
+								width={imageWidth}
+								height={imageHeight}
+								color={colors.border}
+							/>
+						)}
+						ListHeaderComponent={summaryHeader ?? summarySkeleton}
+						contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}
+						columnWrapperStyle={styles.row}
+						scrollEnabled={false}
+					/>
+				) : (
+					<FlatList
+						data={[]}
+						keyExtractor={() => "none"}
+						renderItem={null}
+						ListHeaderComponent={summaryHeader ?? summarySkeleton}
+						contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}
+						ListEmptyComponent={
+							filterQuery.trim().length > 0 ? (
+								<View style={styles.emptyStateCentered}>
+									<Ionicons
+										name="search-outline"
+										size={48}
+										color={colors.mutedForeground}
+									/>
+									<Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+										No matching cards
+									</Text>
+								</View>
+							) : (
+								<View style={styles.emptyState}>
+									<Ionicons
+										name="folder-open-outline"
+										size={48}
+										color={colors.mutedForeground}
+									/>
+									<Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+										No Cards Yet
+									</Text>
+									<Text
+										style={[
+											styles.emptySubtitle,
+											{ color: colors.mutedForeground },
+										]}
+									>
+										Tap + to search and add cards to this collection
+									</Text>
+								</View>
+							)
+						}
+					/>
 				)}
 			</View>
 		</>
@@ -585,43 +610,11 @@ const styles = StyleSheet.create({
 	headerButton: {
 		padding: 8,
 	},
-	filterContainer: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 8,
-		paddingHorizontal: 16,
-		paddingTop: 8,
-		paddingBottom: 12,
-	},
-	filterBar: {
-		flexDirection: "row",
-		alignItems: "center",
-		borderRadius: 10,
-		borderWidth: 1,
-		paddingHorizontal: 12,
-		height: 40,
-		gap: 8,
-	},
-	filterBarFlex: {
-		flex: 1,
-	},
-	sortButton: {
-		width: 40,
-		height: 40,
-		borderRadius: 10,
-		borderWidth: 1,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	filterInput: {
-		flex: 1,
-		fontSize: 15,
-		height: 40,
-	},
 	summaryRow: {
 		flexDirection: "row",
 		justifyContent: "space-between",
 		paddingHorizontal: 16,
+		paddingTop: 4,
 		paddingBottom: 12,
 	},
 	summaryRight: {
@@ -637,7 +630,8 @@ const styles = StyleSheet.create({
 	},
 	grid: {
 		padding: PADDING,
-		paddingBottom: 40,
+		// Clear the bottom toolbar search bar
+		paddingBottom: 140,
 	},
 	row: {
 		gap: GAP,

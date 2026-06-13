@@ -12,7 +12,9 @@ import {
 	View,
 } from "react-native";
 import Animated, {
+	Easing,
 	interpolate,
+	useAnimatedProps,
 	useAnimatedStyle,
 	useSharedValue,
 	withRepeat,
@@ -31,8 +33,11 @@ import {
 	CONDITION_LABELS,
 	PERIOD_TO_DAYS,
 	formatVariantLabel,
+	getCardDisplayName,
+	getCardDisplayRarity,
 	getCardImage,
 	getCardNumber,
+	getExpansionDisplayName,
 	getConditionOptions,
 	getGradedOptions,
 	getVariantNames,
@@ -43,6 +48,7 @@ import {
 import { formatCurrency } from "@/lib/format";
 import { useTheme } from "@/context/ThemeContext";
 import { useCollections } from "@/hooks/useCollections";
+import { useCardConfig } from "@/context/CardConfigContext";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { Image } from "expo-image";
@@ -51,6 +57,7 @@ import CardImage from "@/components/CardImage";
 import ErrorState from "@/components/ErrorState";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
+const SCREEN_HEIGHT = Dimensions.get("window").height;
 const IMAGE_WIDTH = SCREEN_WIDTH * 0.9;
 const IMAGE_HEIGHT = IMAGE_WIDTH * 1.4;
 // Chart width: screen - section horizontal margin (20*2) - section padding (16*2)
@@ -137,141 +144,44 @@ function InfoPill({
 
 // --- Ticker Animation ---
 
-function TickerText({ value, style }: { value: string; style: any }) {
-	const tickerOpacity = useSharedValue(1);
-	const [displayValue, setDisplayValue] = useState(value);
-	const isFirst = useRef(true);
+const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
+
+// Rolls the price from its previous value to the new one (stock-ticker style)
+// whenever the configuration changes. Driven on the UI thread via an
+// AnimatedTextInput so every interpolated frame is painted without JS churn.
+function TickerPrice({ value, style }: { value: number; style: any }) {
+	const animated = useSharedValue(value);
 
 	useEffect(() => {
-		if (isFirst.current) {
-			isFirst.current = false;
-			return;
-		}
-		// Quick fade out, swap text, fade in — total ~160ms
-		tickerOpacity.value = withTiming(0, { duration: 60 });
-
-		const timeout = setTimeout(() => {
-			setDisplayValue(value);
-			tickerOpacity.value = withTiming(1, { duration: 100 });
-		}, 60);
-
-		return () => clearTimeout(timeout);
+		animated.value = withTiming(value, {
+			duration: 450,
+			easing: Easing.out(Easing.cubic),
+		});
 	}, [value]);
 
-	const animatedStyle = useAnimatedStyle(() => ({
-		opacity: tickerOpacity.value,
-	}));
+	const animatedProps = useAnimatedProps(() => {
+		"worklet";
+		const n = animated.value;
+		const [intPart, dec] = n.toFixed(2).split(".");
+		// Group thousands manually — regex lookahead is unreliable inside a
+		// worklet, which made the comma flicker/drop between frames.
+		let withCommas = "";
+		for (let i = 0; i < intPart.length; i++) {
+			if (i > 0 && (intPart.length - i) % 3 === 0) withCommas += ",";
+			withCommas += intPart[i];
+		}
+		return { text: `$${withCommas}.${dec}` } as any;
+	});
 
 	return (
-		<Animated.Text style={[style, animatedStyle]}>
-			{displayValue}
-		</Animated.Text>
-	);
-}
-
-// --- Toggle Components ---
-
-function PillToggle({
-	options,
-	selected,
-	onSelect,
-	colors,
-}: {
-	options: string[];
-	selected: string;
-	onSelect: (val: string) => void;
-	colors: any;
-}) {
-	return (
-		<View style={styles.toggleRow}>
-			{options.map((opt) => {
-				const active = opt === selected;
-				return (
-					<Pressable
-						key={opt}
-						hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-						style={[
-							styles.togglePill,
-							{
-								backgroundColor: active
-									? colors.primary
-									: colors.muted,
-							},
-						]}
-						onPress={() => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-							onSelect(opt);
-						}}
-					>
-						<Text
-							style={[
-								styles.toggleText,
-								{
-									color: active
-										? colors.primaryForeground
-										: colors.foreground,
-									opacity: active ? 1 : 0.75,
-								},
-							]}
-						>
-							{opt}
-						</Text>
-					</Pressable>
-				);
-			})}
-		</View>
-	);
-}
-
-function LabeledPillToggle({
-	options,
-	selected,
-	onSelect,
-	colors,
-}: {
-	options: { label: string; value: string }[];
-	selected: string | null;
-	onSelect: (val: string) => void;
-	colors: any;
-}) {
-	return (
-		<View style={[styles.toggleRow, { flexWrap: "wrap" }]}>
-			{options.map((opt) => {
-				const active = opt.value === selected;
-				return (
-					<Pressable
-						key={opt.value}
-						hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-						style={[
-							styles.togglePill,
-							{
-								backgroundColor: active
-									? colors.primary
-									: colors.muted,
-							},
-						]}
-						onPress={() => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-							onSelect(opt.value);
-						}}
-					>
-						<Text
-							style={[
-								styles.toggleText,
-								{
-									color: active
-										? colors.primaryForeground
-										: colors.foreground,
-									opacity: active ? 1 : 0.75,
-								},
-							]}
-						>
-							{opt.label}
-						</Text>
-					</Pressable>
-				);
-			})}
-		</View>
+		<AnimatedTextInput
+			editable={false}
+			pointerEvents="none"
+			underlineColorAndroid="transparent"
+			style={[style, styles.tickerInput]}
+			animatedProps={animatedProps}
+			defaultValue={formatPrice(value)}
+		/>
 	);
 }
 
@@ -327,217 +237,6 @@ function PeriodToggle({
 				);
 			})}
 		</View>
-	);
-}
-
-// --- Tab Bar ---
-
-function TabBar({
-	tabs,
-	selected,
-	onSelect,
-	colors,
-}: {
-	tabs: string[];
-	selected: string;
-	onSelect: (val: string) => void;
-	colors: any;
-}) {
-	return (
-		<View
-			style={[
-				styles.segmentedControl,
-				{ backgroundColor: colors.muted },
-			]}
-		>
-			{tabs.map((tab) => {
-				const active = tab === selected;
-				return (
-					<Pressable
-						key={tab}
-						style={[
-							styles.segment,
-							active && {
-								backgroundColor: colors.primary,
-								shadowColor: "#000",
-								shadowOpacity: 0.2,
-								shadowRadius: 3,
-								shadowOffset: { width: 0, height: 1 },
-								elevation: 2,
-							},
-						]}
-						onPress={() => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-							onSelect(tab);
-						}}
-					>
-						<Text
-							style={[
-								styles.segmentText,
-								{
-									color: active
-										? colors.primaryForeground
-										: colors.foreground,
-									fontWeight: active ? "700" : "600",
-								},
-							]}
-						>
-							{tab}
-						</Text>
-					</Pressable>
-				);
-			})}
-		</View>
-	);
-}
-
-// --- Sliding Tabs ---
-
-function SlidingTabs({
-	activeTab,
-	hasGraded,
-	rawCondition,
-	setRawCondition,
-	conditionOptions,
-	gradedCompanies,
-	gradedCompany,
-	setGradedCompany,
-	gradedGrades,
-	gradedGrade,
-	setGradedGrade,
-	colors,
-}: {
-	activeTab: string;
-	hasGraded: boolean;
-	rawCondition: string;
-	setRawCondition: (v: string) => void;
-	conditionOptions: { label: string; value: string }[];
-	gradedCompanies: string[];
-	gradedCompany: string | null;
-	setGradedCompany: (v: string) => void;
-	gradedGrades: string[];
-	gradedGrade: string | null;
-	setGradedGrade: (v: string) => void;
-	colors: any;
-}) {
-	const slideAnim = useSharedValue(0);
-	const rawHeight = useSharedValue(0);
-	const gradedHeight = useSharedValue(0);
-
-	useEffect(() => {
-		slideAnim.value = withTiming(activeTab === "Graded" ? 1 : 0, {
-			duration: 250,
-		});
-	}, [activeTab]);
-
-	const containerStyle = useAnimatedStyle(() => {
-		const height = interpolate(
-			slideAnim.value,
-			[0, 1],
-			[rawHeight.value, gradedHeight.value],
-		);
-		return {
-			height: height > 0 ? height : undefined,
-			overflow: "hidden" as const,
-		};
-	});
-
-	const rawPanelStyle = useAnimatedStyle(() => ({
-		transform: [
-			{
-				translateX: interpolate(
-					slideAnim.value,
-					[0, 1],
-					[0, -SCREEN_WIDTH],
-				),
-			},
-		],
-		opacity: interpolate(slideAnim.value, [0, 0.5], [1, 0]),
-	}));
-
-	const gradedPanelStyle = useAnimatedStyle(() => ({
-		transform: [
-			{
-				translateX: interpolate(
-					slideAnim.value,
-					[0, 1],
-					[SCREEN_WIDTH, 0],
-				),
-			},
-		],
-		opacity: interpolate(slideAnim.value, [0.5, 1], [0, 1]),
-	}));
-
-	return (
-		<Animated.View style={[{ marginTop: hasGraded ? 14 : 0 }, containerStyle]}>
-			<Animated.View
-				style={[{ position: "absolute", width: "100%" }, rawPanelStyle]}
-				onLayout={(e) => {
-					rawHeight.value = e.nativeEvent.layout.height;
-				}}
-			>
-				<Text
-					style={[
-						styles.toggleLabel,
-						{ color: colors.mutedForeground },
-					]}
-				>
-					Condition
-				</Text>
-				<LabeledPillToggle
-					options={conditionOptions}
-					selected={rawCondition}
-					onSelect={setRawCondition}
-					colors={colors}
-				/>
-			</Animated.View>
-
-			<Animated.View
-				style={[{ position: "absolute", width: "100%" }, gradedPanelStyle]}
-				onLayout={(e) => {
-					gradedHeight.value = e.nativeEvent.layout.height;
-				}}
-			>
-				<Text
-					style={[
-						styles.toggleLabel,
-						{ color: colors.mutedForeground },
-					]}
-				>
-					Grading Company
-				</Text>
-				<PillToggle
-					options={gradedCompanies}
-					selected={gradedCompany ?? ""}
-					onSelect={setGradedCompany}
-					colors={colors}
-				/>
-				{gradedGrades.length > 0 && (
-					<>
-						<Text
-							style={[
-								styles.toggleLabel,
-								{
-									color: colors.mutedForeground,
-									marginTop: 12,
-								},
-							]}
-						>
-							Grade
-						</Text>
-						<LabeledPillToggle
-							options={gradedGrades.map((g: string) => ({
-								label: g,
-								value: g,
-							}))}
-							selected={gradedGrade}
-							onSelect={setGradedGrade}
-							colors={colors}
-						/>
-					</>
-				)}
-			</Animated.View>
-		</Animated.View>
 	);
 }
 
@@ -675,7 +374,7 @@ function LoadingSkeleton({ colors, isFromCollection }: { colors: any; isFromColl
 			</View>
 
 			{/* Meta Strip */}
-			<View style={styles.metaStrip}>
+			<View style={[styles.metaStrip, { borderColor: colors.border }]}>
 				<View style={{ flex: 1, gap: 4 }}>
 					<Skeleton width="65%" height={17} color={skeletonColor} />
 					<Skeleton width="45%" height={13} color={skeletonColor} />
@@ -716,6 +415,52 @@ function LoadingSkeleton({ colors, isFromCollection }: { colors: any; isFromColl
 	);
 }
 
+// --- Config Summary Row ---
+
+function ConfigRow({
+	label,
+	value,
+	onPress,
+	colors,
+	isLast,
+}: {
+	label: string;
+	value: string;
+	onPress: () => void;
+	colors: any;
+	isLast?: boolean;
+}) {
+	return (
+		<Pressable
+			onPress={onPress}
+			style={[
+				styles.configRow,
+				!isLast && {
+					borderBottomWidth: StyleSheet.hairlineWidth,
+					borderBottomColor: colors.foreground + "1A",
+				},
+			]}
+		>
+			<Text style={[styles.configRowLabel, { color: colors.foreground }]}>
+				{label}
+			</Text>
+			<View style={styles.configRowRight}>
+				<Text
+					style={[styles.configRowValue, { color: colors.foreground }]}
+					numberOfLines={1}
+				>
+					{value}
+				</Text>
+				<Ionicons
+					name="chevron-forward"
+					size={16}
+					color={colors.mutedForeground}
+				/>
+			</View>
+		</Pressable>
+	);
+}
+
 // --- Main ---
 
 export default function CardDetail() {
@@ -737,21 +482,36 @@ export default function CardDetail() {
 	const [quantity, setQuantity] = useState(parseInt(initQuantity || "1", 10) || 1);
 	const api = useApi();
 
-	// Tab state
-	const [pricingTab, setPricingTab] = useState(pricingType || "Raw");
+	// Selection lives in CardConfigContext so the configure formSheet (pushed
+	// over this screen) edits the same state and the price/chart/chips below
+	// update live. Seeded from the route params once per card.
+	const {
+		variant,
+		setVariant,
+		pricingTab,
+		setPricingTab,
+		rawCondition,
+		setRawCondition,
+		gradedCompany,
+		setGradedCompany,
+		gradedGrade,
+		setGradedGrade,
+		pricePaid,
+		setPricePaid,
+		seed,
+	} = useCardConfig();
 
-	// Variant state — shared by Raw and Graded tabs
-	const [variant, setVariant] = useState<string>(initVariant || "");
-	const [rawCondition, setRawCondition] = useState(
-		pricingType === "Graded" ? "NM" : (condition || "NM"),
-	);
-
-	// Graded state
-	const [gradedCompany, setGradedCompany] = useState<string | null>(initGradedCompany || null);
-	const [gradedGrade, setGradedGrade] = useState<string | null>(initGradedGrade || null);
-
-	// Price paid state
-	const [pricePaid, setPricePaid] = useState<string>(initPricePaid || "");
+	useEffect(() => {
+		if (!id) return;
+		seed(id, {
+			variant: initVariant || "",
+			pricingTab: pricingType || "Raw",
+			rawCondition: pricingType === "Graded" ? "NM" : condition || "NM",
+			gradedCompany: initGradedCompany || null,
+			gradedGrade: initGradedGrade || null,
+			pricePaid: initPricePaid || "",
+		});
+	}, [id]);
 
 	// Collection context
 	const { incrementCardQuantity, addCardToCollection, removeCardFromCollection, decrementCardQuantity, updateCardPricePaid } = useCollections();
@@ -830,7 +590,6 @@ export default function CardDetail() {
 
 	// Determine if graded tab is available
 	const hasGraded = gradedCompanies.length > 0;
-	const availableTabs = hasGraded ? ["Raw", "Graded"] : ["Raw"];
 
 	// Get current prices
 	const rawPrice =
@@ -857,6 +616,11 @@ export default function CardDetail() {
 	// Display fields
 	const cardImage = card ? getCardImage(card, variant || undefined, "large") : undefined;
 	const cardNumber = card ? getCardNumber(card) : undefined;
+	// Japanese cards display their English translation when available
+	const displayName = card ? getCardDisplayName(card) : (name ?? "Card");
+	const setDisplayName = card?.expansion
+		? getExpansionDisplayName(card.expansion)
+		: undefined;
 
 	// History queries
 	const historyDays = PERIOD_TO_DAYS[historyPeriod] ?? 30;
@@ -899,6 +663,43 @@ export default function CardDetail() {
 	]);
 
 	const currencySymbol = "$";
+
+	// Scroll the detail view up so the estimate price stays visible above the
+	// configure sheet while options are changed.
+	const scrollRef = useRef<ScrollView>(null);
+	const estimateBottom = useRef(0);
+
+	const openConfig = useCallback(() => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		// Land the market-value block just above the sheet's top edge — the 0.6
+		// detent puts the sheet top at ~40% of the screen height. Content point
+		// c renders at screenY = c - scrollOffset, so target estimateBottom there.
+		const sheetTopY = SCREEN_HEIGHT * 0.4;
+		scrollRef.current?.scrollTo({
+			y: Math.max(estimateBottom.current - sheetTopY + 16, 0),
+			animated: true,
+		});
+		router.push("/(card)/configure");
+	}, []);
+
+	const confirmRemove = useCallback(() => {
+		Alert.alert("Remove Card", "Remove this card from the collection?", [
+			{ text: "Cancel", style: "cancel" },
+			{
+				text: "Remove",
+				style: "destructive",
+				onPress: () => {
+					Haptics.notificationAsync(
+						Haptics.NotificationFeedbackType.Warning,
+					);
+					removeCardFromCollection.mutate(
+						{ collectionId: collectionId!, cardId: id },
+						{ onSuccess: () => router.back() },
+					);
+				},
+			},
+		]);
+	}, [collectionId, id, removeCardFromCollection]);
 
 	// Recent sales — real eBay sold listings
 	const { data: listings } = useQuery({
@@ -973,7 +774,7 @@ export default function CardDetail() {
 		<>
 			<Stack.Screen
 				options={{
-					headerTitle: name ?? "Card",
+					headerTitle: displayName,
 					headerRight: () =>
 						configMatches ? null : (
 						<Pressable
@@ -993,9 +794,9 @@ export default function CardDetail() {
 										{
 											collectionId: collectionId!,
 											cardId: id,
-											cardName: name ?? "",
+											cardName: displayName,
 											cardNumber: cardNumber ?? undefined,
-											setName: card?.expansion?.name ?? undefined,
+											setName: setDisplayName,
 											cardImageUrl: cardImage ?? "",
 											cardValue: heroPrice ?? 0,
 											pricingType: pricingTab,
@@ -1027,9 +828,9 @@ export default function CardDetail() {
 										pathname: "/add-to-collection",
 										params: {
 											cardId: id,
-											cardName: name ?? "",
+											cardName: displayName,
 											cardNumber: cardNumber ?? "",
-											setName: card?.expansion?.name ?? "",
+											setName: setDisplayName ?? "",
 											cardImageUrl: cardImage ?? "",
 											cardValue: String(heroPrice ?? 0),
 											pricingType: pricingTab,
@@ -1092,6 +893,7 @@ export default function CardDetail() {
 						]}
 					/>
 					<ScrollView
+						ref={scrollRef}
 						style={styles.container}
 						contentContainerStyle={styles.content}
 						contentInsetAdjustmentBehavior="automatic"
@@ -1106,7 +908,7 @@ export default function CardDetail() {
 									height: IMAGE_HEIGHT,
 									borderRadius: 14,
 								}}
-								backgroundColor={colors.background}
+								backgroundColor="transparent"
 								shimmerColor={colors.border}
 								fallback={
 									<View
@@ -1122,7 +924,7 @@ export default function CardDetail() {
 											size={28}
 											color={colors.mutedForeground}
 										/>
-										{card.name && (
+										{displayName && (
 											<Text
 												style={{
 													color: colors.foreground,
@@ -1133,7 +935,7 @@ export default function CardDetail() {
 												}}
 												numberOfLines={2}
 											>
-												{card.name}
+												{displayName}
 											</Text>
 										)}
 										{cardNumber && (
@@ -1152,6 +954,12 @@ export default function CardDetail() {
 						</View>
 
 						{/* Estimate Block — most prominent element */}
+						<View
+							onLayout={(e) => {
+								const { y, height } = e.nativeEvent.layout;
+								estimateBottom.current = y + height;
+							}}
+						>
 						<ProGate
 							style={[
 								styles.estimateBlock,
@@ -1167,15 +975,23 @@ export default function CardDetail() {
 									{ color: colors.foreground, opacity: 0.75 },
 								]}
 							>
-								ESTIMATED VALUE
+								MARKET VALUE
 							</Text>
-							<TickerText
-								value={formatPrice(heroPrice)}
-								style={[
-									styles.heroPrice,
-									{ color: colors.foreground },
-								]}
-							/>
+							{heroPrice === undefined ? (
+								<Text
+									style={[styles.heroPrice, { color: colors.foreground }]}
+								>
+									—
+								</Text>
+							) : (
+								<TickerPrice
+									value={heroPrice}
+									style={[
+										styles.heroPrice,
+										{ color: colors.foreground },
+									]}
+								/>
+							)}
 
 							{/* Active selection summary chips */}
 							<View style={styles.selectionSummary}>
@@ -1317,15 +1133,19 @@ export default function CardDetail() {
 								)}
 							</View>
 						</ProGate>
+						</View>
 
 						{/* Quantity Badge */}
 						{configMatches && (
 							<View style={[styles.quantityBadge, { backgroundColor: colors.card + "D9", borderColor: colors.border }]}>
 								<Pressable
 									onPress={() => {
-										// At 1 the "Remove from Collection" button takes over;
-										// decrementing further would leave a 0-quantity row.
-										if (quantity <= 1) return;
+										// At 1, decrementing would leave a 0-quantity row, so
+										// confirm removal from the collection instead.
+										if (quantity <= 1) {
+											confirmRemove();
+											return;
+										}
 										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 										decrementCardQuantity.mutate(
 											{
@@ -1390,7 +1210,7 @@ export default function CardDetail() {
 										{ color: colors.foreground },
 									]}
 								>
-									{card.name}
+									{displayName}
 									{cardNumber ? (
 										<Text
 											style={{
@@ -1410,13 +1230,13 @@ export default function CardDetail() {
 										{ color: colors.foreground, opacity: 0.7 },
 									]}
 								>
-									{card.expansion?.name}
+									{setDisplayName}
 								</Text>
 							</View>
 							<View style={styles.pillRow}>
-								{card.rarity && (
+								{!!getCardDisplayRarity(card) && (
 									<InfoPill
-										label={card.rarity}
+										label={getCardDisplayRarity(card)!}
 										color={colors.foreground}
 										bgColor={colors.primary + "33"}
 										borderColor={colors.primary + "55"}
@@ -1433,7 +1253,7 @@ export default function CardDetail() {
 							</View>
 						</View>
 
-						{/* Pricing Controls */}
+						{/* Pricing Options — tap a row to configure in the sheet */}
 						<View
 							style={[
 								styles.section,
@@ -1444,72 +1264,36 @@ export default function CardDetail() {
 							]}
 						>
 							<Text
-								style={[
-									styles.sectionTitle,
-									{ color: colors.foreground },
-								]}
+								style={[styles.sectionTitle, { color: colors.foreground }]}
 							>
 								Pricing Options
 							</Text>
 							{variantNames.length > 1 && (
-								<View style={styles.variantBlock}>
-									<Text
-										style={[
-											styles.toggleLabel,
-											{ color: colors.mutedForeground },
-										]}
-									>
-										Variant
-									</Text>
-									<LabeledPillToggle
-										options={variantNames.map((v) => ({
-											label: formatVariantLabel(v),
-											value: v,
-										}))}
-										selected={variant}
-										onSelect={setVariant}
-										colors={colors}
-									/>
-								</View>
-							)}
-							{hasGraded && (
-								<TabBar
-									tabs={availableTabs}
-									selected={pricingTab}
-									onSelect={setPricingTab}
+								<ConfigRow
+									label="Variant"
+									value={formatVariantLabel(variant)}
+									onPress={openConfig}
 									colors={colors}
 								/>
 							)}
-
-							<SlidingTabs
-								activeTab={pricingTab}
-								hasGraded={hasGraded}
-								rawCondition={rawCondition}
-								setRawCondition={setRawCondition}
-								conditionOptions={conditionOptions}
-								gradedCompanies={gradedCompanies}
-								gradedCompany={gradedCompany}
-								setGradedCompany={(val: string) => {
-									setGradedCompany(val);
-									const grades =
-										gradedOptions.find(
-											(o) => o.company === val,
-										)?.grades ?? [];
-									setGradedGrade(grades[0] ?? null);
-								}}
-								gradedGrades={gradedGrades}
-								gradedGrade={gradedGrade}
-								setGradedGrade={setGradedGrade}
+							<ConfigRow
+								label={pricingTab === "Graded" ? "Grade" : "Condition"}
+								value={
+									pricingTab === "Graded"
+										? gradedCompany && gradedGrade
+											? `${gradedCompany} ${gradedGrade}`
+											: "—"
+										: formatConditionLabel(rawCondition)
+								}
+								onPress={openConfig}
 								colors={colors}
+								isLast
 							/>
 
 							<Text
 								style={[
-									styles.toggleLabel,
-									{
-										color: colors.mutedForeground,
-										marginTop: 14,
-									},
+									styles.pricePaidLabel,
+									{ color: colors.mutedForeground },
 								]}
 							>
 								Price Paid
@@ -1827,26 +1611,7 @@ export default function CardDetail() {
 						{/* Remove from collection */}
 						{configMatches && quantity <= 1 && (
 							<Pressable
-								onPress={() => {
-									Alert.alert(
-										"Remove Card",
-										"Remove this card from the collection?",
-										[
-											{ text: "Cancel", style: "cancel" },
-											{
-												text: "Remove",
-												style: "destructive",
-												onPress: () => {
-													Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-													removeCardFromCollection.mutate(
-														{ collectionId: collectionId!, cardId: id },
-														{ onSuccess: () => router.back() },
-													);
-												},
-											},
-										],
-									);
-								}}
+								onPress={confirmRemove}
 								style={[styles.removeButton, { borderColor: colors.destructive ?? "#ef4444", marginHorizontal: 20, marginTop: 16 }]}
 							>
 								<Ionicons name="trash-outline" size={18} color={colors.destructive ?? "#ef4444"} />
@@ -1965,6 +1730,12 @@ const styles = StyleSheet.create({
 		fontWeight: "800",
 		letterSpacing: -1.5,
 	},
+	tickerInput: {
+		alignSelf: "stretch",
+		textAlign: "center",
+		padding: 0,
+		fontVariant: ["tabular-nums"],
+	},
 	selectionSummary: {
 		flexDirection: "row",
 		gap: 6,
@@ -2017,16 +1788,71 @@ const styles = StyleSheet.create({
 		flexWrap: "wrap",
 	},
 
-	// Toggle labels
-	toggleLabel: {
+	// Collapsible header
+	collapsibleHeader: {
+		flexDirection: "row",
+		justifyContent: "space-between",
+		alignItems: "center",
+	},
+	pill: {
+		paddingHorizontal: 8,
+		paddingVertical: 4,
+		borderRadius: 6,
+	},
+	pillText: {
+		fontSize: 11,
+		fontWeight: "600",
+	},
+
+	// Sections
+	section: {
+		marginHorizontal: 20,
+		marginBottom: 12,
+		borderRadius: 12,
+		borderWidth: 1,
+		padding: 16,
+	},
+	sectionTitle: {
+		fontSize: 16,
+		fontWeight: "700",
+		lineHeight: 20,
+		marginBottom: 12,
+	},
+
+	// Config summary rows
+	configRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: 12,
+		paddingVertical: 14,
+	},
+	configRowLabel: {
+		fontSize: 15,
+		fontWeight: "600",
+	},
+	configRowRight: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
+		flexShrink: 1,
+	},
+	configRowValue: {
+		fontSize: 15,
+		fontWeight: "500",
+		opacity: 0.7,
+		flexShrink: 1,
+	},
+
+	// Price paid input
+	pricePaidLabel: {
 		fontSize: 11,
 		fontWeight: "600",
 		letterSpacing: 0.5,
 		textTransform: "uppercase",
+		marginTop: 16,
 		marginBottom: 8,
 	},
-
-	// Price paid input
 	pricePaidRow: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -2047,76 +1873,7 @@ const styles = StyleSheet.create({
 		paddingVertical: 0,
 	},
 
-	// Collapsible header
-	collapsibleHeader: {
-		flexDirection: "row",
-		justifyContent: "space-between",
-		alignItems: "center",
-	},
-	pill: {
-		paddingHorizontal: 8,
-		paddingVertical: 4,
-		borderRadius: 6,
-	},
-	pillText: {
-		fontSize: 11,
-		fontWeight: "600",
-	},
-
-	// Segmented control (Raw / Graded)
-	segmentedControl: {
-		flexDirection: "row",
-		borderRadius: 10,
-		padding: 3,
-		marginBottom: 4,
-	},
-	segment: {
-		flex: 1,
-		alignItems: "center",
-		justifyContent: "center",
-		paddingVertical: 8,
-		borderRadius: 8,
-		minHeight: 34,
-	},
-	segmentText: {
-		fontSize: 13,
-	},
-
-	// Sections
-	section: {
-		marginHorizontal: 20,
-		marginBottom: 12,
-		borderRadius: 12,
-		borderWidth: 1,
-		padding: 16,
-	},
-	sectionTitle: {
-		fontSize: 16,
-		fontWeight: "700",
-		lineHeight: 20,
-		marginBottom: 12,
-	},
-
-	// Toggles
-	variantBlock: {
-		marginBottom: 16,
-	},
-	toggleRow: {
-		flexDirection: "row",
-		gap: 8,
-		flexWrap: "wrap",
-	},
-	togglePill: {
-		paddingHorizontal: 14,
-		paddingVertical: 10,
-		borderRadius: 10,
-		minHeight: 36,
-		justifyContent: "center",
-	},
-	toggleText: {
-		fontSize: 13,
-		fontWeight: "600",
-	},
+	// Period toggle
 	periodRow: {
 		flexDirection: "row",
 		borderRadius: 8,

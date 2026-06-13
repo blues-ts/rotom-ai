@@ -75,7 +75,13 @@ export async function getCardHistory(
 
 export async function searchSealed(
   api: AxiosInstance,
-  opts: { q: string; page?: number; pageSize?: number; includePrices?: boolean },
+  opts: {
+    q: string;
+    page?: number;
+    pageSize?: number;
+    includePrices?: boolean;
+    orderBy?: string;
+  },
 ): Promise<ApiListResponse<ScrydexSealedProduct>> {
   const params: Record<string, string | number> = {
     q: opts.q,
@@ -83,6 +89,7 @@ export async function searchSealed(
     page_size: opts.pageSize ?? 30,
   };
   if (opts.includePrices) params.include = "prices";
+  if (opts.orderBy) params.order_by = opts.orderBy;
   const res = await api.get<ApiListResponse<ScrydexSealedProduct>>(
     "/api/pricing/sealed",
     { params },

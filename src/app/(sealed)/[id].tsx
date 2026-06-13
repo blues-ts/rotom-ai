@@ -29,6 +29,7 @@ import { getSealedProduct } from "@/lib/api/pricing";
 import {
 	formatVariantLabel,
 	getCardImage,
+	getExpansionDisplayName,
 	getVariantNames,
 	toNumber,
 } from "@/lib/scrydex";
@@ -170,11 +171,13 @@ export default function SealedDetail() {
 		? getCardImage(product, variant || undefined, "large")
 		: undefined;
 
-	// Frame height tracks the artwork's natural ratio, clamped to sane bounds
-	const [imageAspect, setImageAspect] = useState<number | null>(null);
-	const imageHeight =
-		IMAGE_WIDTH *
-		Math.min(Math.max(imageAspect ?? 1, MIN_ASPECT), MAX_ASPECT);
+	// Frame height tracks the artwork's natural ratio, clamped to sane bounds.
+	// We ease the height into place once the image reports its dimensions so the
+	// frame doesn't snap from the square placeholder — that snap reads as a flicker.
+	const imageAspect = useSharedValue(1);
+	const imageFrameStyle = useAnimatedStyle(() => ({
+		height: IMAGE_WIDTH * imageAspect.value,
+	}));
 
 	// Same identity rule as collection rows: sealed entries are keyed by variant.
 	const configMatches = isFromCollection && variant === (initVariant || "");
@@ -197,6 +200,29 @@ export default function SealedDetail() {
 		return () => clearTimeout(timer);
 	}, [pricePaid, isFromCollection, configMatches, initPricePaid, collectionId, id, variant]);
 
+	const confirmRemove = () => {
+		Alert.alert(
+			"Remove Product",
+			"Remove this product from the collection?",
+			[
+				{ text: "Cancel", style: "cancel" },
+				{
+					text: "Remove",
+					style: "destructive",
+					onPress: () => {
+						Haptics.notificationAsync(
+							Haptics.NotificationFeedbackType.Warning,
+						);
+						removeCardFromCollection.mutate(
+							{ collectionId: collectionId!, cardId: id },
+							{ onSuccess: () => router.back() },
+						);
+					},
+				},
+			],
+		);
+	};
+
 	const handleAdd = () => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 		if (!isPro) {
@@ -208,7 +234,9 @@ export default function SealedDetail() {
 		const config = {
 			cardId: id,
 			cardName: product?.name ?? name ?? "",
-			setName: product?.expansion?.name ?? undefined,
+			setName: product?.expansion
+				? getExpansionDisplayName(product.expansion)
+				: undefined,
 			cardImageUrl: productImage ?? "",
 			cardValue: marketPrice ?? 0,
 			pricingType: "Raw",
@@ -308,14 +336,20 @@ export default function SealedDetail() {
 						{/* Product Image — art floating on the blurred backdrop,
 						    frame sized to the artwork's natural ratio */}
 						<View style={styles.imageContainer}>
-							<View style={{ width: IMAGE_WIDTH, height: imageHeight }}>
+							<Animated.View style={[{ width: IMAGE_WIDTH }, imageFrameStyle]}>
 								<CardImage
 									uri={productImage ?? ""}
 									style={styles.imageInset}
 									backgroundColor="transparent"
 									shimmerColor={colors.border}
 									onImageLoad={({ width, height }) => {
-										if (width > 0) setImageAspect(height / width);
+										if (width > 0) {
+											const aspect = Math.min(
+												Math.max(height / width, MIN_ASPECT),
+												MAX_ASPECT,
+											);
+											imageAspect.value = withTiming(aspect, { duration: 220 });
+										}
 									}}
 									fallback={
 									<View style={styles.imageFallback}>
@@ -339,7 +373,7 @@ export default function SealedDetail() {
 									</View>
 									}
 								/>
-							</View>
+							</Animated.View>
 						</View>
 
 						{/* Quantity Badge */}
@@ -355,9 +389,12 @@ export default function SealedDetail() {
 							>
 								<Pressable
 									onPress={() => {
-										// At 1 the "Remove from Collection" button takes over;
-										// decrementing further would leave a 0-quantity row.
-										if (quantity <= 1) return;
+										// At 1, decrementing would leave a 0-quantity row, so
+										// confirm removal from the collection instead.
+										if (quantity <= 1) {
+											confirmRemove();
+											return;
+										}
 										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 										decrementCardQuantity.mutate(
 											{
@@ -481,7 +518,7 @@ export default function SealedDetail() {
 											{ color: colors.foreground, opacity: 0.7 },
 										]}
 									>
-										{product.expansion.name}
+										{getExpansionDisplayName(product.expansion)}
 										{product.expansion.release_date
 											? ` · ${product.expansion.release_date.slice(0, 4)}`
 											: ""}
@@ -643,28 +680,7 @@ export default function SealedDetail() {
 						{/* Remove from collection */}
 						{configMatches && quantity <= 1 && (
 							<Pressable
-								onPress={() => {
-									Alert.alert(
-										"Remove Product",
-										"Remove this product from the collection?",
-										[
-											{ text: "Cancel", style: "cancel" },
-											{
-												text: "Remove",
-												style: "destructive",
-												onPress: () => {
-													Haptics.notificationAsync(
-														Haptics.NotificationFeedbackType.Warning,
-													);
-													removeCardFromCollection.mutate(
-														{ collectionId: collectionId!, cardId: id },
-														{ onSuccess: () => router.back() },
-													);
-												},
-											},
-										],
-									);
-								}}
+								onPress={confirmRemove}
 								style={[
 									styles.removeButton,
 									{ borderColor: colors.destructive ?? "#ef4444" },

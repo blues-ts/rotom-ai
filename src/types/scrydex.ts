@@ -89,6 +89,8 @@ export interface ScrydexExpansion {
   is_online_only?: boolean;
   logo?: string;
   symbol?: string;
+  /** English translations for Japanese expansions */
+  translation?: { en?: { name?: string } };
 }
 
 export interface ScrydexLegality {
@@ -119,7 +121,9 @@ export interface ScrydexCard {
   expansion_sort_order?: number;
   variants?: ScrydexVariant[];
   /** English translations for Japanese cards (partial) */
-  translation?: { en?: { name?: string; [key: string]: unknown } };
+  translation?: {
+    en?: { name?: string; rarity?: string | null; [key: string]: unknown };
+  };
 }
 
 export interface ScrydexSealedProduct {

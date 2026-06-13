@@ -21,7 +21,7 @@ export default function SearchLayout() {
 		<Stack
 			screenOptions={{
 				headerShown: true,
-				headerTitle: "",
+				headerTitle: "Search",
 				headerShadowVisible: false,
 				headerTransparent: true,
 				headerStyle: { backgroundColor: "transparent" },

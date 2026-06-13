@@ -5,6 +5,7 @@
  */
 import type {
   ScrydexCard,
+  ScrydexExpansion,
   ScrydexImage,
   ScrydexListing,
   ScrydexPrice,
@@ -270,6 +271,24 @@ export function getCardImage(
 /** Full printed number ("013/198") when available, else the bare number. */
 export function getCardNumber(card: ScrydexCard): string {
   return card.printed_number ?? card.number;
+}
+
+/** English name when available (Japanese sets carry translation.en.name). */
+export function getExpansionDisplayName(expansion: ScrydexExpansion): string {
+  return expansion.translation?.en?.name || expansion.name;
+}
+
+/**
+ * English name when available — Japanese cards carry translation.en.name
+ * (coverage is partial; falls back to the printed name).
+ */
+export function getCardDisplayName(card: ScrydexCard): string {
+  return card.translation?.en?.name || card.name;
+}
+
+/** English rarity when available (通常 → "Normal", スペシャルアートレア → "Special Art Rare"). */
+export function getCardDisplayRarity(card: ScrydexCard): string | undefined {
+  return card.translation?.en?.rarity || card.rarity;
 }
 
 /**
