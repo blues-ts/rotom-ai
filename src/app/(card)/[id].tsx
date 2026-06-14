@@ -25,7 +25,7 @@ import Animated, {
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { LineChart } from "react-native-wagmi-charts";
 import { useApi } from "@/lib/axios";
 import { getCard, getCardHistory, getCardListings } from "@/lib/api/pricing";
@@ -72,6 +72,18 @@ function formatPrice(price: number | undefined, currency = "USD"): string {
 
 function formatConditionLabel(condition: string): string {
 	return CONDITION_LABELS[condition] ?? condition;
+}
+
+// Settles a rapidly-changing value: while the user flicks through options the
+// chart/sales queries shouldn't fire for every intermediate selection, only the
+// one they land on. The hero price stays live (it's read from the cached card).
+function useDebouncedValue<T>(value: T, delay: number): T {
+	const [debounced, setDebounced] = useState(value);
+	useEffect(() => {
+		const t = setTimeout(() => setDebounced(value), delay);
+		return () => clearTimeout(t);
+	}, [value, delay]);
+	return debounced;
 }
 
 function buildGradedTierKey(company: string, grade: string): string {
@@ -597,10 +609,6 @@ export default function CardDetail() {
 			? selectPrice(card, variant, { kind: "raw", condition: rawCondition })?.value
 			: undefined;
 
-	const gradedTierKey =
-		gradedCompany && gradedGrade
-			? buildGradedTierKey(gradedCompany, gradedGrade)
-			: null;
 	const gradedPrice =
 		card && variant && gradedCompany && gradedGrade
 			? selectPrice(card, variant, {
@@ -622,44 +630,61 @@ export default function CardDetail() {
 		? getExpansionDisplayName(card.expansion)
 		: undefined;
 
-	// History queries
-	const historyDays = PERIOD_TO_DAYS[historyPeriod] ?? 30;
+	// The chart and recent sales follow the *settled* selection (debounced), so
+	// flicking through conditions/tiers in the configure sheet doesn't fire a
+	// history/listings request for every option passed over — and they're hidden
+	// behind the sheet anyway. The hero price above stays live (cached card).
+	const dTab = useDebouncedValue(pricingTab, 350);
+	const dRawCondition = useDebouncedValue(rawCondition, 350);
+	const dGradedCompany = useDebouncedValue(gradedCompany, 350);
+	const dGradedGrade = useDebouncedValue(gradedGrade, 350);
+	const dHistoryPeriod = useDebouncedValue(historyPeriod, 350);
+
+	const dGradedTierKey =
+		dGradedCompany && dGradedGrade
+			? buildGradedTierKey(dGradedCompany, dGradedGrade)
+			: null;
+	const historyDays = PERIOD_TO_DAYS[dHistoryPeriod] ?? 30;
 
 	const { data: rawHistory, isLoading: rawHistoryLoading } = useQuery({
-		queryKey: ["history", id, rawCondition, historyPeriod],
-		queryFn: () => getCardHistory(api, id, rawCondition, historyDays),
-		enabled: !!id && !!rawCondition && pricingTab !== "Graded",
+		queryKey: ["history", id, dRawCondition, dHistoryPeriod],
+		queryFn: () => getCardHistory(api, id, dRawCondition, historyDays),
+		enabled: !!id && !!dRawCondition && dTab !== "Graded",
+		placeholderData: keepPreviousData,
+		staleTime: 60 * 60 * 1000,
 	});
 
 	const { data: gradedHistory, isLoading: gradedHistoryLoading } = useQuery({
-		queryKey: ["history", id, gradedTierKey, historyPeriod],
-		queryFn: () => getCardHistory(api, id, gradedTierKey!, historyDays),
-		enabled: !!id && !!gradedTierKey && pricingTab === "Graded",
+		queryKey: ["history", id, dGradedTierKey, dHistoryPeriod],
+		queryFn: () => getCardHistory(api, id, dGradedTierKey!, historyDays),
+		enabled: !!id && !!dGradedTierKey && dTab === "Graded",
+		placeholderData: keepPreviousData,
+		staleTime: 60 * 60 * 1000,
 	});
 
-	// Chart data — flatten history days for the active variant/tier (wagmi-charts format)
+	// Chart data — flatten history days for the settled variant/tier (wagmi-charts format)
 	const chartData = useMemo(() => {
 		if (!variant) return [];
-		if (pricingTab === "Graded") {
-			if (!gradedCompany || !gradedGrade) return [];
+		if (dTab === "Graded") {
+			if (!dGradedCompany || !dGradedGrade) return [];
 			return historyToChartPoints(gradedHistory ?? [], variant, {
 				kind: "graded",
-				company: gradedCompany,
-				grade: gradedGrade,
+				company: dGradedCompany,
+				grade: dGradedGrade,
 			});
 		}
 		return historyToChartPoints(rawHistory ?? [], variant, {
 			kind: "raw",
-			condition: rawCondition,
+			condition: dRawCondition,
 		});
 	}, [
-		pricingTab,
+		dTab,
 		rawHistory,
 		gradedHistory,
 		variant,
-		rawCondition,
-		gradedCompany,
-		gradedGrade,
+		dRawCondition,
+		dGradedCompany,
+		dGradedGrade,
 	]);
 
 	const currencySymbol = "$";
@@ -701,22 +726,24 @@ export default function CardDetail() {
 		]);
 	}, [collectionId, id, removeCardFromCollection]);
 
-	// Recent sales — real eBay sold listings
+	// Recent sales — real eBay sold listings (also follows the settled selection)
 	const { data: listings } = useQuery({
 		queryKey: [
 			"listings",
 			id,
-			pricingTab === "Graded" ? gradedCompany : null,
-			pricingTab === "Graded" ? gradedGrade : null,
+			dTab === "Graded" ? dGradedCompany : null,
+			dTab === "Graded" ? dGradedGrade : null,
 		],
 		queryFn: () =>
 			getCardListings(api, id, {
 				pageSize: 25,
 				orderBy: "-sold_at",
-				company: pricingTab === "Graded" ? (gradedCompany ?? undefined) : undefined,
-				grade: pricingTab === "Graded" ? (gradedGrade ?? undefined) : undefined,
+				company: dTab === "Graded" ? (dGradedCompany ?? undefined) : undefined,
+				grade: dTab === "Graded" ? (dGradedGrade ?? undefined) : undefined,
 			}),
-		enabled: !!id && (pricingTab !== "Graded" || !!gradedTierKey),
+		enabled: !!id && (dTab !== "Graded" || !!dGradedTierKey),
+		placeholderData: keepPreviousData,
+		staleTime: 15 * 60 * 1000,
 	});
 
 	const salesList = useMemo(() => {
@@ -726,10 +753,10 @@ export default function CardDetail() {
 			if (l.is_signed || l.is_error || l.is_perfect) return false;
 			// Raw tab: only ungraded sales. Scrydex misses slabs from smaller
 			// graders (company unset), so also screen listing titles.
-			if (pricingTab !== "Graded" && isLikelyGradedListing(l)) return false;
+			if (dTab !== "Graded" && isLikelyGradedListing(l)) return false;
 			return true;
 		});
-	}, [listings, pricingTab]);
+	}, [listings, dTab]);
 
 	const configMatches = isFromCollection &&
 		pricingTab === (pricingType || "Raw") &&
@@ -1365,7 +1392,7 @@ export default function CardDetail() {
 								/>
 							</View>
 
-							{(pricingTab === "Graded" ? gradedHistoryLoading : rawHistoryLoading) ? (
+							{(dTab === "Graded" ? gradedHistoryLoading : rawHistoryLoading) ? (
 								<View style={styles.chartPlaceholder}>
 									<Skeleton
 										width="100%"

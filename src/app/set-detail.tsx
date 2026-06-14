@@ -10,7 +10,6 @@ import {
 } from "react-native";
 import Animated, {
 	FadeIn,
-	FadeOut,
 	useAnimatedStyle,
 	useSharedValue,
 	withRepeat,
@@ -21,7 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/context/ThemeContext";
 import { useApi } from "@/lib/axios";
@@ -29,11 +28,7 @@ import { searchCards, searchSealed } from "@/lib/api/pricing";
 import { buildSetCardsQ, getCardDisplayName, getCardImage, getCardNumber, toNumber } from "@/lib/scrydex";
 import CardImage from "@/components/CardImage";
 import ErrorState from "@/components/ErrorState";
-import type {
-	ApiListResponse,
-	ScrydexCard,
-	ScrydexSealedProduct,
-} from "@/types/scrydex";
+import type { ScrydexCard, ScrydexSealedProduct } from "@/types/scrydex";
 
 type SetItem = ScrydexCard | ScrydexSealedProduct;
 
@@ -56,15 +51,6 @@ const SORT_LABELS: Record<SortOption, string> = {
 	nameAsc: "Name (A–Z)",
 	valueDesc: "Value (high to low)",
 	valueAsc: "Value (low to high)",
-};
-
-// Scrydex order_by silently ignores price fields, and its name ordering uses
-// the printed (Japanese) name while we display English translations — so only
-// number sorts run server-side. Name and value sorts fetch the whole set and
-// sort here.
-const SORT_ORDER_BY: Record<string, string> = {
-	number: "number",
-	numberDesc: "-number",
 };
 
 /**
@@ -132,50 +118,6 @@ function CardPressable({
 	);
 }
 
-function LoadingSpinner({ color }: { color: string }) {
-	const dot1 = useSharedValue(0);
-	const dot2 = useSharedValue(0);
-	const dot3 = useSharedValue(0);
-
-	useEffect(() => {
-		dot1.value = withRepeat(
-			withSequence(
-				withTiming(-8, { duration: 300 }),
-				withTiming(0, { duration: 300 }),
-			),
-			-1,
-		);
-		dot2.value = withRepeat(
-			withSequence(
-				withTiming(0, { duration: 150 }),
-				withTiming(-8, { duration: 300 }),
-				withTiming(0, { duration: 300 }),
-			),
-			-1,
-		);
-		dot3.value = withRepeat(
-			withSequence(
-				withTiming(0, { duration: 300 }),
-				withTiming(-8, { duration: 300 }),
-				withTiming(0, { duration: 300 }),
-			),
-			-1,
-		);
-	}, []);
-
-	const style1 = useAnimatedStyle(() => ({ transform: [{ translateY: dot1.value }] }));
-	const style2 = useAnimatedStyle(() => ({ transform: [{ translateY: dot2.value }] }));
-	const style3 = useAnimatedStyle(() => ({ transform: [{ translateY: dot3.value }] }));
-
-	return (
-		<View style={styles.spinnerRow}>
-			<Animated.View style={[styles.dot, { backgroundColor: color }, style1]} />
-			<Animated.View style={[styles.dot, { backgroundColor: color }, style2]} />
-			<Animated.View style={[styles.dot, { backgroundColor: color }, style3]} />
-		</View>
-	);
-}
-
 function SkeletonCard({ color }: { color: string }) {
 	const opacity = useSharedValue(0.3);
 
@@ -232,83 +174,84 @@ export default function SetDetail() {
 	}, [filterQuery]);
 
 	const isValueSort = sortBy === "valueDesc" || sortBy === "valueAsc";
-	// Name and value sorts run client-side over the whole set: Scrydex can't
-	// order by price, and its name ordering uses printed (Japanese) names
-	// while we display English translations.
-	const isClientSort = isValueSort || sortBy === "nameAsc";
 
-	const {
-		data,
-		isLoading: pagedLoading,
-		isError: pagedError,
-		refetch: refetchPaged,
-		isFetchingNextPage,
-		hasNextPage,
-		fetchNextPage,
-	} = useInfiniteQuery<ApiListResponse<SetItem>>({
-		queryKey: ["setCards", id, isSealedMode, debouncedFilter, sortBy],
-		queryFn: ({ pageParam }) => {
-			const search = isSealedMode ? searchSealed : searchCards;
-			return search(api, {
-				q: buildSetCardsQ(id, debouncedFilter),
-				page: pageParam as number,
-				pageSize: 60,
-				orderBy: SORT_ORDER_BY[sortBy],
-			});
-		},
-		initialPageParam: 1,
-		getNextPageParam: (lastPage) =>
-			lastPage.page * lastPage.page_size < lastPage.total_count
-				? lastPage.page + 1
-				: undefined,
-		enabled: !!id && !isClientSort,
-	});
-
-	// Whole-set fetch for client-side sorts. Sets top out around ~300 cards;
-	// prices are only included when the sort needs them.
-	const {
-		data: allCards,
-		isLoading: allLoading,
-		isError: allError,
-		refetch: refetchAll,
-	} = useQuery({
-		queryKey: ["setCardsAll", id, isSealedMode, debouncedFilter, isValueSort],
-		queryFn: async (): Promise<SetItem[]> => {
+	// Whole-set fetch, paginated *concurrently* so wall-clock load is ~2 round
+	// trips regardless of set size. Prices are optional (see below).
+	const fetchWholeSet = useCallback(
+		async (
+			includePrices: boolean,
+		): Promise<{ items: SetItem[]; totalCount: number }> => {
 			const q = buildSetCardsQ(id, debouncedFilter);
 			const search = isSealedMode ? searchSealed : searchCards;
+			const orderBy = isSealedMode ? undefined : "number";
 			const first = await search(api, {
 				q,
 				pageSize: 100,
-				includePrices: isValueSort,
+				orderBy,
+				includePrices,
 			});
-			const all: SetItem[] = [...first.data];
-			let page = 2;
-			while (all.length < first.total_count && page <= 6) {
-				const next = await search(api, {
-					q,
-					page,
-					pageSize: 100,
-					includePrices: isValueSort,
-				});
-				if (next.data.length === 0) break;
-				all.push(...next.data);
-				page += 1;
+			const items: SetItem[] = [...first.data];
+			const pageSize = first.page_size || 100;
+			const totalPages = Math.min(Math.ceil(first.total_count / pageSize), 6);
+			if (totalPages > 1) {
+				const rest = await Promise.all(
+					Array.from({ length: totalPages - 1 }, (_, i) =>
+						search(api, {
+							q,
+							page: i + 2,
+							pageSize: 100,
+							orderBy,
+							includePrices,
+						}),
+					),
+				);
+				// Promise.all preserves order, so number ordering is kept.
+				for (const r of rest) items.push(...r.data);
 			}
-			return all;
+			return { items, totalCount: first.total_count };
 		},
-		enabled: !!id && isClientSort,
+		[api, id, isSealedMode, debouncedFilter],
+	);
+
+	// Base load: number-ordered, NO prices. The grid only shows art/number/name,
+	// so this stays light and is cached longer (metadata TTL). Drives the initial
+	// paint plus number/name sorts.
+	const {
+		data: setCards,
+		isLoading,
+		isError,
+		refetch,
+	} = useQuery({
+		queryKey: ["setCards", id, isSealedMode, debouncedFilter],
+		queryFn: () => fetchWholeSet(false),
+		enabled: !!id,
 		staleTime: 5 * 60 * 1000,
 	});
 
-	const isLoading = isClientSort ? allLoading : pagedLoading;
-	const isError = isClientSort ? allError : pagedError;
-	const refetch = isClientSort ? refetchAll : refetchPaged;
+	// Prices are only needed to sort by value — fetched lazily the first time the
+	// user picks a value sort, then cached. Avoids paying the price cost on every
+	// set open.
+	const { data: pricedCards, isLoading: pricedLoading } = useQuery({
+		queryKey: ["setCardsPriced", id, isSealedMode, debouncedFilter],
+		queryFn: () => fetchWholeSet(true),
+		enabled: !!id && isValueSort,
+		staleTime: 5 * 60 * 1000,
+	});
+
+	// Hold the skeleton until prices are in for a value sort, so the grid appears
+	// already-sorted instead of flashing number order and reshuffling.
+	const showSkeleton = isLoading || (isValueSort && pricedLoading);
 
 	const sortCondition = isSealedMode ? "U" : "NM";
 
 	const cards = useMemo(() => {
+		const base = setCards?.items ?? [];
 		if (isValueSort) {
-			const sorted = (allCards ?? [])
+			// Until prices arrive, keep the cards on screen in number order rather
+			// than flashing a skeleton; they reorder once priced data loads.
+			const priced = pricedCards?.items;
+			if (!priced) return base;
+			const sorted = priced
 				.slice()
 				.sort(
 					(a, b) =>
@@ -318,31 +261,24 @@ export default function SetDetail() {
 			return sortBy === "valueAsc" ? sorted.reverse() : sorted;
 		}
 		if (sortBy === "nameAsc") {
-			return (allCards ?? [])
-				.slice()
-				.sort((a, b) => {
-					const nameA = "number" in a ? getCardDisplayName(a) : a.name;
-					const nameB = "number" in b ? getCardDisplayName(b) : b.name;
-					return nameA.localeCompare(nameB);
-				});
+			return base.slice().sort((a, b) => {
+				const nameA = "number" in a ? getCardDisplayName(a) : a.name;
+				const nameB = "number" in b ? getCardDisplayName(b) : b.name;
+				return nameA.localeCompare(nameB);
+			});
 		}
-		return data?.pages.flatMap((p) => p.data) ?? [];
-	}, [isValueSort, allCards, sortBy, data, sortCondition]);
-
-	const handleEndReached = useCallback(() => {
-		if (!isClientSort && hasNextPage && !isFetchingNextPage) {
-			fetchNextPage();
-		}
-	}, [isClientSort, hasNextPage, isFetchingNextPage, fetchNextPage]);
+		// Server already returned ascending number order; reverse for descending.
+		return sortBy === "numberDesc" ? base.slice().reverse() : base;
+	}, [setCards, pricedCards, isValueSort, sortBy, sortCondition]);
 
 	// The expansion's `total` is its card count; in sealed mode the product
 	// count comes from the first unfiltered response instead.
 	const [sealedTotal, setSealedTotal] = useState<number | null>(null);
 	useEffect(() => {
 		if (!isSealedMode || debouncedFilter !== "") return;
-		const t = data?.pages[0]?.total_count ?? allCards?.length;
+		const t = setCards?.totalCount;
 		if (t !== undefined) setSealedTotal(t);
-	}, [isSealedMode, debouncedFilter, data, allCards]);
+	}, [isSealedMode, debouncedFilter, setCards]);
 
 	const releaseYear = releaseDate ? releaseDate.slice(0, 4) : "—";
 	const countValue = isSealedMode ? (sealedTotal ?? "—") : (total || "—");
@@ -532,7 +468,7 @@ export default function SetDetail() {
 			<View style={[styles.container, { backgroundColor: colors.background }]}>
 				{isError ? (
 					<ErrorState title="Couldn't load set" onRetry={() => refetch()} />
-				) : isLoading ? (
+				) : showSkeleton ? (
 					<FlatList
 						data={SKELETON_DATA}
 						keyExtractor={(item) => item.id}
@@ -569,19 +505,6 @@ export default function SetDetail() {
 						showsVerticalScrollIndicator={false}
 						keyboardDismissMode="on-drag"
 						keyboardShouldPersistTaps="handled"
-						onEndReached={handleEndReached}
-						onEndReachedThreshold={0.5}
-						ListFooterComponent={
-							isFetchingNextPage ? (
-								<Animated.View
-									entering={FadeIn.duration(200)}
-									exiting={FadeOut.duration(300)}
-									style={styles.footer}
-								>
-									<LoadingSpinner color={colors.mutedForeground} />
-								</Animated.View>
-							) : null
-						}
 					/>
 				)}
 			</View>
@@ -619,20 +542,6 @@ const styles = StyleSheet.create({
 	summaryValue: {
 		fontSize: 22,
 		fontWeight: "700",
-	},
-	footer: {
-		alignItems: "center",
-		paddingVertical: 20,
-	},
-	spinnerRow: {
-		flexDirection: "row",
-		gap: 6,
-		alignItems: "center",
-	},
-	dot: {
-		width: 8,
-		height: 8,
-		borderRadius: 4,
 	},
 	grid: {
 		padding: PADDING,
