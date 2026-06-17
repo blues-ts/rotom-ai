@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	Dimensions,
 	FlatList,
 	Keyboard,
-	Pressable,
 	StyleSheet,
 	Text,
 	View,
+	type ViewToken,
 } from "react-native";
 import Animated, {
 	FadeIn,
@@ -18,7 +18,6 @@ import Animated, {
 	withRepeat,
 	withSequence,
 	withTiming,
-	withSpring,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
@@ -29,13 +28,35 @@ import { useTheme } from "@/context/ThemeContext";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { useApi } from "@/lib/axios";
-import { searchCards, searchSealed, searchSets } from "@/lib/api/pricing";
-import { buildSearchFallbackQ, buildSearchQ, getCardDisplayName, getCardImage, getCardNumber, getExpansionDisplayName } from "@/lib/scrydex";
+import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
+import { usePrefetchSetImages } from "@/hooks/usePrefetchSetImages";
+import { searchCards, searchSealed } from "@/lib/api/pricing";
+import {
+	buildSearchFallbackQ,
+	buildSearchQ,
+	getCardDisplayName,
+	getCardImage,
+	getCardNumber,
+	getExpansionDisplayName,
+} from "@/lib/scrydex";
 import CardImage from "@/components/CardImage";
+import CardPressable from "@/components/CardPressable";
 import ErrorState from "@/components/ErrorState";
 import { Image } from "expo-image";
 import { useQuery } from "@tanstack/react-query";
-import type { ApiListResponse, ScrydexCard, ScrydexExpansion, ScrydexSealedProduct } from "@/types/scrydex";
+import { CATALOG_SETS_KEY } from "@/hooks/usePrefetchExpansions";
+import {
+	getCatalogSets,
+	searchCatalogCards,
+	catalogSetToExpansion,
+	catalogCardToScrydex,
+} from "@/lib/api/catalog";
+import type {
+	ApiListResponse,
+	ScrydexCard,
+	ScrydexExpansion,
+	ScrydexSealedProduct,
+} from "@/types/scrydex";
 
 type SearchMode = "cards" | "sealed";
 type SetsLanguage = "EN" | "JA";
@@ -47,10 +68,6 @@ const MODE_LABELS: Record<SearchMode, string> = {
 
 // JA expansions don't index is_online_only:false (same quirk as JA cards),
 // so both use the negation form to drop TCG Pocket sets.
-const SETS_LANGUAGE_Q: Record<SetsLanguage, string> = {
-	EN: "language:English -is_online_only:true",
-	JA: "language:Japanese -is_online_only:true",
-};
 
 interface CardResult {
 	id: string;
@@ -60,7 +77,9 @@ interface CardResult {
 	kind: "card" | "sealed";
 }
 
-const SKELETON_DATA = Array.from({ length: 15 }, (_, i) => ({ id: `skeleton-${i}` }));
+const SKELETON_DATA = Array.from({ length: 15 }, (_, i) => ({
+	id: `skeleton-${i}`,
+}));
 
 const COLUMNS = 3;
 const GAP = 8;
@@ -69,30 +88,6 @@ const screenWidth = Dimensions.get("window").width;
 const imageWidth = (screenWidth - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 const imageHeight = imageWidth * 1.4;
 const setTileWidth = (screenWidth - PADDING * 2 - GAP) / 2;
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-function CardPressable({ children, onPress }: { children: React.ReactNode; onPress: () => void }) {
-	const scale = useSharedValue(1);
-	const animatedStyle = useAnimatedStyle(() => ({
-		transform: [{ scale: scale.value }],
-	}));
-
-	return (
-		<AnimatedPressable
-			style={animatedStyle}
-			onPressIn={() => {
-				scale.value = withTiming(0.96, { duration: 80 });
-			}}
-			onPressOut={() => {
-				scale.value = withTiming(1, { duration: 120 });
-			}}
-			onPress={onPress}
-		>
-			{children}
-		</AnimatedPressable>
-	);
-}
 
 function SkeletonCard({ color }: { color: string }) {
 	const opacity = useSharedValue(0.3);
@@ -113,11 +108,7 @@ function SkeletonCard({ color }: { color: string }) {
 
 	return (
 		<Animated.View
-			style={[
-				styles.cardImage,
-				{ backgroundColor: color },
-				animatedStyle,
-			]}
+			style={[styles.cardImage, { backgroundColor: color }, animatedStyle]}
 		/>
 	);
 }
@@ -178,9 +169,15 @@ function LoadingSpinner({ color }: { color: string }) {
 		);
 	}, []);
 
-	const style1 = useAnimatedStyle(() => ({ transform: [{ translateY: dot1.value }] }));
-	const style2 = useAnimatedStyle(() => ({ transform: [{ translateY: dot2.value }] }));
-	const style3 = useAnimatedStyle(() => ({ transform: [{ translateY: dot3.value }] }));
+	const style1 = useAnimatedStyle(() => ({
+		transform: [{ translateY: dot1.value }],
+	}));
+	const style2 = useAnimatedStyle(() => ({
+		transform: [{ translateY: dot2.value }],
+	}));
+	const style3 = useAnimatedStyle(() => ({
+		transform: [{ translateY: dot3.value }],
+	}));
 
 	return (
 		<View style={styles.spinnerRow}>
@@ -191,96 +188,134 @@ function LoadingSpinner({ color }: { color: string }) {
 	);
 }
 
-function SetsBrowser({ mode, language }: { mode: SearchMode; language: SetsLanguage }) {
+function SetsBrowser({
+	mode,
+	language,
+}: {
+	mode: SearchMode;
+	language: SetsLanguage;
+}) {
 	const { colors } = useTheme();
 	const insets = useSafeAreaInsets();
 	const api = useApi();
+	const prefetchSetImages = usePrefetchSetImages();
 
-	const { data: sets, isLoading, isError, refetch } = useQuery({
-		queryKey: ["expansions", language],
-		queryFn: async () => {
-			// Physical sets only (~180 EN / ~220 JA); fetch every page up
-			// front so browsing and the local name filter are instant.
-			const q = SETS_LANGUAGE_Q[language];
-			const first = await searchSets(api, { q, pageSize: 100, orderBy: "-release_date" });
-			const all = [...first.data];
-			let page = 2;
-			while (all.length < first.total_count && page <= 5) {
-				const next = await searchSets(api, {
-					q,
-					page,
-					pageSize: 100,
-					orderBy: "-release_date",
-				});
-				if (next.data.length === 0) break;
-				all.push(...next.data);
-				page += 1;
-			}
-			return all;
-		},
-		staleTime: Infinity,
+	// Sets come entirely from the local backend catalog (no Scrydex). Shares the
+	// query key warmed at launch (usePrefetchExpansions), so the grid is instant.
+	const {
+		data: allSets,
+		isLoading,
+		isError,
+		refetch,
+	} = useQuery({
+		queryKey: CATALOG_SETS_KEY,
+		queryFn: () => getCatalogSets(api),
+		staleTime: 24 * 60 * 60 * 1000,
 	});
 
-	const filtered = sets ?? [];
+	const filtered = useMemo(() => {
+		const code = language === "EN" ? "en" : "ja";
+		return (allSets ?? [])
+			.filter(
+				(s) => (s.languageCode ?? "").toLowerCase() === code && !s.isOnlineOnly,
+			)
+			.map(catalogSetToExpansion);
+	}, [allSets, language]);
+
+	// As set tiles scroll into view, warm that set's card images so opening it is
+	// instant. Guarded so each set is prefetched at most once per mount. Refs keep
+	// the handler/config stable, which FlatList requires.
+	const prefetchedRef = useRef<Set<string>>(new Set());
+	const onViewableItemsChanged = useRef(
+		({ viewableItems }: { viewableItems: ViewToken[] }) => {
+			for (const v of viewableItems) {
+				const setId = (v.item as ScrydexExpansion | undefined)?.id;
+				if (setId && !prefetchedRef.current.has(setId)) {
+					prefetchedRef.current.add(setId);
+					prefetchSetImages(setId);
+				}
+			}
+		},
+	).current;
+	const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+
+	// Tracks tiles that have already played their entrance animation. FlatList
+	// recycles cells while scrolling and `entering` re-fires on every mount, so
+	// without this guard the fade-in replays on every scroll-back and janks the
+	// grid. Each tile animates once, on first appearance. Cleared on language
+	// change so the freshly-swapped list animates in again.
+	const animatedIdsRef = useRef<Set<string>>(new Set());
+	useEffect(() => {
+		animatedIdsRef.current = new Set();
+	}, [language]);
 
 	const renderSet = useCallback(
-		({ item, index }: { item: ScrydexExpansion; index: number }) => (
-			<Animated.View
-				entering={FadeInDown.delay(Math.min(index * 35, 400))
-					.duration(380)
-					.springify()
-					.damping(60)}
-			>
-				<CardPressable
-					onPress={() => {
-						Keyboard.dismiss();
-						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-						router.push({
-							pathname: "/set-detail",
-							params: {
-								id: item.id,
-								name: getExpansionDisplayName(item),
-								mode,
-								releaseDate: item.release_date ?? "",
-								total: item.total !== undefined ? String(item.total) : "",
-								logo: item.logo ?? "",
-							},
-						});
-					}}
+		({ item, index }: { item: ScrydexExpansion; index: number }) => {
+			const firstAppearance = !animatedIdsRef.current.has(item.id);
+			if (firstAppearance) animatedIdsRef.current.add(item.id);
+			return (
+				<Animated.View
+					entering={
+						firstAppearance
+							? FadeInDown.delay(Math.min(index * 22, 200)).duration(240)
+							: undefined
+					}
 				>
-					<View
-						style={[
-							styles.setTile,
-							{ backgroundColor: colors.card, borderColor: colors.border },
-						]}
+					<CardPressable
+						onPress={() => {
+							Keyboard.dismiss();
+							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+							// Data/images are already warmed when the tile scrolled into view
+							// (onViewableItemsChanged). Re-prefetching here would fire
+							// Image.prefetch for the whole set right as the screen transitions
+							// in, making the navigation choppy — so just navigate.
+							router.push({
+								pathname: "/set-detail",
+								params: {
+									id: item.id,
+									name: getExpansionDisplayName(item),
+									mode,
+									releaseDate: item.release_date ?? "",
+									total: item.total !== undefined ? String(item.total) : "",
+									logo: item.logo ?? "",
+								},
+							});
+						}}
 					>
-						<View style={styles.setLogoBox}>
-							{item.logo ? (
-								<Image
-									source={{ uri: item.logo }}
-									style={styles.setLogo}
-									contentFit="contain"
-									transition={150}
-									cachePolicy="memory-disk"
-								/>
-							) : (
-								<Ionicons
-									name="albums-outline"
-									size={28}
-									color={colors.mutedForeground}
-								/>
-							)}
-						</View>
-						<Text
-							style={[styles.setName, { color: colors.foreground }]}
-							numberOfLines={1}
+						<View
+							style={[
+								styles.setTile,
+								{ backgroundColor: colors.card, borderColor: colors.border },
+							]}
 						>
-							{getExpansionDisplayName(item)}
-						</Text>
-					</View>
-				</CardPressable>
-			</Animated.View>
-		),
+							<View style={styles.setLogoBox}>
+								{item.logo ? (
+									<Image
+										source={{ uri: item.logo }}
+										style={styles.setLogo}
+										contentFit="contain"
+										transition={150}
+										cachePolicy="memory-disk"
+									/>
+								) : (
+									<Ionicons
+										name="albums-outline"
+										size={28}
+										color={colors.mutedForeground}
+									/>
+								)}
+							</View>
+							<Text
+								style={[styles.setName, { color: colors.foreground }]}
+								numberOfLines={1}
+							>
+								{getExpansionDisplayName(item)}
+							</Text>
+						</View>
+					</CardPressable>
+				</Animated.View>
+			);
+		},
 		[colors, mode],
 	);
 
@@ -304,7 +339,12 @@ function SetsBrowser({ mode, language }: { mode: SearchMode; language: SetsLangu
 
 	if (filtered.length === 0) {
 		return (
-			<Text style={[styles.empty, { color: colors.mutedForeground, marginTop: insets.top + 20 }]}>
+			<Text
+				style={[
+					styles.empty,
+					{ color: colors.mutedForeground, marginTop: insets.top + 20 },
+				]}
+			>
 				No sets found
 			</Text>
 		);
@@ -317,11 +357,17 @@ function SetsBrowser({ mode, language }: { mode: SearchMode; language: SetsLangu
 			keyExtractor={(item) => item.id}
 			numColumns={2}
 			renderItem={renderSet}
+			onViewableItemsChanged={onViewableItemsChanged}
+			viewabilityConfig={viewabilityConfig}
 			contentContainerStyle={[styles.grid, { paddingTop: insets.top + 56 }]}
 			columnWrapperStyle={styles.row}
 			showsVerticalScrollIndicator={false}
 			keyboardDismissMode="on-drag"
 			keyboardShouldPersistTaps="handled"
+			removeClippedSubviews
+			initialNumToRender={10}
+			maxToRenderPerBatch={8}
+			windowSize={7}
 		/>
 	);
 }
@@ -331,6 +377,7 @@ export default function Search() {
 	const { isPro } = useRevenueCat();
 	const insets = useSafeAreaInsets();
 	const api = useApi();
+	const prefetchDetail = usePrefetchDetail();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [debouncedQuery, setDebouncedQuery] = useState("");
 	const [mode, setMode] = useState<SearchMode>("cards");
@@ -354,9 +401,24 @@ export default function Search() {
 		hasNextPage,
 		fetchNextPage,
 	} = useInfiniteQuery<ApiListResponse<ScrydexCard | ScrydexSealedProduct>>({
-		queryKey: ["searchCards", mode, debouncedQuery],
+		queryKey: ["searchCards", mode, debouncedQuery, isPro],
 		queryFn: async ({ pageParam }) => {
 			const page = pageParam as number;
+			// Non-Pro: search the local catalog (no pricing API). Cards only —
+			// sealed search is a Pro feature (the catalog has no sealed products).
+			if (!isPro) {
+				const res = await searchCatalogCards(api, {
+					q: debouncedQuery,
+					page,
+					pageSize: 30,
+				});
+				return {
+					data: res.data.map(catalogCardToScrydex),
+					page: res.page,
+					page_size: res.pageSize,
+					total_count: res.total,
+				} as ApiListResponse<ScrydexCard | ScrydexSealedProduct>;
+			}
 			const search = mode === "sealed" ? searchSealed : searchCards;
 			const primary = await search(api, {
 				q: buildSearchQ(debouncedQuery),
@@ -375,7 +437,9 @@ export default function Search() {
 			lastPage.page * lastPage.page_size < lastPage.total_count
 				? lastPage.page + 1
 				: undefined,
-		enabled: buildSearchQ(debouncedQuery).length > 0,
+		enabled: isPro
+			? buildSearchQ(debouncedQuery).length > 0
+			: debouncedQuery.trim().length > 0,
 	});
 
 	const cards = useMemo<CardResult[]>(
@@ -429,29 +493,52 @@ export default function Search() {
 	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
 	const renderItem = useCallback(
-		({ item, index }: { item: CardResult; index: number }) => {
+		({ item }: { item: CardResult; index: number }) => {
 			const showPlaceholder = !item.image || failedImages.has(item.id);
 			return (
-				<Animated.View
-					entering={FadeIn.delay(Math.min(index * 30, 300)).duration(200)}
-					exiting={FadeOut.duration(100)}
-				>
+				<View>
 					<CardPressable
 						onPress={() => {
 							Keyboard.dismiss();
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+							prefetchDetail(item.kind, item.id);
 							const base = item.kind === "sealed" ? "/(sealed)" : "/(card)";
-							router.push(`${base}/${item.id}?name=${encodeURIComponent(item.name)}`);
+							// Pass the cached thumbnail so the detail shows the image
+							// instantly instead of behind the data-query skeleton.
+							const imageParam = item.image
+								? `&image=${encodeURIComponent(item.image)}`
+								: "";
+							router.push(
+								`${base}/${item.id}?name=${encodeURIComponent(item.name)}${imageParam}`,
+							);
 						}}
 					>
 						{showPlaceholder ? (
-							<View style={[styles.cardImage, styles.placeholder, { backgroundColor: colors.card }]}>
-								<Ionicons name="image-outline" size={24} color={colors.mutedForeground} />
-								<Text style={[styles.placeholderName, { color: colors.foreground }]} numberOfLines={2}>
+							<View
+								style={[
+									styles.cardImage,
+									styles.placeholder,
+									{ backgroundColor: colors.card },
+								]}
+							>
+								<Ionicons
+									name="image-outline"
+									size={24}
+									color={colors.mutedForeground}
+								/>
+								<Text
+									style={[styles.placeholderName, { color: colors.foreground }]}
+									numberOfLines={2}
+								>
 									{item.name}
 								</Text>
 								{item.cardNumber && (
-									<Text style={[styles.placeholderNumber, { color: colors.mutedForeground }]}>
+									<Text
+										style={[
+											styles.placeholderNumber,
+											{ color: colors.mutedForeground },
+										]}
+									>
 										#{item.cardNumber}
 									</Text>
 								)}
@@ -459,7 +546,13 @@ export default function Search() {
 						) : item.kind === "sealed" ? (
 							// Sealed art comes in arbitrary aspect ratios — inset it on the
 							// tile background so the tile keeps the same card silhouette.
-							<View style={[styles.cardImage, styles.sealedTile, { backgroundColor: colors.card }]}>
+							<View
+								style={[
+									styles.cardImage,
+									styles.sealedTile,
+									{ backgroundColor: colors.card },
+								]}
+							>
 								<CardImage
 									uri={item.image}
 									style={styles.sealedImage}
@@ -482,17 +575,29 @@ export default function Search() {
 							/>
 						)}
 					</CardPressable>
-				</Animated.View>
+				</View>
 			);
 		},
-		[colors.card, colors.foreground, colors.mutedForeground, failedImages],
+		[
+			colors.card,
+			colors.foreground,
+			colors.mutedForeground,
+			failedImages,
+			prefetchDetail,
+		],
 	);
 
 	const isSearching = debouncedQuery.trim().length > 0;
-	const showHint = !searchQuery.trim() && !isSearching && displayCards.length === 0;
+	const showHint =
+		!searchQuery.trim() && !isSearching && displayCards.length === 0;
 	const showSkeleton = isSearching && isLoading && displayCards.length === 0;
 	const showError = isSearching && isError && displayCards.length === 0;
-	const showNoResults = isSearching && !isLoading && !isError && cards.length === 0 && displayCards.length === 0;
+	const showNoResults =
+		isSearching &&
+		!isLoading &&
+		!isError &&
+		cards.length === 0 &&
+		displayCards.length === 0;
 
 	return (
 		<>
@@ -532,6 +637,11 @@ export default function Search() {
 						isOn={mode === "sealed"}
 						onPress={() => {
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+							// Sealed pricing is a Pro feature (no free catalog data for it).
+							if (!isPro) {
+								void presentProPaywallIfNeeded();
+								return;
+							}
 							setMode("sealed");
 						}}
 					>
@@ -558,9 +668,7 @@ export default function Search() {
 				</Stack.Toolbar.Menu>
 			</Stack.Toolbar>
 
-			<View
-				style={[styles.container, { backgroundColor: colors.background }]}
-			>
+			<View style={[styles.container, { backgroundColor: colors.background }]}>
 				{/* Sets browser is the default content until the user types */}
 				{showHint && (
 					<Animated.View entering={FadeIn.duration(200)} style={{ flex: 1 }}>
@@ -573,52 +681,68 @@ export default function Search() {
 						keyExtractor={(item) => item.id}
 						numColumns={COLUMNS}
 						renderItem={() => <SkeletonCard color={colors.border} />}
-						contentContainerStyle={[styles.grid, { paddingTop: insets.top + PADDING }]}
+						contentContainerStyle={[
+							styles.grid,
+							{ paddingTop: insets.top + PADDING },
+						]}
 						columnWrapperStyle={styles.row}
 						scrollEnabled={false}
 					/>
 				)}
 				{showError && (
 					<Animated.View entering={FadeIn.duration(200)} style={{ flex: 1 }}>
-						<ErrorState
-							title="Search failed"
-							onRetry={() => refetch()}
-						/>
+						<ErrorState title="Search failed" onRetry={() => refetch()} />
 					</Animated.View>
 				)}
 				{showNoResults && (
-					<Text style={[styles.empty, { color: colors.mutedForeground, marginTop: insets.top + 20 }]}>
+					<Text
+						style={[
+							styles.empty,
+							{ color: colors.mutedForeground, marginTop: insets.top + 20 },
+						]}
+					>
 						{mode === "sealed" ? "No products found" : "No cards found"}
 					</Text>
 				)}
 				{displayCards.length > 0 && (
-					<Animated.View
-						style={[{ flex: 1 }, clearAnimatedStyle]}
-					>
-					<FlatList
-						data={displayCards}
-						keyExtractor={(item) => item.id}
-						numColumns={COLUMNS}
-						renderItem={renderItem}
-						contentContainerStyle={[styles.grid, { paddingTop: insets.top + PADDING }]}
-						columnWrapperStyle={styles.row}
-						showsVerticalScrollIndicator={false}
-						keyboardDismissMode="on-drag"
-						keyboardShouldPersistTaps="handled"
-						onEndReached={handleEndReached}
-						onEndReachedThreshold={0.5}
-						ListFooterComponent={
-							isFetchingNextPage ? (
-								<Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(300)} style={styles.footer}>
-									<LoadingSpinner color={colors.mutedForeground} />
-								</Animated.View>
-							) : !hasNextPage && cards.length > 0 ? (
-								<Text style={[styles.endText, { color: colors.mutedForeground }]}>
-									No more results
-								</Text>
-							) : null
-						}
-					/>
+					<Animated.View style={[{ flex: 1 }, clearAnimatedStyle]}>
+						<FlatList
+							data={displayCards}
+							keyExtractor={(item) => item.id}
+							numColumns={COLUMNS}
+							renderItem={renderItem}
+							contentContainerStyle={[
+								styles.grid,
+								{ paddingTop: insets.top + PADDING },
+							]}
+							columnWrapperStyle={styles.row}
+							showsVerticalScrollIndicator={false}
+							keyboardDismissMode="on-drag"
+							keyboardShouldPersistTaps="handled"
+							removeClippedSubviews
+							initialNumToRender={15}
+							maxToRenderPerBatch={9}
+							windowSize={7}
+							onEndReached={handleEndReached}
+							onEndReachedThreshold={0.5}
+							ListFooterComponent={
+								isFetchingNextPage ? (
+									<Animated.View
+										entering={FadeIn.duration(200)}
+										exiting={FadeOut.duration(300)}
+										style={styles.footer}
+									>
+										<LoadingSpinner color={colors.mutedForeground} />
+									</Animated.View>
+								) : !hasNextPage && cards.length > 0 ? (
+									<Text
+										style={[styles.endText, { color: colors.mutedForeground }]}
+									>
+										No more results
+									</Text>
+								) : null
+							}
+						/>
 					</Animated.View>
 				)}
 			</View>

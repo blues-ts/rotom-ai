@@ -1,4 +1,5 @@
 import AuthSync from "@/components/AuthSync";
+import { usePrefetchExpansions } from "@/hooks/usePrefetchExpansions";
 import { queryClient } from "@/config/queryClient";
 import { RevenueCatProvider, useRevenueCat } from "@/context/RevenueCatContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
@@ -90,6 +91,9 @@ const errorStyles = StyleSheet.create({
 function AppContent() {
 	const { theme, colors } = useTheme();
 	const { isPro } = useRevenueCat();
+
+	// Warm the expansions list + set logos in the background at launch.
+	usePrefetchExpansions();
 
 	const navigationTheme = theme === "dark" ? DarkTheme : DefaultTheme;
 

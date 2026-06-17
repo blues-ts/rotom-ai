@@ -12,6 +12,8 @@ import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
 import { useApi } from "@/lib/axios";
 import { getCard } from "@/lib/api/pricing";
+import { getCatalogCard, catalogCardToScrydex } from "@/lib/api/catalog";
+import { useRevenueCat } from "@/context/RevenueCatContext";
 import {
 	CONDITION_LABELS,
 	formatVariantLabel,
@@ -104,6 +106,7 @@ function SlidingPanels({
 
 export default function ConfigureCard() {
 	const { colors } = useTheme();
+	const { isPro } = useRevenueCat();
 	const api = useApi();
 	const {
 		cardId,
@@ -119,10 +122,12 @@ export default function ConfigureCard() {
 		setGradedGrade,
 	} = useCardConfig();
 
-	// Cached by the detail screen's identical query — no extra fetch.
+	// Cached by the detail screen's identical query — no extra fetch. Matches the
+	// detail screen's Pro-aware source so non-Pro never hits the pricing API.
 	const { data: card } = useQuery({
 		queryKey: ["card", cardId],
-		queryFn: () => getCard(api, cardId!),
+		queryFn: () =>
+			isPro ? getCard(api, cardId!) : getCatalogCard(api, cardId!).then(catalogCardToScrydex),
 		enabled: !!cardId,
 	});
 

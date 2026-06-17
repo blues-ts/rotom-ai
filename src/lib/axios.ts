@@ -10,6 +10,9 @@ export const isNetworkError = (error: unknown): boolean =>
 
 const api = axios.create({
   baseURL: API_URL,
+  // Fail fast on a stalled request instead of hanging a spinner forever on a
+  // flaky mobile network; surfaces as a network error the UI can retry.
+  timeout: 15000,
   headers: {
     "Content-Type": "application/json",
   },

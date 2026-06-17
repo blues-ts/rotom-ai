@@ -4,11 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { getDatabase } from "@/lib/database";
 import { useApi } from "@/lib/axios";
-import { getCard, getSealedProduct } from "@/lib/api/pricing";
+import { getPricedBatch } from "@/lib/api/pricing";
 import { getCardImage, getCardNumber, getExpansionDisplayName, selectPrice, type PriceSelector } from "@/lib/scrydex";
 import type { ScrydexCard, ScrydexSealedProduct } from "@/types/scrydex";
 import { recordCollectionValueSnapshot } from "@/lib/collectionValueHistory";
 import { useToast } from "@/context/ToastContext";
+import { useRevenueCat } from "@/context/RevenueCatContext";
 import type { Collection, CollectionCard } from "@/types/collection";
 
 const STALE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -396,9 +397,13 @@ export function useRefreshCollectionPrices() {
   const db = getDatabase();
   const api = useApi();
   const toast = useToast();
+  const { isPro } = useRevenueCat();
 
   return useMutation({
     mutationFn: async (collectionId?: string) => {
+      // Pricing is a Pro feature — non-Pro never hits the pricing API. Skip
+      // silently (this also runs on an auto-refresh, so no surprise paywall).
+      if (!isPro) return { updated: 0 };
       const rows = collectionId
         ? db.getAllSync<CollectionCardRow>(
             "SELECT * FROM collection_cards WHERE collection_id = ?",
@@ -410,25 +415,23 @@ export function useRefreshCollectionPrices() {
 
       const productTypeById = new Map(rows.map((r) => [r.card_id, r.product_type]));
       const uniqueCardIds = Array.from(new Set(rows.map((r) => r.card_id)));
-      const results = await Promise.all(
-        uniqueCardIds.map(async (cardId) => {
-          try {
-            const card =
-              productTypeById.get(cardId) === "sealed"
-                ? await getSealedProduct(api, cardId)
-                : await getCard(api, cardId);
-            return [cardId, card ?? null] as const;
-          } catch {
-            return [cardId, null] as const;
-          }
-        }),
-      );
-      const cardMap = new Map<string, ScrydexCard | ScrydexSealedProduct | null>(results);
+      const cardIds: string[] = [];
+      const sealedIds: string[] = [];
+      for (const cardId of uniqueCardIds) {
+        if (productTypeById.get(cardId) === "sealed") sealedIds.push(cardId);
+        else cardIds.push(cardId);
+      }
 
-      // Per-card failures are tolerated, but if every fetch failed we're
-      // offline (or the API is down) — surface it instead of silently
-      // reporting a no-op refresh.
-      if (results.every(([, card]) => !card)) {
+      // One request for the whole set of unique items — the server fans out to
+      // Scrydex with bounded concurrency instead of us firing N parallel calls.
+      const batch = await getPricedBatch(api, { cardIds, sealedIds });
+      const cardMap = new Map<string, ScrydexCard | ScrydexSealedProduct>();
+      for (const c of batch.cards) cardMap.set(c.id, c);
+      for (const s of batch.sealed) cardMap.set(s.id, s);
+
+      // If we asked for items but got nothing back we're offline (or the API is
+      // down) — surface it instead of silently reporting a no-op refresh.
+      if (uniqueCardIds.length > 0 && cardMap.size === 0) {
         throw new Error("Price refresh failed for all cards");
       }
 

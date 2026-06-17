@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	createContext,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import {
 	Alert,
 	Dimensions,
@@ -13,7 +21,10 @@ import {
 } from "react-native";
 import Animated, {
 	Easing,
+	FadeInDown,
+	FadeOut,
 	interpolate,
+	type SharedValue,
 	useAnimatedProps,
 	useAnimatedStyle,
 	useSharedValue,
@@ -22,6 +33,8 @@ import Animated, {
 	withSpring,
 	withTiming,
 } from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -29,6 +42,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { LineChart } from "react-native-wagmi-charts";
 import { useApi } from "@/lib/axios";
 import { getCard, getCardHistory, getCardListings } from "@/lib/api/pricing";
+import { getCatalogCard, catalogCardToScrydex } from "@/lib/api/catalog";
 import {
 	CONDITION_LABELS,
 	PERIOD_TO_DAYS,
@@ -63,6 +77,12 @@ const IMAGE_HEIGHT = IMAGE_WIDTH * 1.4;
 // Chart width: screen - section horizontal margin (20*2) - section padding (16*2)
 const CHART_WIDTH = SCREEN_WIDTH - 72;
 
+// Staggered "rise in" for the detail sections — same feel as the set-tile
+// entrance. These sections mount once (not recycled in a list), so a plain
+// staggered FadeInDown on mount is optimal: no replay, no guard needed.
+const sectionEntering = (index: number) =>
+	FadeInDown.delay(Math.min(index * 55, 280)).duration(320);
+
 // --- Helpers ---
 
 function formatPrice(price: number | undefined, currency = "USD"): string {
@@ -92,6 +112,12 @@ function buildGradedTierKey(company: string, grade: string): string {
 
 // --- Shared UI Components ---
 
+// One sweep clock shared by every Skeleton in the loading view, so a single band
+// of light travels across the whole frosted-glass column in unison instead of
+// each block blinking on its own timer. Provided by LoadingSkeleton; blocks used
+// outside it (e.g. the chart's own loader) fall back to a private clock.
+const ShimmerContext = createContext<SharedValue<number> | null>(null);
+
 function Skeleton({
 	width,
 	height,
@@ -103,27 +129,62 @@ function Skeleton({
 	color: string;
 	style?: any;
 }) {
-	const shimmerOpacity = useSharedValue(0.3);
+	const shared = useContext(ShimmerContext);
+	const fallback = useSharedValue(0);
 	useEffect(() => {
-		shimmerOpacity.value = withRepeat(
-			withSequence(
-				withTiming(0.7, { duration: 800 }),
-				withTiming(0.3, { duration: 800 }),
-			),
+		if (shared) return;
+		fallback.value = withRepeat(
+			withTiming(1, { duration: 1300, easing: Easing.linear }),
 			-1,
+			false,
 		);
-	}, []);
-	const animatedStyle = useAnimatedStyle(() => ({
-		opacity: shimmerOpacity.value,
+	}, [shared]);
+	const sweep = shared ?? fallback;
+
+	// Measured pixel width drives the sweep distance (handles %-based widths too).
+	const measured = useSharedValue(typeof width === "number" ? width : 0);
+	const sheenStyle = useAnimatedStyle(() => ({
+		transform: [
+			{
+				translateX: interpolate(
+					sweep.value,
+					[0, 1],
+					[-measured.value, measured.value],
+				),
+			},
+		],
 	}));
+
 	return (
-		<Animated.View
+		<View
+			onLayout={(e) => {
+				measured.value = e.nativeEvent.layout.width;
+			}}
 			style={[
-				{ width, height, backgroundColor: color, borderRadius: 8 },
-				animatedStyle,
+				{
+					width,
+					height,
+					backgroundColor: color,
+					borderRadius: 8,
+					overflow: "hidden",
+				},
 				style,
 			]}
-		/>
+		>
+			<Animated.View
+				pointerEvents="none"
+				style={[StyleSheet.absoluteFill, sheenStyle]}
+			>
+				<LinearGradient
+					// A soft diagonal sheen — light catching glass — over the muted base.
+					colors={["transparent", "rgba(255,255,255,0.28)", "transparent"]}
+					locations={[0.15, 0.5, 0.85]}
+					start={{ x: 0, y: 0 }}
+					end={{ x: 1, y: 0.65 }}
+					style={StyleSheet.absoluteFill}
+				/>
+			</Animated.View>
+		</View>
 	);
 }
 
@@ -211,12 +272,7 @@ function PeriodToggle({
 	colors: any;
 }) {
 	return (
-		<View
-			style={[
-				styles.periodRow,
-				{ backgroundColor: colors.muted },
-			]}
-		>
+		<View style={[styles.periodRow, { backgroundColor: colors.muted }]}>
 			{PERIODS.map((p) => {
 				const active = p === selected;
 				return (
@@ -236,9 +292,7 @@ function PeriodToggle({
 							style={[
 								styles.periodText,
 								{
-									color: active
-										? colors.primaryForeground
-										: colors.foreground,
+									color: active ? colors.primaryForeground : colors.foreground,
 									opacity: active ? 1 : 0.75,
 								},
 							]}
@@ -259,12 +313,14 @@ function AnimatedCollapsible({
 	expanded,
 	onToggle,
 	colors,
+	outerStyle,
 	children,
 }: {
 	title: string;
 	expanded: boolean;
 	onToggle: () => void;
 	colors: any;
+	outerStyle?: any;
 	children: React.ReactNode;
 }) {
 	const progress = useSharedValue(0);
@@ -312,12 +368,16 @@ function AnimatedCollapsible({
 					backgroundColor: colors.card + "D9",
 					borderColor: colors.border,
 				},
+				outerStyle,
 			]}
 		>
-			<Pressable style={styles.collapsibleHeader} onPress={() => {
-				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-				onToggle();
-			}}>
+			<Pressable
+				style={styles.collapsibleHeader}
+				onPress={() => {
+					Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+					onToggle();
+				}}
+			>
 				<Text
 					style={[
 						styles.sectionTitle,
@@ -349,81 +409,173 @@ function AnimatedCollapsible({
 
 // --- Loading Skeleton ---
 
-function LoadingSkeleton({ colors, isFromCollection }: { colors: any; isFromCollection?: boolean }) {
+function LoadingSkeleton({
+	colors,
+	isFromCollection,
+}: {
+	colors: any;
+	isFromCollection?: boolean;
+}) {
 	const skeletonColor = colors.muted;
+
+	// Single sweep clock for all blocks below: glide across (~1.1s), rest briefly
+	// off-screen, repeat — so the light reads as one continuous pass over the
+	// whole column rather than per-block flicker.
+	const sweep = useSharedValue(0);
+	useEffect(() => {
+		sweep.value = withRepeat(
+			withSequence(
+				withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.ease) }),
+				withTiming(1, { duration: 450 }),
+			),
+			-1,
+		);
+	}, []);
+
+	// The hero image is rendered persistently by the parent (above the crossfade),
+	// so the skeleton only covers the data-dependent sections below it.
 	return (
-		<>
-			{/* Card Image */}
-			<View style={styles.imageContainer}>
-				<Skeleton
-					width={IMAGE_WIDTH}
-					height={IMAGE_HEIGHT}
-					color={skeletonColor}
-					style={{ borderRadius: 19 }}
-				/>
-			</View>
-
-			{/* Quantity Badge */}
-			{isFromCollection && (
-				<View style={{ alignSelf: "center", marginBottom: 12 }}>
-					<Skeleton width={120} height={36} color={skeletonColor} style={{ borderRadius: 20 }} />
-				</View>
-			)}
-
-			{/* Estimate Block */}
+		<ShimmerContext.Provider value={sweep}>
 			<View
 				style={[
-					styles.estimateBlock,
-					{ borderColor: colors.border },
+					styles.sheet,
+					{ backgroundColor: colors.card, borderColor: colors.border },
 				]}
 			>
-				<Skeleton width={100} height={11} color={skeletonColor} />
-				<Skeleton width={180} height={44} color={skeletonColor} style={{ marginTop: 6 }} />
-				<View style={{ flexDirection: "row", gap: 6, marginTop: 12 }}>
-					<Skeleton width={70} height={26} color={skeletonColor} style={{ borderRadius: 20 }} />
-					<Skeleton width={90} height={26} color={skeletonColor} style={{ borderRadius: 20 }} />
-				</View>
-			</View>
-
-			{/* Meta Strip */}
-			<View style={[styles.metaStrip, { borderColor: colors.border }]}>
-				<View style={{ flex: 1, gap: 4 }}>
-					<Skeleton width="65%" height={17} color={skeletonColor} />
-					<Skeleton width="45%" height={13} color={skeletonColor} />
-					<View style={{ flexDirection: "row", gap: 6, marginTop: 4 }}>
-						<Skeleton width={60} height={22} color={skeletonColor} style={{ borderRadius: 6 }} />
-						<Skeleton width={80} height={22} color={skeletonColor} style={{ borderRadius: 6 }} />
+				<View
+					style={[
+						styles.grabber,
+						{ backgroundColor: colors.mutedForeground + "66" },
+					]}
+				/>
+				{/* Estimate Block — same container + line heights as the real frosted
+			    card: 12pt label (~16), 44pt price (~54), ~28 chips. */}
+				{/* Value header placeholder */}
+				<View style={styles.valueGate}>
+					<Skeleton
+						width={110}
+						height={16}
+						color={skeletonColor}
+						style={{ marginBottom: 8 }}
+					/>
+					<Skeleton
+						width={200}
+						height={54}
+						color={skeletonColor}
+						style={{ borderRadius: 10 }}
+					/>
+					<View style={{ flexDirection: "row", gap: 6, marginTop: 12 }}>
+						<Skeleton
+							width={78}
+							height={28}
+							color={skeletonColor}
+							style={{ borderRadius: 20 }}
+						/>
+						<Skeleton
+							width={96}
+							height={28}
+							color={skeletonColor}
+							style={{ borderRadius: 20 }}
+						/>
 					</View>
 				</View>
-			</View>
 
-			{/* Pricing Options Section */}
-			<View
-				style={[
-					styles.section,
-					{ backgroundColor: colors.card + "D9", borderColor: colors.border },
-				]}
-			>
-				<Skeleton width={130} height={16} color={skeletonColor} style={{ marginBottom: 12 }} />
-				<Skeleton width="100%" height={36} color={skeletonColor} style={{ borderRadius: 8 }} />
-				<Skeleton width={60} height={11} color={skeletonColor} style={{ marginTop: 14 }} />
-				<View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-					<Skeleton width={80} height={32} color={skeletonColor} style={{ borderRadius: 8 }} />
-					<Skeleton width={80} height={32} color={skeletonColor} style={{ borderRadius: 8 }} />
+				<View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+				{/* Identity placeholder */}
+				<View style={styles.metaStrip}>
+					<View style={{ flex: 1, gap: 4 }}>
+						<Skeleton width="60%" height={17} color={skeletonColor} />
+						<Skeleton width="40%" height={13} color={skeletonColor} />
+					</View>
+					<View style={{ flexDirection: "row", gap: 6 }}>
+						<Skeleton
+							width={56}
+							height={22}
+							color={skeletonColor}
+							style={{ borderRadius: 6 }}
+						/>
+						<Skeleton
+							width={72}
+							height={22}
+							color={skeletonColor}
+							style={{ borderRadius: 6 }}
+						/>
+					</View>
+				</View>
+
+				<View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+				{/* Pricing Options placeholder */}
+				<View style={styles.sheetSection}>
+					<Skeleton
+						width={140}
+						height={16}
+						color={skeletonColor}
+						style={{ marginBottom: 12 }}
+					/>
+					{[0, 1].map((i) => (
+						<View
+							key={i}
+							style={[
+								styles.configRow,
+								i === 0 && {
+									borderBottomWidth: StyleSheet.hairlineWidth,
+									borderBottomColor: colors.foreground + "1A",
+								},
+							]}
+						>
+							<Skeleton width={70} height={15} color={skeletonColor} />
+							<Skeleton width={90} height={15} color={skeletonColor} />
+						</View>
+					))}
+					<Skeleton
+						width={70}
+						height={11}
+						color={skeletonColor}
+						style={{ marginTop: 16, marginBottom: 8 }}
+					/>
+					<Skeleton
+						width="100%"
+						height={42}
+						color={skeletonColor}
+						style={{ borderRadius: 10 }}
+					/>
+				</View>
+
+				<View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+				{/* Price History placeholder */}
+				<View style={styles.sheetSection}>
+					<View style={styles.chartHeader}>
+						<Skeleton width={110} height={16} color={skeletonColor} />
+						<Skeleton
+							width={150}
+							height={30}
+							color={skeletonColor}
+							style={{ borderRadius: 8 }}
+						/>
+					</View>
+					<View
+						style={{ minHeight: 22, marginBottom: 4, justifyContent: "center" }}
+					>
+						<Skeleton width={120} height={16} color={skeletonColor} />
+					</View>
+					<Skeleton
+						width="100%"
+						height={180}
+						color={skeletonColor}
+						style={{ marginTop: 8, borderRadius: 8 }}
+					/>
+					<Skeleton
+						width={160}
+						height={11}
+						color={skeletonColor}
+						style={{ marginTop: 10, alignSelf: "center" }}
+					/>
 				</View>
 			</View>
-
-			{/* Price History Section */}
-			<View
-				style={[
-					styles.section,
-					{ backgroundColor: colors.card + "D9", borderColor: colors.border },
-				]}
-			>
-				<Skeleton width={110} height={16} color={skeletonColor} style={{ marginBottom: 12 }} />
-				<Skeleton width="100%" height={180} color={skeletonColor} style={{ borderRadius: 8 }} />
-			</View>
-		</>
+		</ShimmerContext.Provider>
 	);
 }
 
@@ -477,10 +629,25 @@ function ConfigRow({
 
 export default function CardDetail() {
 	const { colors } = useTheme();
+	const insets = useSafeAreaInsets();
 	const { isPro } = useRevenueCat();
-	const { id, name, pricingType, variant: initVariant, condition, gradedCompany: initGradedCompany, gradedGrade: initGradedGrade, collectionId, quantity: initQuantity, pricePaid: initPricePaid } = useLocalSearchParams<{
+	const {
+		id,
+		name,
+		image: initImage,
+		pricingType,
+		variant: initVariant,
+		condition,
+		gradedCompany: initGradedCompany,
+		gradedGrade: initGradedGrade,
+		collectionId,
+		quantity: initQuantity,
+		pricePaid: initPricePaid,
+	} = useLocalSearchParams<{
 		id: string;
 		name: string;
+		/** Thumbnail URL passed from the grid — already cached, shown instantly. */
+		image?: string;
 		pricingType?: string;
 		variant?: string;
 		condition?: string;
@@ -491,7 +658,9 @@ export default function CardDetail() {
 		pricePaid?: string;
 	}>();
 	const isFromCollection = !!collectionId;
-	const [quantity, setQuantity] = useState(parseInt(initQuantity || "1", 10) || 1);
+	const [quantity, setQuantity] = useState(
+		parseInt(initQuantity || "1", 10) || 1,
+	);
 	const api = useApi();
 
 	// Selection lives in CardConfigContext so the configure formSheet (pushed
@@ -526,18 +695,44 @@ export default function CardDetail() {
 	}, [id]);
 
 	// Collection context
-	const { incrementCardQuantity, addCardToCollection, removeCardFromCollection, decrementCardQuantity, updateCardPricePaid } = useCollections();
+	const {
+		incrementCardQuantity,
+		addCardToCollection,
+		removeCardFromCollection,
+		decrementCardQuantity,
+		updateCardPricePaid,
+	} = useCollections();
 
 	// History
 	const [historyPeriod, setHistoryPeriod] = useState("30d");
 	const [salesExpanded, setSalesExpanded] = useState(false);
 
-	// Card data
-	const { data: card, isLoading, isError, refetch } = useQuery({
+	// Card data. Pro gets the full card (with prices) from the pricing API; non-Pro
+	// gets identity + image from the local catalog so NO pricing call fires — the
+	// price sections below are paywalled behind ProGate anyway.
+	const {
+		data: card,
+		isLoading,
+		isError,
+		refetch,
+	} = useQuery({
 		queryKey: ["card", id],
-		queryFn: () => getCard(api, id),
+		queryFn: () =>
+			isPro
+				? getCard(api, id)
+				: getCatalogCard(api, id).then(catalogCardToScrydex),
 		enabled: !!id,
 	});
+
+	// If the user upgrades to Pro while on this screen, the cached data is the
+	// price-less catalog card, so prices stay "—". Refetch on the Pro transition
+	// so the pricing API fires and real prices replace the placeholders. (The
+	// history/listings queries re-enable themselves via their `enabled` flags.)
+	const wasPro = useRef(isPro);
+	useEffect(() => {
+		if (isPro && !wasPro.current) refetch();
+		wasPro.current = isPro;
+	}, [isPro, refetch]);
 
 	// Variants — auto-select the first when none was passed in
 	const variantNames = useMemo(
@@ -586,8 +781,7 @@ export default function CardDetail() {
 	const conditionOptions = useMemo(() => {
 		const conditions =
 			card && variant ? getConditionOptions(card, variant) : [];
-		if (conditions.length === 0)
-			return [{ label: "Near Mint", value: "NM" }];
+		if (conditions.length === 0) return [{ label: "Near Mint", value: "NM" }];
 		return conditions.map((c) => ({
 			label: formatConditionLabel(c),
 			value: c,
@@ -606,7 +800,8 @@ export default function CardDetail() {
 	// Get current prices
 	const rawPrice =
 		card && variant
-			? selectPrice(card, variant, { kind: "raw", condition: rawCondition })?.value
+			? selectPrice(card, variant, { kind: "raw", condition: rawCondition })
+					?.value
 			: undefined;
 
 	const gradedPrice =
@@ -622,7 +817,21 @@ export default function CardDetail() {
 	const heroPrice = pricingTab === "Graded" ? gradedPrice : rawPrice;
 
 	// Display fields
-	const cardImage = card ? getCardImage(card, variant || undefined, "large") : undefined;
+	const cardImage = card
+		? getCardImage(card, variant || undefined, "large")
+		: undefined;
+	// The small thumbnail is already cached from the set/search grid, so use it as
+	// an instant placeholder under the large image (which loads cold here since
+	// it's a different URL) — no blank frame while the large downloads. Falls back
+	// to the thumbnail URL passed in the route params, which is available before
+	// the card data query resolves.
+	const cardImageSmall =
+		(card ? getCardImage(card, variant || undefined, "small") : undefined) ??
+		initImage;
+	// Blurred background — strictly the thumbnail we navigated with (already
+	// cached, and plenty for a 30px-blur backdrop). Fixed for the whole screen:
+	// it shows instantly and never reloads on data load or variant change.
+	const bgImage = initImage;
 	const cardNumber = card ? getCardNumber(card) : undefined;
 	// Japanese cards display their English translation when available
 	const displayName = card ? getCardDisplayName(card) : (name ?? "Card");
@@ -649,7 +858,7 @@ export default function CardDetail() {
 	const { data: rawHistory, isLoading: rawHistoryLoading } = useQuery({
 		queryKey: ["history", id, dRawCondition, dHistoryPeriod],
 		queryFn: () => getCardHistory(api, id, dRawCondition, historyDays),
-		enabled: !!id && !!dRawCondition && dTab !== "Graded",
+		enabled: isPro && !!id && !!dRawCondition && dTab !== "Graded",
 		placeholderData: keepPreviousData,
 		staleTime: 60 * 60 * 1000,
 	});
@@ -657,7 +866,7 @@ export default function CardDetail() {
 	const { data: gradedHistory, isLoading: gradedHistoryLoading } = useQuery({
 		queryKey: ["history", id, dGradedTierKey, dHistoryPeriod],
 		queryFn: () => getCardHistory(api, id, dGradedTierKey!, historyDays),
-		enabled: !!id && !!dGradedTierKey && dTab === "Graded",
+		enabled: isPro && !!id && !!dGradedTierKey && dTab === "Graded",
 		placeholderData: keepPreviousData,
 		staleTime: 60 * 60 * 1000,
 	});
@@ -693,6 +902,11 @@ export default function CardDetail() {
 	// configure sheet while options are changed.
 	const scrollRef = useRef<ScrollView>(null);
 	const estimateBottom = useRef(0);
+	// The content sits inside an Animated.View (the crossfade wrapper), so the
+	// estimate block's onLayout reports a y relative to that wrapper, not the
+	// scroll view. Capture the wrapper's offset (the image above it) and add it
+	// back, otherwise the scroll-to-estimate math is short by the image height.
+	const contentTop = useRef(0);
 
 	const openConfig = useCallback(() => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -714,9 +928,7 @@ export default function CardDetail() {
 				text: "Remove",
 				style: "destructive",
 				onPress: () => {
-					Haptics.notificationAsync(
-						Haptics.NotificationFeedbackType.Warning,
-					);
+					Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 					removeCardFromCollection.mutate(
 						{ collectionId: collectionId!, cardId: id },
 						{ onSuccess: () => router.back() },
@@ -741,7 +953,7 @@ export default function CardDetail() {
 				company: dTab === "Graded" ? (dGradedCompany ?? undefined) : undefined,
 				grade: dTab === "Graded" ? (dGradedGrade ?? undefined) : undefined,
 			}),
-		enabled: !!id && (dTab !== "Graded" || !!dGradedTierKey),
+		enabled: isPro && !!id && (dTab !== "Graded" || !!dGradedTierKey),
 		placeholderData: keepPreviousData,
 		staleTime: 15 * 60 * 1000,
 	});
@@ -758,7 +970,8 @@ export default function CardDetail() {
 		});
 	}, [listings, dTab]);
 
-	const configMatches = isFromCollection &&
+	const configMatches =
+		isFromCollection &&
 		pricingTab === (pricingType || "Raw") &&
 		variant === (initVariant || "") &&
 		(pricingTab === "Graded"
@@ -777,8 +990,10 @@ export default function CardDetail() {
 				pricingType: pricingTab,
 				variant,
 				condition: pricingTab === "Graded" ? "GRADED" : rawCondition,
-				gradedCompany: pricingTab === "Graded" ? (gradedCompany ?? undefined) : undefined,
-				gradedGrade: pricingTab === "Graded" ? (gradedGrade ?? undefined) : undefined,
+				gradedCompany:
+					pricingTab === "Graded" ? (gradedCompany ?? undefined) : undefined,
+				gradedGrade:
+					pricingTab === "Graded" ? (gradedGrade ?? undefined) : undefined,
 				pricePaid: isNaN(parsed) ? null : parsed,
 			});
 		}, 600);
@@ -804,121 +1019,116 @@ export default function CardDetail() {
 					headerTitle: displayName,
 					headerRight: () =>
 						configMatches ? null : (
-						<Pressable
-							hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-							onPress={() => {
-								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-								if (!isPro) {
-									void presentProPaywallIfNeeded();
-									return;
-								}
-								const parsedPricePaid =
-									pricePaid.trim().length > 0
-										? parseFloat(pricePaid)
-										: undefined;
-								if (isFromCollection) {
-									addCardToCollection.mutate(
-										{
-											collectionId: collectionId!,
-											cardId: id,
-											cardName: displayName,
-											cardNumber: cardNumber ?? undefined,
-											setName: setDisplayName,
-											cardImageUrl: cardImage ?? "",
-											cardValue: heroPrice ?? 0,
-											pricingType: pricingTab,
-											variant,
-											condition: pricingTab === "Graded" ? "GRADED" : rawCondition,
-											gradedCompany: pricingTab === "Graded" ? (gradedCompany ?? undefined) : undefined,
-											gradedGrade: pricingTab === "Graded" ? (gradedGrade ?? undefined) : undefined,
-											pricePaid:
-												parsedPricePaid !== undefined &&
-												!isNaN(parsedPricePaid)
-													? parsedPricePaid
-													: undefined,
-										},
-										{
-											onSuccess: () => {
-												Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-												const configLabel = pricingTab === "Graded"
-													? `${gradedCompany} ${gradedGrade}`
-													: `${formatVariantLabel(variant)} · ${formatConditionLabel(rawCondition)}`;
-												Alert.alert(
-													"Added!",
-													`${configLabel} configuration added to collection.`,
-												);
+							<Pressable
+								hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+								onPress={() => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+									if (!isPro) {
+										void presentProPaywallIfNeeded();
+										return;
+									}
+									const parsedPricePaid =
+										pricePaid.trim().length > 0
+											? parseFloat(pricePaid)
+											: undefined;
+									if (isFromCollection) {
+										addCardToCollection.mutate(
+											{
+												collectionId: collectionId!,
+												cardId: id,
+												cardName: displayName,
+												cardNumber: cardNumber ?? undefined,
+												setName: setDisplayName,
+												cardImageUrl: cardImage ?? "",
+												cardValue: heroPrice ?? 0,
+												pricingType: pricingTab,
+												variant,
+												condition:
+													pricingTab === "Graded" ? "GRADED" : rawCondition,
+												gradedCompany:
+													pricingTab === "Graded"
+														? (gradedCompany ?? undefined)
+														: undefined,
+												gradedGrade:
+													pricingTab === "Graded"
+														? (gradedGrade ?? undefined)
+														: undefined,
+												pricePaid:
+													parsedPricePaid !== undefined &&
+													!isNaN(parsedPricePaid)
+														? parsedPricePaid
+														: undefined,
 											},
-										},
-									);
-								} else {
-									router.push({
-										pathname: "/add-to-collection",
-										params: {
-											cardId: id,
-											cardName: displayName,
-											cardNumber: cardNumber ?? "",
-											setName: setDisplayName ?? "",
-											cardImageUrl: cardImage ?? "",
-											cardValue: String(heroPrice ?? 0),
-											pricingType: pricingTab,
-											variant,
-											condition: pricingTab === "Graded" ? "GRADED" : rawCondition,
-											gradedCompany: pricingTab === "Graded" ? (gradedCompany ?? "") : "",
-											gradedGrade: pricingTab === "Graded" ? (gradedGrade ?? "") : "",
-											pricePaid:
-												parsedPricePaid !== undefined &&
-												!isNaN(parsedPricePaid)
-													? String(parsedPricePaid)
-													: "",
-										},
-									});
-								}
-							}}
-						>
-							<Ionicons
-								name="add"
-								size={26}
-								color={colors.foreground}
-							/>
-						</Pressable>
-					),
+											{
+												onSuccess: () => {
+													Haptics.notificationAsync(
+														Haptics.NotificationFeedbackType.Success,
+													);
+													const configLabel =
+														pricingTab === "Graded"
+															? `${gradedCompany} ${gradedGrade}`
+															: `${formatVariantLabel(variant)} · ${formatConditionLabel(rawCondition)}`;
+													Alert.alert(
+														"Added!",
+														`${configLabel} configuration added to collection.`,
+													);
+												},
+											},
+										);
+									} else {
+										router.push({
+											pathname: "/add-to-collection",
+											params: {
+												cardId: id,
+												cardName: displayName,
+												cardNumber: cardNumber ?? "",
+												setName: setDisplayName ?? "",
+												cardImageUrl: cardImage ?? "",
+												cardValue: String(heroPrice ?? 0),
+												pricingType: pricingTab,
+												variant,
+												condition:
+													pricingTab === "Graded" ? "GRADED" : rawCondition,
+												gradedCompany:
+													pricingTab === "Graded" ? (gradedCompany ?? "") : "",
+												gradedGrade:
+													pricingTab === "Graded" ? (gradedGrade ?? "") : "",
+												pricePaid:
+													parsedPricePaid !== undefined &&
+													!isNaN(parsedPricePaid)
+														? String(parsedPricePaid)
+														: "",
+											},
+										});
+									}
+								}}
+							>
+								<Ionicons name="add" size={26} color={colors.foreground} />
+							</Pressable>
+						),
 				}}
 			/>
 
-			{isLoading ? (
-				<ScrollView
-					style={[
-						styles.container,
-						{ backgroundColor: colors.background },
-					]}
-					contentContainerStyle={styles.content}
-					contentInsetAdjustmentBehavior="automatic"
-					scrollEnabled={false}
-				>
-					<LoadingSkeleton colors={colors} isFromCollection={isFromCollection} />
-				</ScrollView>
-			) : card ? (
+			<View style={[styles.container, { backgroundColor: colors.background }]}>
+				{/* Blurred backdrop — small image, kept OUTSIDE the crossfade so it
+				    never re-fades (it's identical in both states). */}
+				{bgImage && (
+					<Image
+						source={{ uri: bgImage }}
+						style={StyleSheet.absoluteFill}
+						contentFit="cover"
+						blurRadius={30}
+						cachePolicy="memory-disk"
+					/>
+				)}
 				<View
 					style={[
-						styles.container,
-						{ backgroundColor: colors.background },
+						StyleSheet.absoluteFill,
+						{ backgroundColor: `${colors.background}B3` },
 					]}
-				>
-					{cardImage && (
-						<Image
-							source={{ uri: cardImage }}
-							style={StyleSheet.absoluteFill}
-							contentFit="cover"
-							blurRadius={30}
-							cachePolicy="memory-disk"
-						/>
-					)}
-					<View
-						style={[
-							StyleSheet.absoluteFill,
-							{ backgroundColor: `${colors.background}B3` },
-						]}
-					/>
+				/>
+
+				{isLoading || card ? (
 					<ScrollView
 						ref={scrollRef}
 						style={styles.container}
@@ -926,10 +1136,13 @@ export default function CardDetail() {
 						contentInsetAdjustmentBehavior="automatic"
 						showsVerticalScrollIndicator={false}
 					>
-						{/* Card Image */}
+						{/* Card Image — persistent, OUTSIDE the crossfade: a single
+						    element that just switches from the cached small thumbnail to
+						    the large image once the card data loads (no fade between). */}
 						<View style={styles.imageContainer}>
 							<CardImage
-								uri={cardImage ?? ""}
+								uri={cardImage ?? initImage ?? ""}
+								placeholder={cardImageSmall}
 								style={{
 									width: IMAGE_WIDTH,
 									height: IMAGE_HEIGHT,
@@ -980,698 +1193,770 @@ export default function CardDetail() {
 							/>
 						</View>
 
-						{/* Estimate Block — most prominent element */}
-						<View
-							onLayout={(e) => {
-								const { y, height } = e.nativeEvent.layout;
-								estimateBottom.current = y + height;
-							}}
-						>
-						<ProGate
-							style={[
-								styles.estimateBlock,
-								{
-									backgroundColor: colors.card + "D9",
-									borderColor: colors.border,
-								},
-							]}
-						>
-							<Text
+						{card ? (
+							<Animated.View
+								key="card-content"
 								style={[
-									styles.estimateLabel,
-									{ color: colors.foreground, opacity: 0.75 },
-								]}
-							>
-								MARKET VALUE
-							</Text>
-							{heroPrice === undefined ? (
-								<Text
-									style={[styles.heroPrice, { color: colors.foreground }]}
-								>
-									—
-								</Text>
-							) : (
-								<TickerPrice
-									value={heroPrice}
-									style={[
-										styles.heroPrice,
-										{ color: colors.foreground },
-									]}
-								/>
-							)}
-
-							{/* Active selection summary chips */}
-							<View style={styles.selectionSummary}>
-								{pricingTab === "Graded" ? (
-									<>
-										<View
-											style={[
-												styles.selectionChip,
-												{
-													backgroundColor:
-														colors.primary + "33",
-													borderColor:
-														colors.primary + "55",
-												},
-											]}
-										>
-											<View
-												style={[
-													styles.chipDot,
-													{
-														backgroundColor:
-															colors.primary,
-													},
-												]}
-											/>
-											<Text
-												style={[
-													styles.selectionChipText,
-													{
-														color: colors.foreground,
-													},
-												]}
-											>
-												Graded
-											</Text>
-										</View>
-										{gradedCompany && (
-											<View
-												style={[
-													styles.selectionChip,
-													{
-														backgroundColor:
-															colors.primary +
-															"33",
-														borderColor:
-															colors.primary +
-															"55",
-													},
-												]}
-											>
-												<View
-													style={[
-														styles.chipDot,
-														{
-															backgroundColor:
-																colors.primary,
-														},
-													]}
-												/>
-												<Text
-													style={[
-														styles.selectionChipText,
-														{
-															color: colors.foreground,
-														},
-													]}
-												>
-													{gradedCompany}{" "}
-													{gradedGrade}
-												</Text>
-											</View>
-										)}
-									</>
-								) : (
-									<>
-										<View
-											style={[
-												styles.selectionChip,
-												{
-													backgroundColor:
-														colors.primary + "33",
-													borderColor:
-														colors.primary + "55",
-												},
-											]}
-										>
-											<View
-												style={[
-													styles.chipDot,
-													{
-														backgroundColor:
-															colors.primary,
-													},
-												]}
-											/>
-											<Text
-												style={[
-													styles.selectionChipText,
-													{
-														color: colors.foreground,
-													},
-												]}
-											>
-												{variant ? formatVariantLabel(variant) : "—"}
-											</Text>
-										</View>
-										<View
-											style={[
-												styles.selectionChip,
-												{
-													backgroundColor:
-														colors.primary + "33",
-													borderColor:
-														colors.primary + "55",
-												},
-											]}
-										>
-											<View
-												style={[
-													styles.chipDot,
-													{
-														backgroundColor:
-															colors.primary,
-													},
-												]}
-											/>
-											<Text
-												style={[
-													styles.selectionChipText,
-													{
-														color: colors.foreground,
-													},
-												]}
-											>
-												{formatConditionLabel(rawCondition)}
-											</Text>
-										</View>
-									</>
-								)}
-							</View>
-						</ProGate>
-						</View>
-
-						{/* Quantity Badge */}
-						{configMatches && (
-							<View style={[styles.quantityBadge, { backgroundColor: colors.card + "D9", borderColor: colors.border }]}>
-								<Pressable
-									onPress={() => {
-										// At 1, decrementing would leave a 0-quantity row, so
-										// confirm removal from the collection instead.
-										if (quantity <= 1) {
-											confirmRemove();
-											return;
-										}
-										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-										decrementCardQuantity.mutate(
-											{
-												collectionId: collectionId!,
-												cardId: id,
-												pricingType: pricingType || "Raw",
-												variant: initVariant || "normal",
-												condition: condition || "NM",
-												gradedCompany: initGradedCompany || undefined,
-												gradedGrade: initGradedGrade || undefined,
-											},
-											{ onError: () => setQuantity((q) => q + 1) },
-										);
-										setQuantity((q) => q - 1);
-									}}
-									style={[styles.qtyButton, { backgroundColor: colors.muted }]}
-								>
-									<Ionicons name="remove" size={16} color={colors.foreground} />
-								</Pressable>
-								<Ionicons name="layers-outline" size={16} color={colors.primary} />
-								<Text style={[styles.quantityText, { color: colors.foreground }]}>
-									{quantity}
-								</Text>
-								<Pressable
-									onPress={() => {
-										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-										incrementCardQuantity.mutate(
-											{
-												collectionId: collectionId!,
-												cardId: id,
-												pricingType: pricingType || "Raw",
-												variant: initVariant || "normal",
-												condition: condition || "NM",
-												gradedCompany: initGradedCompany || undefined,
-												gradedGrade: initGradedGrade || undefined,
-											},
-											{ onError: () => setQuantity((q) => q - 1) },
-										);
-										setQuantity((q) => q + 1);
-									}}
-									style={[styles.qtyButton, { backgroundColor: colors.muted }]}
-								>
-									<Ionicons name="add" size={16} color={colors.foreground} />
-								</Pressable>
-							</View>
-						)}
-
-						{/* Card Meta Strip */}
-						<View
-							style={[
-								styles.metaStrip,
-								{
-									backgroundColor: colors.card + "D9",
-									borderColor: colors.border,
-								},
-							]}
-						>
-							<View style={{ flex: 1 }}>
-								<Text
-									style={[
-										styles.cardName,
-										{ color: colors.foreground },
-									]}
-								>
-									{displayName}
-									{cardNumber ? (
-										<Text
-											style={{
-												color: colors.foreground,
-												opacity: 0.65,
-												fontWeight: "500",
-											}}
-										>
-											{" "}
-											#{cardNumber}
-										</Text>
-									) : null}
-								</Text>
-								<Text
-									style={[
-										styles.setName,
-										{ color: colors.foreground, opacity: 0.7 },
-									]}
-								>
-									{setDisplayName}
-								</Text>
-							</View>
-							<View style={styles.pillRow}>
-								{!!getCardDisplayRarity(card) && (
-									<InfoPill
-										label={getCardDisplayRarity(card)!}
-										color={colors.foreground}
-										bgColor={colors.primary + "33"}
-										borderColor={colors.primary + "55"}
-									/>
-								)}
-								{!!variant && (
-									<InfoPill
-										label={formatVariantLabel(variant)}
-										color={colors.foreground}
-										bgColor={colors.primary + "33"}
-										borderColor={colors.primary + "55"}
-									/>
-								)}
-							</View>
-						</View>
-
-						{/* Pricing Options — tap a row to configure in the sheet */}
-						<View
-							style={[
-								styles.section,
-								{
-									backgroundColor: colors.card + "D9",
-									borderColor: colors.border,
-								},
-							]}
-						>
-							<Text
-								style={[styles.sectionTitle, { color: colors.foreground }]}
-							>
-								Pricing Options
-							</Text>
-							{variantNames.length > 1 && (
-								<ConfigRow
-									label="Variant"
-									value={formatVariantLabel(variant)}
-									onPress={openConfig}
-									colors={colors}
-								/>
-							)}
-							<ConfigRow
-								label={pricingTab === "Graded" ? "Grade" : "Condition"}
-								value={
-									pricingTab === "Graded"
-										? gradedCompany && gradedGrade
-											? `${gradedCompany} ${gradedGrade}`
-											: "—"
-										: formatConditionLabel(rawCondition)
-								}
-								onPress={openConfig}
-								colors={colors}
-								isLast
-							/>
-
-							<Text
-								style={[
-									styles.pricePaidLabel,
-									{ color: colors.mutedForeground },
-								]}
-							>
-								Price Paid
-							</Text>
-							<View
-								style={[
-									styles.pricePaidRow,
+									styles.sheet,
 									{
-										backgroundColor: colors.input,
+										backgroundColor: colors.card,
 										borderColor: colors.border,
+										// Extend the counter past the scroll view's bottom safe-area
+										// inset so it reaches the physical screen edge; pad the
+										// content back up so the last row clears the home indicator.
+										marginBottom: -insets.bottom,
+										paddingBottom: 40 + insets.bottom,
 									},
 								]}
+								onLayout={(e) => {
+									contentTop.current = e.nativeEvent.layout.y;
+								}}
 							>
-								<Text
+								<View
 									style={[
-										styles.pricePaidSymbol,
-										{ color: colors.mutedForeground },
+										styles.grabber,
+										{ backgroundColor: colors.mutedForeground + "66" },
 									]}
-								>
-									{currencySymbol}
-								</Text>
-								<TextInput
-									style={[
-										styles.pricePaidInput,
-										{ color: colors.foreground },
-									]}
-									value={pricePaid}
-									onChangeText={(v) => {
-										const cleaned = v
-											.replace(/[^0-9.]/g, "")
-											.replace(/(\..*)\./g, "$1");
-										setPricePaid(cleaned);
+								/>
+
+								{/* Market value — the sheet's headline, resting on the counter */}
+								<Animated.View
+									entering={sectionEntering(0)}
+									onLayout={(e) => {
+										const { y, height } = e.nativeEvent.layout;
+										estimateBottom.current = contentTop.current + y + height;
 									}}
-									placeholder="0.00"
-									placeholderTextColor={colors.mutedForeground}
-									keyboardType="decimal-pad"
-									returnKeyType="done"
-								/>
-							</View>
-						</View>
-
-						{/* Price History Chart */}
-						<ProGate
-							style={[
-								styles.section,
-								{
-									backgroundColor: colors.card + "D9",
-									borderColor: colors.border,
-								},
-							]}
-						>
-							<View style={styles.chartHeader}>
-								<Text
-									style={[
-										styles.sectionTitle,
-										{
-											color: colors.foreground,
-											marginBottom: 0,
-											flexShrink: 1,
-										},
-									]}
 								>
-									Price History
-								</Text>
-								<PeriodToggle
-									selected={historyPeriod}
-									onSelect={setHistoryPeriod}
-									colors={colors}
-								/>
-							</View>
-
-							{(dTab === "Graded" ? gradedHistoryLoading : rawHistoryLoading) ? (
-								<View style={styles.chartPlaceholder}>
-									<Skeleton
-										width="100%"
-										height={180}
-										color={colors.border}
-									/>
-								</View>
-							) : chartData.length > 1 ? (
-								<View>
-									<LineChart.Provider data={chartData}>
-										<View style={styles.chartHoverHeader}>
-											<LineChart.PriceText
-												format={({ value }) => {
-													"worklet";
-													if (!value) return "";
-													const n = Number(value);
-													if (!isFinite(n)) return "—";
-													const [intPart, decPart] = n.toFixed(2).split(".");
-													const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-													return `${currencySymbol}${withCommas}.${decPart}`;
-												}}
-												style={[
-													styles.chartHoverPrice,
-													{ color: colors.foreground },
-												]}
-											/>
-											<LineChart.DatetimeText
-												style={[
-													styles.chartHoverDate,
-													{
-														color: colors.foreground,
-														opacity: 0.7,
-													},
-												]}
-											/>
-										</View>
-
-										<View style={styles.chartContainer}>
-											<LineChart
-												height={180}
-												width={CHART_WIDTH}
-												yGutter={20}
-											>
-												<LineChart.Path
-													color={colors.primary}
-													width={2}
-												>
-													<LineChart.Gradient />
-													<LineChart.Dot
-														at={chartData.length - 1}
-														color={colors.primary}
-														size={5}
-														hasPulse
-														pulseBehaviour="while-inactive"
-													/>
-												</LineChart.Path>
-												<LineChart.CursorCrosshair
-													color={colors.foreground}
-												/>
-											</LineChart>
-										</View>
-									</LineChart.Provider>
-									<Text
-										style={[
-											styles.scrubHint,
-											{
-												color: colors.foreground,
-												opacity: 0.55,
-											},
-										]}
-									>
-										Touch and drag to see prices
-									</Text>
-								</View>
-							) : (
-								<View style={styles.chartPlaceholder}>
-									<Text
-										style={{
-											color: colors.mutedForeground,
-											fontSize: 13,
-										}}
-									>
-										Price History Unavailable
-									</Text>
-								</View>
-							)}
-						</ProGate>
-
-						{/* Recent Sales */}
-						{salesList.length > 0 && (
-							isPro ? (
-								<AnimatedCollapsible
-									title="Recent Sales"
-									expanded={salesExpanded}
-									onToggle={() =>
-										setSalesExpanded((v) => !v)
-									}
-									colors={colors}
-								>
-									{salesList.slice(0, 20).map((item, i) => (
-										<Pressable
-											key={item.id}
-											disabled={!item.url}
-											onPress={() => {
-												if (item.url) {
-													Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-													Linking.openURL(item.url);
-												}
-											}}
-											style={[
-												styles.historyRow,
-												i < Math.min(salesList.length, 20) - 1 && {
-													borderBottomWidth: 1,
-													borderBottomColor: colors.foreground + "14",
-												},
-											]}
-										>
-											<View style={{ flex: 1, paddingRight: 12 }}>
+									<ProGate style={styles.valueGate}>
+										<View style={styles.valueTopRow}>
+											<View style={styles.valueMain}>
 												<Text
 													style={[
-														styles.historyDate,
-														{
-															color: colors.foreground,
-														},
+														styles.estimateLabel,
+														{ color: colors.foreground, opacity: 0.75 },
 													]}
 												>
-													{new Date(
-														item.sold_at.replace(/\//g, "-"),
-													).toLocaleDateString()}
+													MARKET VALUE
 												</Text>
-												<Text
-													style={[
-														styles.historyMeta,
-														{
-															color: colors.foreground,
-															opacity: 0.6,
-														},
-													]}
-													numberOfLines={1}
-												>
-													{item.title}
-												</Text>
-											</View>
-											<View
-												style={{ alignItems: "flex-end" }}
-											>
-												<Text
-													style={[
-														styles.historyPrice,
-														{
-															color: colors.foreground,
-														},
-													]}
-												>
-													{formatPrice(item.price)}
-												</Text>
-												{item.company && (
+												{heroPrice === undefined ? (
 													<Text
 														style={[
-															styles.historyMeta,
+															styles.heroPrice,
+															{ color: colors.foreground },
+														]}
+													>
+														—
+													</Text>
+												) : (
+													<TickerPrice
+														value={heroPrice}
+														style={[
+															styles.heroPrice,
+															{ color: colors.foreground },
+														]}
+													/>
+												)}
+											</View>
+
+											{/* Quantity owned — sits with the value when this exact
+											    configuration is in the collection */}
+											{configMatches && (
+												<View
+													style={[
+														styles.quantityBadge,
+														styles.quantityBadgeHeader,
+														{
+															backgroundColor: colors.muted,
+															borderColor: colors.border,
+														},
+													]}
+												>
+													<Pressable
+														onPress={() => {
+															// At 1, decrementing would leave a 0-quantity row,
+															// so confirm removal from the collection instead.
+															if (quantity <= 1) {
+																confirmRemove();
+																return;
+															}
+															Haptics.impactAsync(
+																Haptics.ImpactFeedbackStyle.Light,
+															);
+															decrementCardQuantity.mutate(
+																{
+																	collectionId: collectionId!,
+																	cardId: id,
+																	pricingType: pricingType || "Raw",
+																	variant: initVariant || "normal",
+																	condition: condition || "NM",
+																	gradedCompany: initGradedCompany || undefined,
+																	gradedGrade: initGradedGrade || undefined,
+																},
+																{ onError: () => setQuantity((q) => q + 1) },
+															);
+															setQuantity((q) => q - 1);
+														}}
+														style={[
+															styles.qtyButton,
+															{ backgroundColor: colors.card },
+														]}
+													>
+														<Ionicons
+															name="remove"
+															size={16}
+															color={colors.foreground}
+														/>
+													</Pressable>
+													<Ionicons
+														name="layers-outline"
+														size={16}
+														color={colors.primary}
+													/>
+													<Text
+														style={[
+															styles.quantityText,
+															{ color: colors.foreground },
+														]}
+													>
+														{quantity}
+													</Text>
+													<Pressable
+														onPress={() => {
+															Haptics.impactAsync(
+																Haptics.ImpactFeedbackStyle.Light,
+															);
+															incrementCardQuantity.mutate(
+																{
+																	collectionId: collectionId!,
+																	cardId: id,
+																	pricingType: pricingType || "Raw",
+																	variant: initVariant || "normal",
+																	condition: condition || "NM",
+																	gradedCompany: initGradedCompany || undefined,
+																	gradedGrade: initGradedGrade || undefined,
+																},
+																{ onError: () => setQuantity((q) => q - 1) },
+															);
+															setQuantity((q) => q + 1);
+														}}
+														style={[
+															styles.qtyButton,
+															{ backgroundColor: colors.card },
+														]}
+													>
+														<Ionicons
+															name="add"
+															size={16}
+															color={colors.foreground}
+														/>
+													</Pressable>
+												</View>
+											)}
+										</View>
+
+										{/* Active selection summary chips */}
+										<View style={styles.selectionSummary}>
+											{pricingTab === "Graded" ? (
+												<>
+													<View
+														style={[
+															styles.selectionChip,
 															{
-																color: colors.foreground,
-																opacity: 0.6,
+																backgroundColor: colors.primary + "33",
+																borderColor: colors.primary + "55",
 															},
 														]}
 													>
-														{item.company} {item.grade}
-													</Text>
-												)}
-											</View>
-										</Pressable>
-									))}
-								</AnimatedCollapsible>
-							) : (
-								<ProGate
-									style={[
-										styles.section,
-										{
-											backgroundColor: colors.card + "D9",
-											borderColor: colors.border,
-										},
-									]}
+														<View
+															style={[
+																styles.chipDot,
+																{
+																	backgroundColor: colors.primary,
+																},
+															]}
+														/>
+														<Text
+															style={[
+																styles.selectionChipText,
+																{
+																	color: colors.foreground,
+																},
+															]}
+														>
+															Graded
+														</Text>
+													</View>
+													{gradedCompany && (
+														<View
+															style={[
+																styles.selectionChip,
+																{
+																	backgroundColor: colors.primary + "33",
+																	borderColor: colors.primary + "55",
+																},
+															]}
+														>
+															<View
+																style={[
+																	styles.chipDot,
+																	{
+																		backgroundColor: colors.primary,
+																	},
+																]}
+															/>
+															<Text
+																style={[
+																	styles.selectionChipText,
+																	{
+																		color: colors.foreground,
+																	},
+																]}
+															>
+																{gradedCompany} {gradedGrade}
+															</Text>
+														</View>
+													)}
+												</>
+											) : (
+												<>
+													<View
+														style={[
+															styles.selectionChip,
+															{
+																backgroundColor: colors.primary + "33",
+																borderColor: colors.primary + "55",
+															},
+														]}
+													>
+														<View
+															style={[
+																styles.chipDot,
+																{
+																	backgroundColor: colors.primary,
+																},
+															]}
+														/>
+														<Text
+															style={[
+																styles.selectionChipText,
+																{
+																	color: colors.foreground,
+																},
+															]}
+														>
+															{variant ? formatVariantLabel(variant) : "—"}
+														</Text>
+													</View>
+													<View
+														style={[
+															styles.selectionChip,
+															{
+																backgroundColor: colors.primary + "33",
+																borderColor: colors.primary + "55",
+															},
+														]}
+													>
+														<View
+															style={[
+																styles.chipDot,
+																{
+																	backgroundColor: colors.primary,
+																},
+															]}
+														/>
+														<Text
+															style={[
+																styles.selectionChipText,
+																{
+																	color: colors.foreground,
+																},
+															]}
+														>
+															{formatConditionLabel(rawCondition)}
+														</Text>
+													</View>
+												</>
+											)}
+										</View>
+									</ProGate>
+								</Animated.View>
+
+								<View
+									style={[styles.divider, { backgroundColor: colors.border }]}
+								/>
+
+								{/* Identity — card name, set, rarity */}
+								<Animated.View
+									entering={sectionEntering(2)}
+									style={styles.metaStrip}
 								>
-									<View style={styles.collapsibleHeader}>
+									<View style={{ flex: 1 }}>
+										<Text
+											style={[styles.cardName, { color: colors.foreground }]}
+										>
+											{displayName}
+											{cardNumber ? (
+												<Text
+													style={{
+														color: colors.foreground,
+														opacity: 0.65,
+														fontWeight: "500",
+													}}
+												>
+													{" "}
+													#{cardNumber}
+												</Text>
+											) : null}
+										</Text>
 										<Text
 											style={[
-												styles.sectionTitle,
-												{ color: colors.foreground, marginBottom: 0 },
+												styles.setName,
+												{ color: colors.foreground, opacity: 0.7 },
 											]}
 										>
-											Recent Sales
+											{setDisplayName}
 										</Text>
-										<Ionicons
-											name="chevron-down"
-											size={18}
-											color={colors.mutedForeground}
+									</View>
+									<View style={styles.pillRow}>
+										{!!getCardDisplayRarity(card) && (
+											<InfoPill
+												label={getCardDisplayRarity(card)!}
+												color={colors.foreground}
+												bgColor={colors.primary + "33"}
+												borderColor={colors.primary + "55"}
+											/>
+										)}
+										{!!variant && (
+											<InfoPill
+												label={formatVariantLabel(variant)}
+												color={colors.foreground}
+												bgColor={colors.primary + "33"}
+												borderColor={colors.primary + "55"}
+											/>
+										)}
+									</View>
+								</Animated.View>
+
+								<View
+									style={[styles.divider, { backgroundColor: colors.border }]}
+								/>
+
+								{/* Pricing Options — tap a row to configure in the sheet */}
+								<Animated.View
+									entering={sectionEntering(3)}
+									style={styles.sheetSection}
+								>
+									<Text
+										style={[styles.sectionTitle, { color: colors.foreground }]}
+									>
+										Pricing Options
+									</Text>
+									{variantNames.length > 1 && (
+										<ConfigRow
+											label="Variant"
+											value={formatVariantLabel(variant)}
+											onPress={openConfig}
+											colors={colors}
+										/>
+									)}
+									<ConfigRow
+										label={pricingTab === "Graded" ? "Grade" : "Condition"}
+										value={
+											pricingTab === "Graded"
+												? gradedCompany && gradedGrade
+													? `${gradedCompany} ${gradedGrade}`
+													: "—"
+												: formatConditionLabel(rawCondition)
+										}
+										onPress={openConfig}
+										colors={colors}
+										isLast
+									/>
+
+									<Text
+										style={[
+											styles.pricePaidLabel,
+											{ color: colors.mutedForeground },
+										]}
+									>
+										Price Paid
+									</Text>
+									<View
+										style={[
+											styles.pricePaidRow,
+											{
+												backgroundColor: colors.input,
+												borderColor: colors.border,
+											},
+										]}
+									>
+										<Text
+											style={[
+												styles.pricePaidSymbol,
+												{ color: colors.mutedForeground },
+											]}
+										>
+											{currencySymbol}
+										</Text>
+										<TextInput
+											style={[
+												styles.pricePaidInput,
+												{ color: colors.foreground },
+											]}
+											value={pricePaid}
+											onChangeText={(v) => {
+												const cleaned = v
+													.replace(/[^0-9.]/g, "")
+													.replace(/(\..*)\./g, "$1");
+												setPricePaid(cleaned);
+											}}
+											placeholder="0.00"
+											placeholderTextColor={colors.mutedForeground}
+											keyboardType="decimal-pad"
+											returnKeyType="done"
 										/>
 									</View>
-									{salesList.slice(0, 3).map((item, i) => (
+								</Animated.View>
+
+								<View
+									style={[styles.divider, { backgroundColor: colors.border }]}
+								/>
+
+								{/* Price History Chart */}
+								<Animated.View entering={sectionEntering(4)}>
+									<ProGate style={styles.sheetSection}>
+										<View style={styles.chartHeader}>
+											<Text
+												style={[
+													styles.sectionTitle,
+													{
+														color: colors.foreground,
+														marginBottom: 0,
+														flexShrink: 1,
+													},
+												]}
+											>
+												Price History
+											</Text>
+											<PeriodToggle
+												selected={historyPeriod}
+												onSelect={setHistoryPeriod}
+												colors={colors}
+											/>
+										</View>
+
+										{(
+											dTab === "Graded"
+												? gradedHistoryLoading
+												: rawHistoryLoading
+										) ? (
+											<View style={styles.chartPlaceholder}>
+												<Skeleton
+													width="100%"
+													height={180}
+													color={colors.border}
+												/>
+											</View>
+										) : chartData.length > 1 ? (
+											<View>
+												<LineChart.Provider data={chartData}>
+													<View style={styles.chartHoverHeader}>
+														<LineChart.PriceText
+															format={({ value }) => {
+																"worklet";
+																if (!value) return "";
+																const n = Number(value);
+																if (!isFinite(n)) return "—";
+																const [intPart, decPart] = n
+																	.toFixed(2)
+																	.split(".");
+																const withCommas = intPart.replace(
+																	/\B(?=(\d{3})+(?!\d))/g,
+																	",",
+																);
+																return `${currencySymbol}${withCommas}.${decPart}`;
+															}}
+															style={[
+																styles.chartHoverPrice,
+																{ color: colors.foreground },
+															]}
+														/>
+														<LineChart.DatetimeText
+															style={[
+																styles.chartHoverDate,
+																{
+																	color: colors.foreground,
+																	opacity: 0.7,
+																},
+															]}
+														/>
+													</View>
+
+													<View style={styles.chartContainer}>
+														<LineChart
+															height={180}
+															width={CHART_WIDTH}
+															yGutter={20}
+														>
+															<LineChart.Path color={colors.primary} width={2}>
+																<LineChart.Gradient />
+																<LineChart.Dot
+																	at={chartData.length - 1}
+																	color={colors.primary}
+																	size={5}
+																	hasPulse
+																	pulseBehaviour="while-inactive"
+																/>
+															</LineChart.Path>
+															<LineChart.CursorCrosshair
+																color={colors.foreground}
+															/>
+														</LineChart>
+													</View>
+												</LineChart.Provider>
+												<Text
+													style={[
+														styles.scrubHint,
+														{
+															color: colors.foreground,
+															opacity: 0.55,
+														},
+													]}
+												>
+													Touch and drag to see prices
+												</Text>
+											</View>
+										) : (
+											<View style={styles.chartPlaceholder}>
+												<Text
+													style={{
+														color: colors.mutedForeground,
+														fontSize: 13,
+													}}
+												>
+													Price History Unavailable
+												</Text>
+											</View>
+										)}
+									</ProGate>
+								</Animated.View>
+
+								{/* Recent Sales */}
+								{salesList.length > 0 && (
+									<Animated.View entering={sectionEntering(5)}>
 										<View
-											key={item.id}
 											style={[
-												styles.historyRow,
-												i < Math.min(salesList.length, 3) - 1 && {
-													borderBottomWidth: 1,
-													borderBottomColor: colors.foreground + "14",
+												styles.divider,
+												{ backgroundColor: colors.border },
+											]}
+										/>
+										{isPro ? (
+											<AnimatedCollapsible
+												title="Recent Sales"
+												expanded={salesExpanded}
+												onToggle={() => setSalesExpanded((v) => !v)}
+												colors={colors}
+												outerStyle={styles.collapsibleInSheet}
+											>
+												{salesList.slice(0, 20).map((item, i) => (
+													<Pressable
+														key={item.id}
+														disabled={!item.url}
+														onPress={() => {
+															if (item.url) {
+																Haptics.impactAsync(
+																	Haptics.ImpactFeedbackStyle.Light,
+																);
+																Linking.openURL(item.url);
+															}
+														}}
+														style={[
+															styles.historyRow,
+															i < Math.min(salesList.length, 20) - 1 && {
+																borderBottomWidth: 1,
+																borderBottomColor: colors.foreground + "14",
+															},
+														]}
+													>
+														<View style={{ flex: 1, paddingRight: 12 }}>
+															<Text
+																style={[
+																	styles.historyDate,
+																	{
+																		color: colors.foreground,
+																	},
+																]}
+															>
+																{new Date(
+																	item.sold_at.replace(/\//g, "-"),
+																).toLocaleDateString()}
+															</Text>
+															<Text
+																style={[
+																	styles.historyMeta,
+																	{
+																		color: colors.foreground,
+																		opacity: 0.6,
+																	},
+																]}
+																numberOfLines={1}
+															>
+																{item.title}
+															</Text>
+														</View>
+														<View style={{ alignItems: "flex-end" }}>
+															<Text
+																style={[
+																	styles.historyPrice,
+																	{
+																		color: colors.foreground,
+																	},
+																]}
+															>
+																{formatPrice(item.price)}
+															</Text>
+															{item.company && (
+																<Text
+																	style={[
+																		styles.historyMeta,
+																		{
+																			color: colors.foreground,
+																			opacity: 0.6,
+																		},
+																	]}
+																>
+																	{item.company} {item.grade}
+																</Text>
+															)}
+														</View>
+													</Pressable>
+												))}
+											</AnimatedCollapsible>
+										) : (
+											<ProGate style={styles.sheetSection}>
+												<View style={styles.collapsibleHeader}>
+													<Text
+														style={[
+															styles.sectionTitle,
+															{ color: colors.foreground, marginBottom: 0 },
+														]}
+													>
+														Recent Sales
+													</Text>
+													<Ionicons
+														name="chevron-down"
+														size={18}
+														color={colors.mutedForeground}
+													/>
+												</View>
+												{salesList.slice(0, 3).map((item, i) => (
+													<View
+														key={item.id}
+														style={[
+															styles.historyRow,
+															i < Math.min(salesList.length, 3) - 1 && {
+																borderBottomWidth: 1,
+																borderBottomColor: colors.foreground + "14",
+															},
+														]}
+													>
+														<View style={{ flex: 1, paddingRight: 12 }}>
+															<Text
+																style={[
+																	styles.historyDate,
+																	{ color: colors.foreground },
+																]}
+															>
+																{new Date(
+																	item.sold_at.replace(/\//g, "-"),
+																).toLocaleDateString()}
+															</Text>
+															<Text
+																style={[
+																	styles.historyMeta,
+																	{ color: colors.foreground, opacity: 0.6 },
+																]}
+																numberOfLines={1}
+															>
+																{item.title}
+															</Text>
+														</View>
+														<Text
+															style={[
+																styles.historyPrice,
+																{ color: colors.foreground },
+															]}
+														>
+															{formatPrice(item.price)}
+														</Text>
+													</View>
+												))}
+											</ProGate>
+										)}
+									</Animated.View>
+								)}
+
+								{/* Remove from collection */}
+								{configMatches && quantity <= 1 && (
+									<Animated.View entering={sectionEntering(6)}>
+										<View
+											style={[styles.divider, { backgroundColor: colors.border }]}
+										/>
+										<Pressable
+											onPress={confirmRemove}
+											style={[
+												styles.removeButton,
+												{
+													borderColor: colors.destructive ?? "#ef4444",
+													marginHorizontal: 22,
+													marginTop: 18,
 												},
 											]}
 										>
-											<View style={{ flex: 1, paddingRight: 12 }}>
-												<Text
-													style={[
-														styles.historyDate,
-														{ color: colors.foreground },
-													]}
-												>
-													{new Date(item.sold_at.replace(/\//g, "-")).toLocaleDateString()}
-												</Text>
-												<Text
-													style={[
-														styles.historyMeta,
-														{ color: colors.foreground, opacity: 0.6 },
-													]}
-													numberOfLines={1}
-												>
-													{item.title}
-												</Text>
-											</View>
+											<Ionicons
+												name="trash-outline"
+												size={18}
+												color={colors.destructive ?? "#ef4444"}
+											/>
 											<Text
 												style={[
-													styles.historyPrice,
-													{ color: colors.foreground },
+													styles.removeButtonText,
+													{ color: colors.destructive ?? "#ef4444" },
 												]}
 											>
-												{formatPrice(item.price)}
+												Remove from Collection
 											</Text>
-										</View>
-									))}
-								</ProGate>
-							)
-						)}
-
-						{/* Remove from collection */}
-						{configMatches && quantity <= 1 && (
-							<Pressable
-								onPress={confirmRemove}
-								style={[styles.removeButton, { borderColor: colors.destructive ?? "#ef4444", marginHorizontal: 20, marginTop: 16 }]}
+										</Pressable>
+									</Animated.View>
+								)}
+							</Animated.View>
+						) : (
+							<Animated.View
+								key="card-skeleton"
+								exiting={FadeOut.duration(220)}
 							>
-								<Ionicons name="trash-outline" size={18} color={colors.destructive ?? "#ef4444"} />
-								<Text style={[styles.removeButtonText, { color: colors.destructive ?? "#ef4444" }]}>
-									Remove from Collection
-								</Text>
-							</Pressable>
+								<LoadingSkeleton
+									colors={colors}
+									isFromCollection={isFromCollection}
+								/>
+							</Animated.View>
 						)}
-
-						<View style={{ height: 40 }} />
 					</ScrollView>
-
-				</View>
-			) : (
-				<View
-					style={[
-						styles.container,
-						styles.centered,
-						{ backgroundColor: colors.background },
-					]}
-				>
-					{isError ? (
-						<ErrorState
-							title="Couldn't load card"
-							onRetry={() => refetch()}
-						/>
-					) : (
-						<Text style={{ color: colors.mutedForeground }}>
-							Card not found
-						</Text>
-					)}
-				</View>
-			)}
+				) : (
+					<View style={[StyleSheet.absoluteFill, styles.centered]}>
+						{isError ? (
+							<ErrorState
+								title="Couldn't load card"
+								onRetry={() => refetch()}
+							/>
+						) : (
+							<Text style={{ color: colors.mutedForeground }}>
+								Card not found
+							</Text>
+						)}
+					</View>
+				)}
+			</View>
 		</>
 	);
 }
@@ -1686,7 +1971,60 @@ const styles = StyleSheet.create({
 	},
 	content: {
 		paddingTop: 4,
+		// Grow the content to at least the viewport so the sheet can stretch to
+		// the bottom edge — no blurred backdrop peeking below the counter.
+		flexGrow: 1,
+	},
+
+	// The counter — one solid surface that rises beneath the floating card and
+	// holds every detail as divided rows (replaces the old floating cards).
+	sheet: {
+		borderTopLeftRadius: 28,
+		borderTopRightRadius: 28,
+		borderTopWidth: StyleSheet.hairlineWidth,
+		paddingTop: 10,
 		paddingBottom: 40,
+		// Fill the remaining height below the card when content is short.
+		flexGrow: 1,
+		minHeight: SCREEN_HEIGHT * 0.5,
+		// Lift the lip off the stage so the card reads as floating above it.
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: -8 },
+		shadowOpacity: 0.22,
+		shadowRadius: 18,
+		elevation: 12,
+	},
+	grabber: {
+		width: 38,
+		height: 5,
+		borderRadius: 3,
+		alignSelf: "center",
+		marginBottom: 6,
+	},
+	// A section's breathing room inside the sheet — replaces per-card margins.
+	sheetSection: {
+		paddingHorizontal: 22,
+		paddingVertical: 18,
+	},
+	divider: {
+		height: StyleSheet.hairlineWidth,
+		marginHorizontal: 22,
+	},
+
+	// Value header — the headline price + owned quantity, on the counter lip
+	valueGate: {
+		paddingHorizontal: 22,
+		paddingTop: 12,
+		paddingBottom: 18,
+	},
+	valueTopRow: {
+		flexDirection: "row",
+		alignItems: "flex-start",
+		justifyContent: "space-between",
+		gap: 12,
+	},
+	valueMain: {
+		flex: 1,
 	},
 
 	// Image
@@ -1709,6 +2047,12 @@ const styles = StyleSheet.create({
 		borderRadius: 20,
 		borderWidth: 1,
 		marginBottom: 12,
+	},
+	// In the value header the badge sits top-right beside the price, not centered.
+	quantityBadgeHeader: {
+		alignSelf: "flex-start",
+		marginBottom: 0,
+		marginTop: 4,
 	},
 	quantityText: {
 		fontSize: 14,
@@ -1737,15 +2081,6 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 	},
 
-	// Estimate block — most prominent element
-	estimateBlock: {
-		marginHorizontal: 20,
-		marginBottom: 12,
-		borderRadius: 12,
-		borderWidth: 1,
-		padding: 20,
-		alignItems: "center",
-	},
 	estimateLabel: {
 		fontSize: 12,
 		fontWeight: "700",
@@ -1756,19 +2091,20 @@ const styles = StyleSheet.create({
 		fontSize: 44,
 		fontWeight: "800",
 		letterSpacing: -1.5,
+		marginTop: 2,
 	},
 	tickerInput: {
-		alignSelf: "stretch",
-		textAlign: "center",
+		alignSelf: "flex-start",
+		textAlign: "left",
 		padding: 0,
 		fontVariant: ["tabular-nums"],
 	},
 	selectionSummary: {
 		flexDirection: "row",
 		gap: 6,
-		marginTop: 12,
+		marginTop: 14,
 		flexWrap: "wrap",
-		justifyContent: "center",
+		justifyContent: "flex-start",
 	},
 	selectionChip: {
 		flexDirection: "row",
@@ -1789,17 +2125,13 @@ const styles = StyleSheet.create({
 		borderRadius: 3.5,
 	},
 
-	// Card meta strip
+	// Card meta strip — now a row within the sheet
 	metaStrip: {
 		flexDirection: "row",
 		alignItems: "center",
-		marginHorizontal: 20,
-		marginBottom: 12,
-		paddingHorizontal: 16,
-		paddingVertical: 14,
+		paddingHorizontal: 22,
+		paddingVertical: 18,
 		gap: 12,
-		borderRadius: 12,
-		borderWidth: 1,
 	},
 	cardName: {
 		fontSize: 17,
@@ -1838,6 +2170,16 @@ const styles = StyleSheet.create({
 		borderRadius: 12,
 		borderWidth: 1,
 		padding: 16,
+	},
+	// Strips the collapsible's standalone-card chrome so it reads as a sheet row.
+	collapsibleInSheet: {
+		marginHorizontal: 0,
+		marginBottom: 0,
+		borderRadius: 0,
+		borderWidth: 0,
+		paddingHorizontal: 22,
+		paddingVertical: 18,
+		backgroundColor: "transparent",
 	},
 	sectionTitle: {
 		fontSize: 16,

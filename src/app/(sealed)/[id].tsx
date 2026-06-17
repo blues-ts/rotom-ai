@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	Alert,
 	Dimensions,
@@ -10,6 +10,7 @@ import {
 	View,
 } from "react-native";
 import Animated, {
+	FadeInDown,
 	useAnimatedStyle,
 	useSharedValue,
 	withRepeat,
@@ -21,6 +22,7 @@ import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApi } from "@/lib/axios";
 import { useCollections } from "@/hooks/useCollections";
 import { useRevenueCat } from "@/context/RevenueCatContext";
@@ -43,6 +45,7 @@ import type { ScrydexRawPrice, ScrydexTrends } from "@/types/scrydex";
 // Same width as the card detail page; height follows the artwork's natural
 // aspect ratio (packs are tall, boxes are wide) so there's no letterboxing.
 const SCREEN_WIDTH = Dimensions.get("window").width;
+const SCREEN_HEIGHT = Dimensions.get("window").height;
 const IMAGE_WIDTH = SCREEN_WIDTH * 0.9;
 const MIN_ASPECT = 0.5;
 const MAX_ASPECT = 1.4;
@@ -52,6 +55,12 @@ const TREND_WINDOWS: { key: keyof ScrydexTrends; label: string }[] = [
 	{ key: "days_30", label: "30D" },
 	{ key: "days_90", label: "90D" },
 ];
+
+// Staggered "rise in" for the detail sections — same feel as the set-tile
+// entrance. Sections mount once (not recycled), so a plain staggered FadeInDown
+// on mount is optimal: no replay, no guard needed.
+const sectionEntering = (index: number) =>
+	FadeInDown.delay(Math.min(index * 55, 280)).duration(320);
 
 function Skeleton({
 	width,
@@ -90,6 +99,7 @@ function Skeleton({
 
 export default function SealedDetail() {
 	const { colors } = useTheme();
+	const insets = useSafeAreaInsets();
 	const { isPro } = useRevenueCat();
 	const {
 		id,
@@ -108,7 +118,9 @@ export default function SealedDetail() {
 	}>();
 	const api = useApi();
 	const isFromCollection = !!collectionId;
-	const [quantity, setQuantity] = useState(parseInt(initQuantity || "1", 10) || 1);
+	const [quantity, setQuantity] = useState(
+		parseInt(initQuantity || "1", 10) || 1,
+	);
 	const [pricePaid, setPricePaid] = useState<string>(initPricePaid || "");
 
 	const {
@@ -119,11 +131,25 @@ export default function SealedDetail() {
 		updateCardPricePaid,
 	} = useCollections();
 
-	const { data: product, isLoading, isError, refetch } = useQuery({
+	const {
+		data: product,
+		isLoading,
+		isError,
+		refetch,
+	} = useQuery({
 		queryKey: ["sealed", id],
 		queryFn: () => getSealedProduct(api, id),
 		enabled: !!id,
 	});
+
+	// If the user upgrades to Pro while on this screen, refetch so the pricing
+	// API fires and real prices replace the "—" placeholders instead of showing
+	// stale price-less data.
+	const wasPro = useRef(isPro);
+	useEffect(() => {
+		if (isPro && !wasPro.current) refetch();
+		wasPro.current = isPro;
+	}, [isPro, refetch]);
 
 	const variantNames = useMemo(
 		() => (product ? getVariantNames(product) : []),
@@ -174,7 +200,9 @@ export default function SealedDetail() {
 	// Frame height tracks the artwork's natural ratio, clamped to sane bounds.
 	// We ease the height into place once the image reports its dimensions so the
 	// frame doesn't snap from the square placeholder — that snap reads as a flicker.
-	const imageAspect = useSharedValue(1);
+	// Reserve a tall frame by default (most sealed art is tall, clamped to
+	// MAX_ASPECT) so the common case needs no resize once the image loads.
+	const imageAspect = useSharedValue(MAX_ASPECT);
 	const imageFrameStyle = useAnimatedStyle(() => ({
 		height: IMAGE_WIDTH * imageAspect.value,
 	}));
@@ -198,29 +226,31 @@ export default function SealedDetail() {
 			});
 		}, 600);
 		return () => clearTimeout(timer);
-	}, [pricePaid, isFromCollection, configMatches, initPricePaid, collectionId, id, variant]);
+	}, [
+		pricePaid,
+		isFromCollection,
+		configMatches,
+		initPricePaid,
+		collectionId,
+		id,
+		variant,
+	]);
 
 	const confirmRemove = () => {
-		Alert.alert(
-			"Remove Product",
-			"Remove this product from the collection?",
-			[
-				{ text: "Cancel", style: "cancel" },
-				{
-					text: "Remove",
-					style: "destructive",
-					onPress: () => {
-						Haptics.notificationAsync(
-							Haptics.NotificationFeedbackType.Warning,
-						);
-						removeCardFromCollection.mutate(
-							{ collectionId: collectionId!, cardId: id },
-							{ onSuccess: () => router.back() },
-						);
-					},
+		Alert.alert("Remove Product", "Remove this product from the collection?", [
+			{ text: "Cancel", style: "cancel" },
+			{
+				text: "Remove",
+				style: "destructive",
+				onPress: () => {
+					Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+					removeCardFromCollection.mutate(
+						{ collectionId: collectionId!, cardId: id },
+						{ onSuccess: () => router.back() },
+					);
 				},
-			],
-		);
+			},
+		]);
 	};
 
 	const handleAdd = () => {
@@ -267,7 +297,8 @@ export default function SealedDetail() {
 				params: {
 					...config,
 					cardValue: String(config.cardValue),
-					pricePaid: config.pricePaid !== undefined ? String(config.pricePaid) : "",
+					pricePaid:
+						config.pricePaid !== undefined ? String(config.pricePaid) : "",
 				},
 			});
 		}
@@ -300,18 +331,38 @@ export default function SealedDetail() {
 					<View style={styles.imageContainer}>
 						<Skeleton
 							width={IMAGE_WIDTH}
-							height={IMAGE_WIDTH}
+							height={IMAGE_WIDTH * MAX_ASPECT}
 							color={colors.muted}
 							style={{ borderRadius: 19 }}
 						/>
 					</View>
-					<View style={[styles.estimateBlock, { borderColor: colors.border }]}>
-						<Skeleton width={100} height={11} color={colors.muted} />
-						<Skeleton width={180} height={44} color={colors.muted} style={{ marginTop: 6 }} />
+					<View
+						style={[
+							styles.sheet,
+							{ backgroundColor: colors.card, borderColor: colors.border },
+						]}
+					>
+						<View
+							style={[
+								styles.grabber,
+								{ backgroundColor: colors.mutedForeground + "66" },
+							]}
+						/>
+						<View style={styles.valueGate}>
+							<Skeleton width={120} height={12} color={colors.muted} />
+							<Skeleton
+								width={180}
+								height={44}
+								color={colors.muted}
+								style={{ marginTop: 8 }}
+							/>
+						</View>
 					</View>
 				</ScrollView>
 			) : product ? (
-				<View style={[styles.container, { backgroundColor: colors.background }]}>
+				<View
+					style={[styles.container, { backgroundColor: colors.background }]}
+				>
 					{productImage && (
 						<Image
 							source={{ uri: productImage }}
@@ -348,167 +399,229 @@ export default function SealedDetail() {
 												Math.max(height / width, MIN_ASPECT),
 												MAX_ASPECT,
 											);
-											imageAspect.value = withTiming(aspect, { duration: 220 });
+											// Set instantly — animating the frame size makes the
+											// image visibly scale/zoom into place as it fades in.
+											imageAspect.value = aspect;
 										}
 									}}
 									fallback={
-									<View style={styles.imageFallback}>
-										<Ionicons
-											name="cube-outline"
-											size={28}
-											color={colors.mutedForeground}
-										/>
-										<Text
-											style={{
-												color: colors.foreground,
-												fontSize: 12,
-												fontWeight: "600",
-												textAlign: "center",
-												paddingHorizontal: 8,
-											}}
-											numberOfLines={2}
-										>
-											{product.name}
-										</Text>
-									</View>
+										<View style={styles.imageFallback}>
+											<Ionicons
+												name="cube-outline"
+												size={28}
+												color={colors.mutedForeground}
+											/>
+											<Text
+												style={{
+													color: colors.foreground,
+													fontSize: 12,
+													fontWeight: "600",
+													textAlign: "center",
+													paddingHorizontal: 8,
+												}}
+												numberOfLines={2}
+											>
+												{product.name}
+											</Text>
+										</View>
 									}
 								/>
 							</Animated.View>
 						</View>
 
-						{/* Quantity Badge */}
-						{configMatches && (
-							<View
-								style={[
-									styles.quantityBadge,
-									{
-										backgroundColor: colors.card + "D9",
-										borderColor: colors.border,
-									},
-								]}
-							>
-								<Pressable
-									onPress={() => {
-										// At 1, decrementing would leave a 0-quantity row, so
-										// confirm removal from the collection instead.
-										if (quantity <= 1) {
-											confirmRemove();
-											return;
-										}
-										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-										decrementCardQuantity.mutate(
-											{
-												collectionId: collectionId!,
-												cardId: id,
-												pricingType: "Raw",
-												variant: initVariant || "normal",
-												condition: "U",
-											},
-											{ onError: () => setQuantity((q) => q + 1) },
-										);
-										setQuantity((q) => q - 1);
-									}}
-									style={[styles.qtyButton, { backgroundColor: colors.muted }]}
-								>
-									<Ionicons name="remove" size={16} color={colors.foreground} />
-								</Pressable>
-								<Ionicons name="layers-outline" size={16} color={colors.primary} />
-								<Text style={[styles.quantityText, { color: colors.foreground }]}>
-									{quantity}
-								</Text>
-								<Pressable
-									onPress={() => {
-										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-										incrementCardQuantity.mutate(
-											{
-												collectionId: collectionId!,
-												cardId: id,
-												pricingType: "Raw",
-												variant: initVariant || "normal",
-												condition: "U",
-											},
-											{ onError: () => setQuantity((q) => q - 1) },
-										);
-										setQuantity((q) => q + 1);
-									}}
-									style={[styles.qtyButton, { backgroundColor: colors.muted }]}
-								>
-									<Ionicons name="add" size={16} color={colors.foreground} />
-								</Pressable>
-							</View>
-						)}
-
-						{/* Market Price */}
-						<ProGate
+						<View
 							style={[
-								styles.estimateBlock,
+								styles.sheet,
 								{
-									backgroundColor: colors.card + "D9",
+									backgroundColor: colors.card,
 									borderColor: colors.border,
+									// Extend the counter past the scroll view's bottom safe-area
+									// inset so it reaches the physical screen edge; pad the
+									// content back up so the last row clears the home indicator.
+									marginBottom: -insets.bottom,
+									paddingBottom: 40 + insets.bottom,
 								},
 							]}
 						>
-							<Text
+							<View
 								style={[
-									styles.estimateLabel,
-									{ color: colors.foreground, opacity: 0.75 },
+									styles.grabber,
+									{ backgroundColor: colors.mutedForeground + "66" },
 								]}
-							>
-								MARKET PRICE · UNOPENED
-							</Text>
-							<Text style={[styles.heroPrice, { color: colors.foreground }]}>
-								{marketPrice !== undefined
-									? formatCurrency(marketPrice)
-									: "—"}
-							</Text>
+							/>
 
-							{trendChips.length > 0 && (
-								<View style={styles.trendRow}>
-									{trendChips.map(({ label, pct }) => {
-										const up = pct >= 0;
-										const trendColor = up ? "#22c55e" : "#ef4444";
-										return (
-											<View
-												key={label}
+							{/* Market price — the sheet's headline, on the counter */}
+							<Animated.View entering={sectionEntering(1)}>
+								<ProGate style={styles.valueGate}>
+									<View style={styles.valueTopRow}>
+										<View style={styles.valueMain}>
+											<Text
 												style={[
-													styles.trendChip,
+													styles.estimateLabel,
+													{ color: colors.foreground, opacity: 0.75 },
+												]}
+											>
+												MARKET PRICE · UNOPENED
+											</Text>
+											<Text
+												style={[
+													styles.heroPrice,
+													{ color: colors.foreground },
+												]}
+											>
+												{marketPrice !== undefined
+													? formatCurrency(marketPrice)
+													: "—"}
+											</Text>
+										</View>
+
+										{/* Quantity owned */}
+										{configMatches && (
+											<View
+												style={[
+													styles.quantityBadge,
+													styles.quantityBadgeHeader,
 													{
-														backgroundColor: trendColor + "1F",
-														borderColor: trendColor + "44",
+														backgroundColor: colors.muted,
+														borderColor: colors.border,
 													},
 												]}
 											>
+												<Pressable
+													onPress={() => {
+														// At 1, decrementing would leave a 0-quantity
+														// row, so confirm removal instead.
+														if (quantity <= 1) {
+															confirmRemove();
+															return;
+														}
+														Haptics.impactAsync(
+															Haptics.ImpactFeedbackStyle.Light,
+														);
+														decrementCardQuantity.mutate(
+															{
+																collectionId: collectionId!,
+																cardId: id,
+																pricingType: "Raw",
+																variant: initVariant || "normal",
+																condition: "U",
+															},
+															{ onError: () => setQuantity((q) => q + 1) },
+														);
+														setQuantity((q) => q - 1);
+													}}
+													style={[
+														styles.qtyButton,
+														{ backgroundColor: colors.card },
+													]}
+												>
+													<Ionicons
+														name="remove"
+														size={16}
+														color={colors.foreground}
+													/>
+												</Pressable>
 												<Ionicons
-													name={up ? "trending-up" : "trending-down"}
-													size={13}
-													color={trendColor}
+													name="layers-outline"
+													size={16}
+													color={colors.primary}
 												/>
-												<Text style={[styles.trendText, { color: colors.foreground }]}>
-													{label}{" "}
-													<Text style={{ color: trendColor, fontWeight: "700" }}>
-														{up ? "+" : ""}
-														{pct.toFixed(1)}%
-													</Text>
+												<Text
+													style={[
+														styles.quantityText,
+														{ color: colors.foreground },
+													]}
+												>
+													{quantity}
 												</Text>
+												<Pressable
+													onPress={() => {
+														Haptics.impactAsync(
+															Haptics.ImpactFeedbackStyle.Light,
+														);
+														incrementCardQuantity.mutate(
+															{
+																collectionId: collectionId!,
+																cardId: id,
+																pricingType: "Raw",
+																variant: initVariant || "normal",
+																condition: "U",
+															},
+															{ onError: () => setQuantity((q) => q - 1) },
+														);
+														setQuantity((q) => q + 1);
+													}}
+													style={[
+														styles.qtyButton,
+														{ backgroundColor: colors.card },
+													]}
+												>
+													<Ionicons
+														name="add"
+														size={16}
+														color={colors.foreground}
+													/>
+												</Pressable>
 											</View>
-										);
-									})}
-								</View>
-							)}
-						</ProGate>
+										)}
+									</View>
 
-						{/* Meta strip */}
+								{trendChips.length > 0 && (
+									<View style={styles.trendRow}>
+										{trendChips.map(({ label, pct }) => {
+											const up = pct >= 0;
+											const trendColor = up ? "#22c55e" : "#ef4444";
+											return (
+												<View
+													key={label}
+													style={[
+														styles.trendChip,
+														{
+															backgroundColor: trendColor + "1F",
+															borderColor: trendColor + "44",
+														},
+													]}
+												>
+													<Ionicons
+														name={up ? "trending-up" : "trending-down"}
+														size={13}
+														color={trendColor}
+													/>
+													<Text
+														style={[
+															styles.trendText,
+															{ color: colors.foreground },
+														]}
+													>
+														{label}{" "}
+														<Text
+															style={{ color: trendColor, fontWeight: "700" }}
+														>
+															{up ? "+" : ""}
+															{pct.toFixed(1)}%
+														</Text>
+													</Text>
+												</View>
+											);
+										})}
+									</View>
+								)}
+							</ProGate>
+						</Animated.View>
+
 						<View
-							style={[
-								styles.metaStrip,
-								{
-									backgroundColor: colors.card + "D9",
-									borderColor: colors.border,
-								},
-							]}
+							style={[styles.divider, { backgroundColor: colors.border }]}
+						/>
+
+						{/* Identity — product name, set, type */}
+						<Animated.View
+							entering={sectionEntering(2)}
+							style={styles.metaStrip}
 						>
 							<View style={{ flex: 1 }}>
-								<Text style={[styles.productName, { color: colors.foreground }]}>
+								<Text
+									style={[styles.productName, { color: colors.foreground }]}
+								>
 									{product.name}
 								</Text>
 								{!!product.expansion?.name && (
@@ -540,19 +653,21 @@ export default function SealedDetail() {
 									</Text>
 								</View>
 							)}
-						</View>
+						</Animated.View>
 
 						{/* Variant picker */}
 						{variantNames.length > 1 && (
-							<View
-								style={[
-									styles.section,
-									{
-										backgroundColor: colors.card + "D9",
-										borderColor: colors.border,
-									},
-								]}
-							>
+							<>
+								<View
+									style={[
+										styles.divider,
+										{ backgroundColor: colors.border },
+									]}
+								/>
+								<Animated.View
+									entering={sectionEntering(3)}
+									style={styles.sheetSection}
+								>
 								<Text
 									style={[
 										styles.toggleLabel,
@@ -600,18 +715,18 @@ export default function SealedDetail() {
 										);
 									})}
 								</View>
-							</View>
+							</Animated.View>
+							</>
 						)}
 
-						{/* Price Paid */}
 						<View
-							style={[
-								styles.section,
-								{
-									backgroundColor: colors.card + "D9",
-									borderColor: colors.border,
-								},
-							]}
+							style={[styles.divider, { backgroundColor: colors.border }]}
+						/>
+
+						{/* Price Paid */}
+						<Animated.View
+							entering={sectionEntering(4)}
+							style={styles.sheetSection}
 						>
 							<Text
 								style={[styles.toggleLabel, { color: colors.mutedForeground }]}
@@ -650,20 +765,24 @@ export default function SealedDetail() {
 									returnKeyType="done"
 								/>
 							</View>
-						</View>
+						</Animated.View>
 
 						{/* Description */}
 						{!!product.description && (
-							<View
-								style={[
-									styles.section,
-									{
-										backgroundColor: colors.card + "D9",
-										borderColor: colors.border,
-									},
-								]}
-							>
-								<Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+							<>
+								<View
+									style={[
+										styles.divider,
+										{ backgroundColor: colors.border },
+									]}
+								/>
+								<Animated.View
+									entering={sectionEntering(5)}
+									style={styles.sheetSection}
+								>
+								<Text
+									style={[styles.sectionTitle, { color: colors.foreground }]}
+								>
 									{"What's Inside"}
 								</Text>
 								<Text
@@ -674,35 +793,44 @@ export default function SealedDetail() {
 								>
 									{product.description}
 								</Text>
-							</View>
+							</Animated.View>
+							</>
 						)}
 
 						{/* Remove from collection */}
 						{configMatches && quantity <= 1 && (
-							<Pressable
-								onPress={confirmRemove}
-								style={[
-									styles.removeButton,
-									{ borderColor: colors.destructive ?? "#ef4444" },
-								]}
-							>
-								<Ionicons
-									name="trash-outline"
-									size={18}
-									color={colors.destructive ?? "#ef4444"}
+							<Animated.View entering={sectionEntering(6)}>
+								<View
+									style={[styles.divider, { backgroundColor: colors.border }]}
 								/>
-								<Text
+								<Pressable
+									onPress={confirmRemove}
 									style={[
-										styles.removeButtonText,
-										{ color: colors.destructive ?? "#ef4444" },
+										styles.removeButton,
+										{
+											borderColor: colors.destructive ?? "#ef4444",
+											marginHorizontal: 22,
+											marginTop: 18,
+										},
 									]}
 								>
-									Remove from Collection
-								</Text>
-							</Pressable>
+									<Ionicons
+										name="trash-outline"
+										size={18}
+										color={colors.destructive ?? "#ef4444"}
+									/>
+									<Text
+										style={[
+											styles.removeButtonText,
+											{ color: colors.destructive ?? "#ef4444" },
+										]}
+									>
+										Remove from Collection
+									</Text>
+								</Pressable>
+							</Animated.View>
 						)}
-
-						<View style={{ height: 40 }} />
+						</View>
 					</ScrollView>
 				</View>
 			) : (
@@ -714,7 +842,10 @@ export default function SealedDetail() {
 					]}
 				>
 					{isError ? (
-						<ErrorState title="Couldn't load product" onRetry={() => refetch()} />
+						<ErrorState
+							title="Couldn't load product"
+							onRetry={() => refetch()}
+						/>
 					) : (
 						<Text style={{ color: colors.mutedForeground }}>
 							Product not found
@@ -736,8 +867,60 @@ const styles = StyleSheet.create({
 	},
 	content: {
 		paddingTop: 4,
-		paddingBottom: 40,
+		// Grow the content to at least the viewport so the sheet can stretch to
+		// the bottom edge — no blurred backdrop peeking below the counter.
+		flexGrow: 1,
 	},
+
+	// The counter — one solid surface that rises beneath the floating product
+	// and holds every detail as divided rows (replaces the old floating cards).
+	sheet: {
+		borderTopLeftRadius: 28,
+		borderTopRightRadius: 28,
+		borderTopWidth: StyleSheet.hairlineWidth,
+		paddingTop: 10,
+		paddingBottom: 40,
+		// Fill the remaining height below the product when content is short.
+		flexGrow: 1,
+		minHeight: SCREEN_HEIGHT * 0.5,
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: -8 },
+		shadowOpacity: 0.22,
+		shadowRadius: 18,
+		elevation: 12,
+	},
+	grabber: {
+		width: 38,
+		height: 5,
+		borderRadius: 3,
+		alignSelf: "center",
+		marginBottom: 6,
+	},
+	sheetSection: {
+		paddingHorizontal: 22,
+		paddingVertical: 18,
+	},
+	divider: {
+		height: StyleSheet.hairlineWidth,
+		marginHorizontal: 22,
+	},
+
+	// Value header — the headline price + owned quantity, on the counter lip
+	valueGate: {
+		paddingHorizontal: 22,
+		paddingTop: 12,
+		paddingBottom: 18,
+	},
+	valueTopRow: {
+		flexDirection: "row",
+		alignItems: "flex-start",
+		justifyContent: "space-between",
+		gap: 12,
+	},
+	valueMain: {
+		flex: 1,
+	},
+
 	imageContainer: {
 		alignItems: "center",
 		marginBottom: 20,
@@ -756,14 +939,6 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		gap: 6,
 	},
-	estimateBlock: {
-		marginHorizontal: 20,
-		marginBottom: 12,
-		borderRadius: 12,
-		borderWidth: 1,
-		padding: 20,
-		alignItems: "center",
-	},
 	estimateLabel: {
 		fontSize: 12,
 		fontWeight: "700",
@@ -774,13 +949,14 @@ const styles = StyleSheet.create({
 		fontSize: 44,
 		fontWeight: "800",
 		letterSpacing: -1.5,
+		marginTop: 2,
 	},
 	trendRow: {
 		flexDirection: "row",
 		gap: 6,
-		marginTop: 12,
+		marginTop: 14,
 		flexWrap: "wrap",
-		justifyContent: "center",
+		justifyContent: "flex-start",
 	},
 	trendChip: {
 		flexDirection: "row",
@@ -799,11 +975,8 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 10,
-		marginHorizontal: 20,
-		marginBottom: 12,
-		borderRadius: 12,
-		borderWidth: 1,
-		padding: 16,
+		paddingHorizontal: 22,
+		paddingVertical: 18,
 	},
 	productName: {
 		fontSize: 17,
@@ -822,13 +995,6 @@ const styles = StyleSheet.create({
 	pillText: {
 		fontSize: 12,
 		fontWeight: "600",
-	},
-	section: {
-		marginHorizontal: 20,
-		marginBottom: 12,
-		borderRadius: 12,
-		borderWidth: 1,
-		padding: 16,
 	},
 	sectionTitle: {
 		fontSize: 16,
@@ -873,6 +1039,12 @@ const styles = StyleSheet.create({
 		borderRadius: 20,
 		borderWidth: 1,
 		marginBottom: 12,
+	},
+	// In the value header the badge sits top-right beside the price, not centered.
+	quantityBadgeHeader: {
+		alignSelf: "flex-start",
+		marginBottom: 0,
+		marginTop: 4,
 	},
 	quantityText: {
 		fontSize: 14,

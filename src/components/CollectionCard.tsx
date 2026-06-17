@@ -2,21 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
 import { formatCurrency } from "@/lib/format";
 import * as Haptics from "expo-haptics";
-import {
-	Dimensions,
-	Pressable,
-	StyleSheet,
-	Text,
-	View,
-} from "react-native";
+import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
-import Animated, {
-	useAnimatedStyle,
-	useSharedValue,
-	withTiming,
-} from "react-native-reanimated";
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+import CardPressable from "@/components/CardPressable";
 
 // Fixed thumbnail size based on a 4-card layout so 1–3 card collections
 // don't stretch their thumbnails. Math: screen - list padding (16*2) -
@@ -34,7 +22,6 @@ interface CollectionCardProps {
 	onPress?: () => void;
 }
 
-
 export default function CollectionCard({
 	name,
 	cardCount,
@@ -45,27 +32,16 @@ export default function CollectionCard({
 	onPress,
 }: CollectionCardProps) {
 	const { colors } = useTheme();
-	const scale = useSharedValue(1);
-	const animatedStyle = useAnimatedStyle(() => ({
-		transform: [{ scale: scale.value }],
-	}));
 
 	return (
-		<AnimatedPressable
+		<CardPressable
 			onPress={() => {
 				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 				onPress?.();
 			}}
-			onPressIn={() => {
-				scale.value = withTiming(0.97, { duration: 80 });
-			}}
-			onPressOut={() => {
-				scale.value = withTiming(1, { duration: 120 });
-			}}
 			style={[
 				styles.container,
 				{ backgroundColor: colors.card, borderColor: colors.border },
-				animatedStyle,
 			]}
 		>
 			{/* Header */}
@@ -74,19 +50,12 @@ export default function CollectionCard({
 					<Text style={[styles.name, { color: colors.foreground }]}>
 						{name}
 					</Text>
-					<Text
-						style={[styles.count, { color: colors.mutedForeground }]}
-					>
+					<Text style={[styles.count, { color: colors.mutedForeground }]}>
 						{cardCount} card{cardCount !== 1 ? "s" : ""}
 					</Text>
 				</View>
 				<View style={{ alignItems: "flex-end" }}>
-					<Text
-						style={[
-							styles.valueLabel,
-							{ color: colors.mutedForeground },
-						]}
-					>
+					<Text style={[styles.valueLabel, { color: colors.mutedForeground }]}>
 						Total value
 					</Text>
 					<Text style={[styles.value, { color: colors.foreground }]}>
@@ -126,12 +95,7 @@ export default function CollectionCard({
 					]}
 				>
 					<Ionicons name="add" size={16} color={colors.foreground} />
-					<Text
-						style={[
-							styles.addButtonText,
-							{ color: colors.foreground },
-						]}
-					>
+					<Text style={[styles.addButtonText, { color: colors.foreground }]}>
 						Add cards
 					</Text>
 				</Pressable>
@@ -143,7 +107,7 @@ export default function CollectionCard({
 					/>
 				</Pressable>
 			</View>
-		</AnimatedPressable>
+		</CardPressable>
 	);
 }
 

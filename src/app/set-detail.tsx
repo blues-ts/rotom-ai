@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	Dimensions,
 	FlatList,
+	InteractionManager,
 	Keyboard,
 	Pressable,
 	StyleSheet,
@@ -9,7 +10,7 @@ import {
 	View,
 } from "react-native";
 import Animated, {
-	FadeIn,
+	FadeInDown,
 	useAnimatedStyle,
 	useSharedValue,
 	withRepeat,
@@ -24,9 +25,20 @@ import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/context/ThemeContext";
 import { useApi } from "@/lib/axios";
+import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
 import { searchCards, searchSealed } from "@/lib/api/pricing";
-import { buildSetCardsQ, getCardDisplayName, getCardImage, getCardNumber, toNumber } from "@/lib/scrydex";
+import { getCatalogSet, catalogCardToScrydex } from "@/lib/api/catalog";
+import { useRevenueCat } from "@/context/RevenueCatContext";
+import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
+import {
+	buildSetCardsQ,
+	getCardDisplayName,
+	getCardImage,
+	getCardNumber,
+	toNumber,
+} from "@/lib/scrydex";
 import CardImage from "@/components/CardImage";
+import CardPressable from "@/components/CardPressable";
 import ErrorState from "@/components/ErrorState";
 import type { ScrydexCard, ScrydexSealedProduct } from "@/types/scrydex";
 
@@ -39,11 +51,16 @@ const screenWidth = Dimensions.get("window").width;
 const imageWidth = (screenWidth - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 const imageHeight = imageWidth * 1.4;
 
-const SKELETON_DATA = Array.from({ length: 15 }, (_, i) => ({ id: `skeleton-${i}` }));
+const SKELETON_DATA = Array.from({ length: 15 }, (_, i) => ({
+	id: `skeleton-${i}`,
+}));
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-type SortOption = "number" | "numberDesc" | "nameAsc" | "valueDesc" | "valueAsc";
+type SortOption =
+	| "number"
+	| "numberDesc"
+	| "nameAsc"
+	| "valueDesc"
+	| "valueAsc";
 
 const SORT_LABELS: Record<SortOption, string> = {
 	number: "Number (low to high)",
@@ -90,34 +107,6 @@ function bestMarketPrice(
 		: { value: bestOther, variant: bestOtherVariant };
 }
 
-function CardPressable({
-	children,
-	onPress,
-}: {
-	children: React.ReactNode;
-	onPress: () => void;
-}) {
-	const scale = useSharedValue(1);
-	const animatedStyle = useAnimatedStyle(() => ({
-		transform: [{ scale: scale.value }],
-	}));
-
-	return (
-		<AnimatedPressable
-			style={animatedStyle}
-			onPressIn={() => {
-				scale.value = withTiming(0.96, { duration: 80 });
-			}}
-			onPressOut={() => {
-				scale.value = withTiming(1, { duration: 120 });
-			}}
-			onPress={onPress}
-		>
-			{children}
-		</AnimatedPressable>
-	);
-}
-
 function SkeletonCard({ color }: { color: string }) {
 	const opacity = useSharedValue(0.3);
 
@@ -153,8 +142,10 @@ export default function SetDetail() {
 	}>();
 	const isSealedMode = mode === "sealed";
 	const { colors } = useTheme();
+	const { isPro } = useRevenueCat();
 	const insets = useSafeAreaInsets();
 	const api = useApi();
+	const prefetchDetail = usePrefetchDetail();
 	// Explicit header offset: contentInsetAdjustmentBehavior applies its inset
 	// a frame after mount, which made the summary jump down on every list
 	// remount (initial load, sort changes).
@@ -165,6 +156,28 @@ export default function SetDetail() {
 		isSealedMode ? "nameAsc" : "number",
 	);
 	const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+
+	// Tracks cards that have already played their entrance animation. FlatList
+	// recycles cells (unmount/remount) constantly while scrolling, and an
+	// `entering` animation re-fires on every mount — so without this guard the
+	// fade-in would replay on every scroll-back and jank the list. We let each
+	// card animate exactly once, on its genuine first appearance. Cleared when
+	// the dataset changes (sort/filter) so a fresh list animates in again.
+	const animatedIdsRef = useRef<Set<string>>(new Set());
+	useEffect(() => {
+		animatedIdsRef.current = new Set();
+	}, [sortBy, debouncedFilter, isSealedMode]);
+
+	// Defer the heavy card grid (animated image cells) until the navigation
+	// transition finishes, so pushing this screen is instant instead of waiting
+	// on the grid's first render. The light skeleton shows during the slide-in.
+	const [transitionDone, setTransitionDone] = useState(false);
+	useEffect(() => {
+		const handle = InteractionManager.runAfterInteractions(() => {
+			setTransitionDone(true);
+		});
+		return () => handle.cancel();
+	}, []);
 
 	useEffect(() => {
 		const timer = setTimeout(() => {
@@ -213,39 +226,74 @@ export default function SetDetail() {
 		[api, id, isSealedMode, debouncedFilter],
 	);
 
-	// Base load: number-ordered, NO prices. The grid only shows art/number/name,
-	// so this stays light and is cached longer (metadata TTL). Drives the initial
-	// paint plus number/name sorts.
+	// Card list comes from the LOCAL catalog — no Scrydex call. It's the same
+	// query the sets list warms on scroll/tap, so opening a set is instant (and
+	// offline-capable). The grid only needs art/number/name, all of which the
+	// catalog carries.
 	const {
-		data: setCards,
-		isLoading,
-		isError,
-		refetch,
+		data: catalogSet,
+		isLoading: catalogLoading,
+		isError: catalogError,
+		refetch: refetchCatalog,
 	} = useQuery({
-		queryKey: ["setCards", id, isSealedMode, debouncedFilter],
+		queryKey: ["catalog-set", id],
+		queryFn: () => getCatalogSet(api, id),
+		enabled: !!id && !isSealedMode,
+		staleTime: 24 * 60 * 60 * 1000,
+	});
+
+	// Sealed products aren't in the catalog, so sealed mode still loads live.
+	const {
+		data: sealedSet,
+		isLoading: sealedLoading,
+		isError: sealedError,
+		refetch: refetchSealed,
+	} = useQuery({
+		queryKey: ["setSealed", id, debouncedFilter],
 		queryFn: () => fetchWholeSet(false),
-		enabled: !!id,
+		enabled: !!id && isSealedMode,
 		staleTime: 5 * 60 * 1000,
 	});
 
-	// Prices are only needed to sort by value — fetched lazily the first time the
-	// user picks a value sort, then cached. Avoids paying the price cost on every
-	// set open.
-	const { data: pricedCards, isLoading: pricedLoading } = useQuery({
+	const isLoading = isSealedMode ? sealedLoading : catalogLoading;
+	const isError = isSealedMode ? sealedError : catalogError;
+	const refetch = isSealedMode ? refetchSealed : refetchCatalog;
+
+	// Prices are needed ONLY to sort by value — fetched on demand from the live
+	// pricing path the first time the user picks a value sort, then cached.
+	const { data: pricedCards } = useQuery({
 		queryKey: ["setCardsPriced", id, isSealedMode, debouncedFilter],
 		queryFn: () => fetchWholeSet(true),
-		enabled: !!id && isValueSort,
+		enabled: !!id && isValueSort && isPro,
 		staleTime: 5 * 60 * 1000,
 	});
 
-	// Hold the skeleton until prices are in for a value sort, so the grid appears
-	// already-sorted instead of flashing number order and reshuffling.
-	const showSkeleton = isLoading || (isValueSort && pricedLoading);
+	// Skeleton during a cold load OR until the push transition settles (so the
+	// heavy grid mounts after the slide-in, not during it). For a value sort we
+	// keep the current grid and let it reorder once prices arrive (see `cards`).
+	const showSkeleton = isLoading || !transitionDone;
 
 	const sortCondition = isSealedMode ? "U" : "NM";
 
 	const cards = useMemo(() => {
-		const base = setCards?.items ?? [];
+		// Card mode: map the local catalog cards and filter client-side (the whole
+		// set is already local). Sealed mode: items come pre-filtered from the API.
+		let base: SetItem[];
+		if (isSealedMode) {
+			base = sealedSet?.items ?? [];
+		} else {
+			const all = (catalogSet?.cards ?? []).map(catalogCardToScrydex);
+			const f = debouncedFilter.trim().toLowerCase();
+			base = f
+				? all.filter(
+						(c) =>
+							getCardDisplayName(c).toLowerCase().includes(f) ||
+							c.name.toLowerCase().includes(f) ||
+							getCardNumber(c).toLowerCase().includes(f),
+					)
+				: all;
+		}
+
 		if (isValueSort) {
 			// Until prices arrive, keep the cards on screen in number order rather
 			// than flashing a skeleton; they reorder once priced data loads.
@@ -267,21 +315,30 @@ export default function SetDetail() {
 				return nameA.localeCompare(nameB);
 			});
 		}
-		// Server already returned ascending number order; reverse for descending.
+		// Catalog/API already return ascending number order; reverse for descending.
 		return sortBy === "numberDesc" ? base.slice().reverse() : base;
-	}, [setCards, pricedCards, isValueSort, sortBy, sortCondition]);
+	}, [
+		isSealedMode,
+		sealedSet,
+		catalogSet,
+		debouncedFilter,
+		pricedCards,
+		isValueSort,
+		sortBy,
+		sortCondition,
+	]);
 
 	// The expansion's `total` is its card count; in sealed mode the product
 	// count comes from the first unfiltered response instead.
 	const [sealedTotal, setSealedTotal] = useState<number | null>(null);
 	useEffect(() => {
 		if (!isSealedMode || debouncedFilter !== "") return;
-		const t = setCards?.totalCount;
+		const t = sealedSet?.totalCount;
 		if (t !== undefined) setSealedTotal(t);
-	}, [isSealedMode, debouncedFilter, setCards]);
+	}, [isSealedMode, debouncedFilter, sealedSet]);
 
 	const releaseYear = releaseDate ? releaseDate.slice(0, 4) : "—";
-	const countValue = isSealedMode ? (sealedTotal ?? "—") : (total || "—");
+	const countValue = isSealedMode ? (sealedTotal ?? "—") : total || "—";
 
 	// Rendered inside the FlatList so native header insets (translucent header
 	// + attached search bar) position it correctly instead of hiding it.
@@ -327,19 +384,31 @@ export default function SetDetail() {
 			const bestVariant = isValueSort
 				? bestMarketPrice(item, sortCondition).variant
 				: undefined;
+			// Animate in only on a card's first appearance; recycled cells get no
+			// `entering`, so scrolling back never replays the fade (the old jank).
+			const firstAppearance = !animatedIdsRef.current.has(item.id);
+			if (firstAppearance) animatedIdsRef.current.add(item.id);
 			return (
 				<Animated.View
-					entering={FadeIn.delay(Math.min(index * 20, 240)).duration(200)}
+					entering={
+						firstAppearance
+							? FadeInDown.delay(Math.min(index * 22, 200)).duration(240)
+							: undefined
+					}
 				>
 					<CardPressable
 						onPress={() => {
 							Keyboard.dismiss();
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+							prefetchDetail(isSealedMode ? "sealed" : "card", item.id);
 							router.push({
 								pathname: isSealedMode ? "/(sealed)/[id]" : "/(card)/[id]",
 								params: {
 									id: item.id,
 									name: displayName,
+									// Cached thumbnail — lets the detail show the image
+									// instantly instead of behind the data-query skeleton.
+									...(image ? { image } : {}),
 									...(bestVariant ? { variant: bestVariant } : {}),
 								},
 							});
@@ -410,7 +479,14 @@ export default function SetDetail() {
 				</Animated.View>
 			);
 		},
-		[colors, failedImages, isValueSort, isSealedMode, sortCondition],
+		[
+			colors,
+			failedImages,
+			isValueSort,
+			isSealedMode,
+			sortCondition,
+			prefetchDetail,
+		],
 	);
 
 	return (
@@ -456,6 +532,11 @@ export default function SetDetail() {
 							isOn={sortBy === o}
 							onPress={() => {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								// Value sorts need prices — a Pro feature.
+								if ((o === "valueDesc" || o === "valueAsc") && !isPro) {
+									void presentProPaywallIfNeeded();
+									return;
+								}
 								setSortBy(o);
 							}}
 						>
@@ -505,6 +586,10 @@ export default function SetDetail() {
 						showsVerticalScrollIndicator={false}
 						keyboardDismissMode="on-drag"
 						keyboardShouldPersistTaps="handled"
+						removeClippedSubviews
+						initialNumToRender={15}
+						maxToRenderPerBatch={9}
+						windowSize={7}
 					/>
 				)}
 			</View>

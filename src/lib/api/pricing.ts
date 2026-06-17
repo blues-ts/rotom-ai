@@ -60,6 +60,23 @@ export async function getCard(api: AxiosInstance, id: string): Promise<ScrydexCa
   return res.data.data;
 }
 
+/**
+ * Prices for many cards/sealed products in a single request. The server fans
+ * out to Scrydex with a bounded concurrency, so a large collection refresh is
+ * one round trip instead of one call per card.
+ */
+export async function getPricedBatch(
+  api: AxiosInstance,
+  ids: { cardIds: string[]; sealedIds: string[] },
+): Promise<{ cards: ScrydexCard[]; sealed: ScrydexSealedProduct[] }> {
+  const res = await api.post<{
+    success: boolean;
+    cards: ScrydexCard[];
+    sealed: ScrydexSealedProduct[];
+  }>("/api/pricing/batch", ids);
+  return { cards: res.data.cards ?? [], sealed: res.data.sealed ?? [] };
+}
+
 export async function getCardHistory(
   api: AxiosInstance,
   id: string,

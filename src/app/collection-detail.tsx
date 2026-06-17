@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	Alert,
 	Dimensions,
@@ -11,7 +11,7 @@ import {
 	View,
 } from "react-native";
 import Animated, {
-	FadeIn,
+	FadeInDown,
 	useAnimatedStyle,
 	useSharedValue,
 	withRepeat,
@@ -23,6 +23,7 @@ import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/context/ThemeContext";
+import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
 import {
 	useCollectionCards,
 	useCollectionDetail,
@@ -31,6 +32,7 @@ import {
 } from "@/hooks/useCollections";
 import RefreshingPill from "@/components/RefreshingPill";
 import CardImage from "@/components/CardImage";
+import CardPressable from "@/components/CardPressable";
 import ErrorState from "@/components/ErrorState";
 import { formatCurrency } from "@/lib/format";
 import { CONDITION_LABELS, formatVariantLabel } from "@/lib/scrydex";
@@ -43,9 +45,9 @@ const screenWidth = Dimensions.get("window").width;
 const imageWidth = (screenWidth - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 const imageHeight = imageWidth * 1.4;
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-const SKELETON_DATA = Array.from({ length: 9 }, (_, i) => ({ id: `skeleton-${i}` }));
+const SKELETON_DATA = Array.from({ length: 9 }, (_, i) => ({
+	id: `skeleton-${i}`,
+}));
 
 function SkeletonBlock({
 	width,
@@ -102,38 +104,14 @@ function sortCards(cards: CollectionCard[], by: SortOption): CollectionCard[] {
 		case "nameAsc":
 			return arr.sort((a, b) => a.cardName.localeCompare(b.cardName));
 		case "valueDesc":
-			return arr.sort((a, b) => b.cardValue * b.quantity - a.cardValue * a.quantity);
+			return arr.sort(
+				(a, b) => b.cardValue * b.quantity - a.cardValue * a.quantity,
+			);
 		case "valueAsc":
-			return arr.sort((a, b) => a.cardValue * a.quantity - b.cardValue * b.quantity);
+			return arr.sort(
+				(a, b) => a.cardValue * a.quantity - b.cardValue * b.quantity,
+			);
 	}
-}
-
-function CardPressable({
-	children,
-	onPress,
-}: {
-	children: React.ReactNode;
-	onPress: () => void;
-}) {
-	const scale = useSharedValue(1);
-	const animatedStyle = useAnimatedStyle(() => ({
-		transform: [{ scale: scale.value }],
-	}));
-
-	return (
-		<AnimatedPressable
-			style={animatedStyle}
-			onPressIn={() => {
-				scale.value = withTiming(0.96, { duration: 80 });
-			}}
-			onPressOut={() => {
-				scale.value = withTiming(1, { duration: 120 });
-			}}
-			onPress={onPress}
-		>
-			{children}
-		</AnimatedPressable>
-	);
 }
 
 export default function CollectionDetail() {
@@ -150,6 +128,7 @@ export default function CollectionDetail() {
 	}>();
 	const { colors } = useTheme();
 	const insets = useSafeAreaInsets();
+	const prefetchDetail = usePrefetchDetail();
 	// Explicit header offset: contentInsetAdjustmentBehavior applies its inset
 	// a frame after mount, which made the summary jump down on remounts.
 	const topPadding = insets.top + 52;
@@ -168,7 +147,6 @@ export default function CollectionDetail() {
 	} = useCollectionCards(id);
 	const [filterQuery, setFilterQuery] = useState("");
 	const [sortBy, setSortBy] = useState<SortOption>("valueDesc");
-
 
 	const filteredCards = useMemo(() => {
 		if (!cards) return [];
@@ -198,6 +176,17 @@ export default function CollectionDetail() {
 			return haystack.includes(q);
 		});
 	}, [cards, filterQuery, sortBy]);
+
+	// Tracks items that have already played their entrance animation. FlatList
+	// recycles cells (unmount/remount) while scrolling and an `entering` animation
+	// re-fires on every mount — so without this guard the fade-up would replay on
+	// every scroll-back and jank the grid. Each item animates once, on its genuine
+	// first appearance. Cleared when the dataset changes (sort/filter) so a fresh
+	// list animates in again.
+	const animatedIdsRef = useRef<Set<string>>(new Set());
+	useEffect(() => {
+		animatedIdsRef.current = new Set();
+	}, [filterQuery, sortBy]);
 
 	// Banner values: query data when present, falling back to route params so
 	// the banner renders fully populated on the very first frame (same
@@ -277,14 +266,28 @@ export default function CollectionDetail() {
 	}, [collection, id, renameCollection]);
 
 	const renderItem = useCallback(
-		({ item, index }: { item: CollectionCard; index: number }) => (
-			<Animated.View
-				entering={FadeIn.delay(Math.min(index * 30, 300)).duration(200)}
-			>
+		({ item, index }: { item: CollectionCard; index: number }) => {
+			// Fade-up only on an item's first appearance; recycled cells get no
+			// `entering`, so scrolling back never replays the animation — same feel
+			// as the set tiles and set-detail cards.
+			const firstAppearance = !animatedIdsRef.current.has(item.id);
+			if (firstAppearance) animatedIdsRef.current.add(item.id);
+			return (
+				<Animated.View
+					entering={
+						firstAppearance
+							? FadeInDown.delay(Math.min(index * 22, 200)).duration(240)
+							: undefined
+					}
+				>
 				<CardPressable
 					onPress={() => {
 						Keyboard.dismiss();
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+						prefetchDetail(
+							item.productType === "sealed" ? "sealed" : "card",
+							item.cardId,
+						);
 						if (item.productType === "sealed") {
 							router.push({
 								pathname: "/(sealed)/[id]",
@@ -295,9 +298,7 @@ export default function CollectionDetail() {
 									collectionId: item.collectionId,
 									quantity: String(item.quantity),
 									pricePaid:
-										item.pricePaid !== undefined
-											? String(item.pricePaid)
-											: "",
+										item.pricePaid !== undefined ? String(item.pricePaid) : "",
 								},
 							});
 							return;
@@ -315,9 +316,7 @@ export default function CollectionDetail() {
 								collectionId: item.collectionId,
 								quantity: String(item.quantity),
 								pricePaid:
-									item.pricePaid !== undefined
-										? String(item.pricePaid)
-										: "",
+									item.pricePaid !== undefined ? String(item.pricePaid) : "",
 							},
 						});
 					}}
@@ -342,10 +341,7 @@ export default function CollectionDetail() {
 							{/* Middle line always renders so card and sealed tiles
 							    keep identical heights. */}
 							<Text
-								style={[
-									styles.infoNumber,
-									{ color: colors.primary },
-								]}
+								style={[styles.infoNumber, { color: colors.primary }]}
 								numberOfLines={1}
 							>
 								{item.productType === "sealed"
@@ -356,26 +352,20 @@ export default function CollectionDetail() {
 							</Text>
 							<View style={styles.infoValueRow}>
 								<Text
-									style={[
-										styles.infoValue,
-										{ color: colors.foreground },
-									]}
+									style={[styles.infoValue, { color: colors.foreground }]}
 									numberOfLines={1}
 								>
 									{formatCurrency(item.cardValue)}
 								</Text>
 								<Text
-									style={[
-										styles.infoCondition,
-										{ color: colors.primary },
-									]}
+									style={[styles.infoCondition, { color: colors.primary }]}
 									numberOfLines={1}
 								>
 									{item.productType === "sealed"
 										? "Sealed"
 										: item.pricingType === "Graded" &&
-											  item.gradedCompany &&
-											  item.gradedGrade
+												item.gradedCompany &&
+												item.gradedGrade
 											? `${item.gradedCompany} ${item.gradedGrade}`
 											: item.condition}
 									{item.quantity > 1 ? ` ×${item.quantity}` : ""}
@@ -426,8 +416,9 @@ export default function CollectionDetail() {
 					</View>
 				</CardPressable>
 			</Animated.View>
-		),
-		[colors],
+			);
+		},
+		[colors, prefetchDetail],
 	);
 
 	return (
@@ -443,9 +434,7 @@ export default function CollectionDetail() {
 						<View style={styles.headerRight}>
 							<Pressable
 								onPress={() => {
-									Haptics.impactAsync(
-										Haptics.ImpactFeedbackStyle.Light,
-									);
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 									handleRename();
 								}}
 								style={styles.headerButton}
@@ -458,18 +447,12 @@ export default function CollectionDetail() {
 							</Pressable>
 							<Pressable
 								onPress={() => {
-									Haptics.impactAsync(
-										Haptics.ImpactFeedbackStyle.Light,
-									);
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 									router.push("/(search)");
 								}}
 								style={styles.headerButton}
 							>
-								<Ionicons
-									name="add"
-									size={26}
-									color={colors.foreground}
-								/>
+								<Ionicons name="add" size={26} color={colors.foreground} />
 							</Pressable>
 						</View>
 					),
@@ -566,7 +549,9 @@ export default function CollectionDetail() {
 										size={48}
 										color={colors.mutedForeground}
 									/>
-									<Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+									<Text
+										style={[styles.emptyTitle, { color: colors.foreground }]}
+									>
 										No matching cards
 									</Text>
 								</View>
@@ -577,7 +562,9 @@ export default function CollectionDetail() {
 										size={48}
 										color={colors.mutedForeground}
 									/>
-									<Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+									<Text
+										style={[styles.emptyTitle, { color: colors.foreground }]}
+									>
 										No Cards Yet
 									</Text>
 									<Text
