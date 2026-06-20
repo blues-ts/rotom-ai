@@ -268,10 +268,15 @@ export default function SetDetail() {
 		staleTime: 5 * 60 * 1000,
 	});
 
+	// A value sort is meaningless until prices arrive — show the skeleton while
+	// fetching rather than briefly displaying the default (number) order. Cached
+	// prices (staleTime) make this instant on repeat selections.
+	const waitingForPriceSort = isValueSort && isPro && !pricedCards;
+
 	// Skeleton during a cold load OR until the push transition settles (so the
-	// heavy grid mounts after the slide-in, not during it). For a value sort we
-	// keep the current grid and let it reorder once prices arrive (see `cards`).
-	const showSkeleton = isLoading || !transitionDone;
+	// heavy grid mounts after the slide-in, not during it), OR while a value
+	// sort waits on its pricing fetch.
+	const showSkeleton = isLoading || !transitionDone || waitingForPriceSort;
 
 	const sortCondition = isSealedMode ? "U" : "NM";
 
@@ -295,8 +300,8 @@ export default function SetDetail() {
 		}
 
 		if (isValueSort) {
-			// Until prices arrive, keep the cards on screen in number order rather
-			// than flashing a skeleton; they reorder once priced data loads.
+			// While prices load the skeleton is shown (see `waitingForPriceSort`),
+			// so this number-order fallback only ever renders for non-pro users.
 			const priced = pricedCards?.items;
 			if (!priced) return base;
 			const sorted = priced

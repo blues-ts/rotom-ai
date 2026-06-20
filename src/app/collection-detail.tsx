@@ -308,6 +308,10 @@ export default function CollectionDetail() {
 							params: {
 								id: item.cardId,
 								name: item.cardName,
+								// Cached thumbnail — shows instantly while the full card
+								// loads, and is the only image for non-Pro (catalog card
+								// carries no large art).
+								...(item.cardImageUrl ? { image: item.cardImageUrl } : {}),
 								pricingType: item.pricingType,
 								variant: item.variant,
 								condition: item.condition,

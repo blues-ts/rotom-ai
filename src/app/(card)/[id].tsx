@@ -21,6 +21,7 @@ import {
 } from "react-native";
 import Animated, {
 	Easing,
+	FadeIn,
 	FadeInDown,
 	FadeOut,
 	interpolate,
@@ -33,7 +34,6 @@ import Animated, {
 	withSpring,
 	withTiming,
 } from "react-native-reanimated";
-import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack, useLocalSearchParams } from "expo-router";
@@ -112,11 +112,11 @@ function buildGradedTierKey(company: string, grade: string): string {
 
 // --- Shared UI Components ---
 
-// One sweep clock shared by every Skeleton in the loading view, so a single band
-// of light travels across the whole frosted-glass column in unison instead of
-// each block blinking on its own timer. Provided by LoadingSkeleton; blocks used
-// outside it (e.g. the chart's own loader) fall back to a private clock.
-const ShimmerContext = createContext<SharedValue<number> | null>(null);
+// One pulse clock shared by every Skeleton in the loading view, so the whole
+// frosted-glass column fades in and out in unison instead of each block blinking
+// on its own timer. Provided by LoadingSkeleton; blocks used outside it (e.g. the
+// chart's own loader) fall back to a private clock. Holds the current opacity.
+const PulseContext = createContext<SharedValue<number> | null>(null);
 
 function Skeleton({
 	width,
@@ -129,62 +129,37 @@ function Skeleton({
 	color: string;
 	style?: any;
 }) {
-	const shared = useContext(ShimmerContext);
-	const fallback = useSharedValue(0);
+	const shared = useContext(PulseContext);
+	const fallback = useSharedValue(0.3);
 	useEffect(() => {
 		if (shared) return;
 		fallback.value = withRepeat(
-			withTiming(1, { duration: 1300, easing: Easing.linear }),
+			withSequence(
+				withTiming(0.7, { duration: 800 }),
+				withTiming(0.3, { duration: 800 }),
+			),
 			-1,
-			false,
 		);
 	}, [shared]);
-	const sweep = shared ?? fallback;
+	const pulse = shared ?? fallback;
 
-	// Measured pixel width drives the sweep distance (handles %-based widths too).
-	const measured = useSharedValue(typeof width === "number" ? width : 0);
-	const sheenStyle = useAnimatedStyle(() => ({
-		transform: [
-			{
-				translateX: interpolate(
-					sweep.value,
-					[0, 1],
-					[-measured.value, measured.value],
-				),
-			},
-		],
+	const animatedStyle = useAnimatedStyle(() => ({
+		opacity: pulse.value,
 	}));
 
 	return (
-		<View
-			onLayout={(e) => {
-				measured.value = e.nativeEvent.layout.width;
-			}}
+		<Animated.View
 			style={[
 				{
 					width,
 					height,
 					backgroundColor: color,
 					borderRadius: 8,
-					overflow: "hidden",
 				},
 				style,
+				animatedStyle,
 			]}
-		>
-			<Animated.View
-				pointerEvents="none"
-				style={[StyleSheet.absoluteFill, sheenStyle]}
-			>
-				<LinearGradient
-					// A soft diagonal sheen — light catching glass — over the muted base.
-					colors={["transparent", "rgba(255,255,255,0.28)", "transparent"]}
-					locations={[0.15, 0.5, 0.85]}
-					start={{ x: 0, y: 0 }}
-					end={{ x: 1, y: 0.65 }}
-					style={StyleSheet.absoluteFill}
-				/>
-			</Animated.View>
-		</View>
+		/>
 	);
 }
 
@@ -416,17 +391,19 @@ function LoadingSkeleton({
 	colors: any;
 	isFromCollection?: boolean;
 }) {
-	const skeletonColor = colors.muted;
+	// `border` (not `muted`) so blocks stay visible against the sheet's `card`
+	// background — muted is nearly identical to card in dark mode. Matches the
+	// set-detail loader, which pulses opacity on `border`.
+	const skeletonColor = colors.border;
 
-	// Single sweep clock for all blocks below: glide across (~1.1s), rest briefly
-	// off-screen, repeat — so the light reads as one continuous pass over the
-	// whole column rather than per-block flicker.
-	const sweep = useSharedValue(0);
+	// Single pulse clock for all blocks below: fade between 0.3 and 0.7 in unison
+	// so the whole column breathes together rather than per-block flicker.
+	const pulse = useSharedValue(0.3);
 	useEffect(() => {
-		sweep.value = withRepeat(
+		pulse.value = withRepeat(
 			withSequence(
-				withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.ease) }),
-				withTiming(1, { duration: 450 }),
+				withTiming(0.7, { duration: 800 }),
+				withTiming(0.3, { duration: 800 }),
 			),
 			-1,
 		);
@@ -435,7 +412,7 @@ function LoadingSkeleton({
 	// The hero image is rendered persistently by the parent (above the crossfade),
 	// so the skeleton only covers the data-dependent sections below it.
 	return (
-		<ShimmerContext.Provider value={sweep}>
+		<PulseContext.Provider value={pulse}>
 			<View
 				style={[
 					styles.sheet,
@@ -575,7 +552,7 @@ function LoadingSkeleton({
 					/>
 				</View>
 			</View>
-		</ShimmerContext.Provider>
+		</PulseContext.Provider>
 	);
 }
 
@@ -1196,6 +1173,10 @@ export default function CardDetail() {
 						{card ? (
 							<Animated.View
 								key="card-content"
+								// Fade the whole sheet in as the skeleton fades out, so the two
+								// overlap into a crossfade instead of a hard cut. The inner
+								// sections still cascade in on top via sectionEntering.
+								entering={FadeIn.duration(260)}
 								style={[
 									styles.sheet,
 									{
@@ -2273,6 +2254,7 @@ const styles = StyleSheet.create({
 	chartContainer: {
 		height: 180,
 		marginTop: 8,
+		alignItems: "center",
 	},
 	chartHoverHeader: {
 		flexDirection: "row",

@@ -1,6 +1,6 @@
 import { useAnalyzeCard } from "@/hooks/useAnalyzeCard";
 import { isNetworkError } from "@/lib/axios";
-import { getCardDisplayName } from "@/lib/scrydex";
+import { getCardDisplayName, getCardImage } from "@/lib/scrydex";
 import { Ionicons } from "@expo/vector-icons";
 import {
 	CameraView,
@@ -199,9 +199,18 @@ export default function Camera() {
 				setProcessingStatus("Card found!");
 
 				const cardData = result.data;
+				// The scan already returns the full card, so pass its thumbnail as the
+				// `image` param (like the set/collection grids do). Without it the
+				// detail screen has no thumbnail/backdrop/fallback and the hero image
+				// reads as missing until — or unless — the refetch resolves one.
+				const cardImage = getCardImage(cardData, undefined, "small");
 				router.push({
 					pathname: "/(card)/[id]",
-					params: { id: cardData.id, name: getCardDisplayName(cardData) },
+					params: {
+						id: cardData.id,
+						name: getCardDisplayName(cardData),
+						...(cardImage ? { image: cardImage } : {}),
+					},
 				});
 
 				navigationTimeoutRef.current = setTimeout(() => {

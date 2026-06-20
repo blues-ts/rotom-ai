@@ -10,7 +10,7 @@ import Animated, {
 import { useTheme } from "@/context/ThemeContext";
 
 export default function EmptyChat() {
-	const { colors } = useTheme();
+	const { colors, theme } = useTheme();
 	const opacity = useSharedValue(0);
 	const translateY = useSharedValue(10);
 
@@ -37,7 +37,17 @@ export default function EmptyChat() {
 						contentFit="contain"
 					/>
 				</View>
-				<Text style={[styles.subtitle, { color: colors.mutedForeground, textAlign: "center" }]}>
+				<Text
+					style={[
+						styles.subtitle,
+						{
+							// White in dark mode so the tagline doesn't read as washed-out
+							// grey against the dark background.
+							color: theme === "dark" ? "#ffffff" : colors.mutedForeground,
+							textAlign: "center",
+						},
+					]}
+				>
 					Your Pokemon TCG AI Assistant
 				</Text>
 			</Animated.View>
