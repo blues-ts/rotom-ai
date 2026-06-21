@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
@@ -28,12 +28,13 @@ export default function AddToCollection() {
     }>();
 
   const { collections, addCardToCollection } = useCollections();
+  // The collection that was just added to — its row outlines blue as the
+  // success cue, then the sheet dismisses itself.
+  const [addedId, setAddedId] = useState<string | null>(null);
 
   const handleSelect = useCallback(
     (collectionId: string) => {
-      if (!cardId || !cardName) return;
-
-      const collection = collections.find((c) => c.id === collectionId);
+      if (!cardId || !cardName || addedId) return;
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -63,11 +64,8 @@ export default function AddToCollection() {
         },
         {
           onSuccess: () => {
-            Alert.alert(
-              "Added!",
-              `${cardName} was added to ${collection?.name ?? "collection"}.`,
-              [{ text: "OK", onPress: () => router.back() }],
-            );
+            setAddedId(collectionId);
+            setTimeout(() => router.back(), 700);
           },
           onError: (error) => {
             // Duplicate configs increment quantity instead of erroring, so any
@@ -82,7 +80,7 @@ export default function AddToCollection() {
         },
       );
     },
-    [cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade, pricePaid, addCardToCollection, collections],
+    [cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade, pricePaid, addCardToCollection, addedId],
   );
 
   return (
@@ -101,39 +99,49 @@ export default function AddToCollection() {
         </View>
       ) : (
         <View style={styles.list}>
-          {collections.map((collection) => (
-            <Pressable
-              key={collection.id}
-              onPress={() => handleSelect(collection.id)}
-              style={({ pressed }) => [
-                styles.collectionRow,
-                {
-                  backgroundColor: pressed ? colors.muted : "transparent",
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <View style={styles.collectionInfo}>
-                <Text
-                  style={[styles.collectionName, { color: colors.foreground }]}
-                  numberOfLines={1}
-                >
-                  {collection.name}
-                </Text>
-                <Text
-                  style={[styles.collectionCount, { color: colors.mutedForeground }]}
-                >
-                  {collection.cardCount}{" "}
-                  {collection.cardCount === 1 ? "card" : "cards"}
-                </Text>
-              </View>
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={colors.mutedForeground}
-              />
-            </Pressable>
-          ))}
+          {collections.map((collection) => {
+            const added = addedId === collection.id;
+            return (
+              <Pressable
+                key={collection.id}
+                onPress={() => handleSelect(collection.id)}
+                disabled={!!addedId}
+                style={({ pressed }) => [
+                  styles.collectionRow,
+                  {
+                    backgroundColor: added
+                      ? colors.primary + "1A"
+                      : pressed
+                        ? colors.muted
+                        : "transparent",
+                    borderColor: added ? colors.primary : colors.border,
+                    borderWidth: added ? 2 : 1,
+                  },
+                ]}
+              >
+                <View style={styles.collectionInfo}>
+                  <Text
+                    style={[styles.collectionName, { color: colors.foreground }]}
+                    numberOfLines={1}
+                  >
+                    {collection.name}
+                  </Text>
+                  <Text
+                    style={[styles.collectionCount, { color: colors.mutedForeground }]}
+                  >
+                    {added
+                      ? "Added"
+                      : `${collection.cardCount} ${collection.cardCount === 1 ? "card" : "cards"}`}
+                  </Text>
+                </View>
+                <Ionicons
+                  name={added ? "checkmark-circle" : "chevron-forward"}
+                  size={added ? 22 : 18}
+                  color={added ? colors.primary : colors.mutedForeground}
+                />
+              </Pressable>
+            );
+          })}
         </View>
       )}
     </ScrollView>

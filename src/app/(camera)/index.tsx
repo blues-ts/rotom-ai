@@ -1,15 +1,7 @@
-import { useAnalyzeCard } from "@/hooks/useAnalyzeCard";
-import { isNetworkError } from "@/lib/axios";
-import { getCardDisplayName, getCardImage } from "@/lib/scrydex";
 import { Ionicons } from "@expo/vector-icons";
-import {
-	CameraView,
-	useCameraPermissions,
-	type AvailableLenses,
-} from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { router, Stack, useFocusEffect } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
@@ -21,308 +13,403 @@ import {
 	View,
 } from "react-native";
 import Animated, {
+	cancelAnimation,
+	Easing,
 	FadeIn,
-	runOnJS,
 	useAnimatedStyle,
+	useReducedMotion,
 	useSharedValue,
 	withRepeat,
-	withSequence,
 	withTiming,
 } from "react-native-reanimated";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Svg, { Defs, Mask, Rect } from "react-native-svg";
+import Svg, { Defs, Mask, Path, Rect } from "react-native-svg";
+import {
+	Camera,
+	useCameraDevice,
+	useCameraPermission,
+	usePhotoOutput,
+	type CameraRef,
+} from "react-native-vision-camera";
+
+import * as CardVision from "../../../modules/card-vision";
 
 const { width, height } = Dimensions.get("window");
 
-// Card dimensions: 2.5" x 3.5" Pokemon card
+// Card geometry (2.5" x 3.5")
 const CARD_ASPECT_RATIO = 2.5 / 3.5;
-const CARD_CORNER_RADIUS = 12;
+const CARD_CORNER_RADIUS = 14;
 const CARD_MAX_WIDTH = 325;
-const CARD_WIDTH_RATIO = 0.75;
-const CARD_CENTER_Y_RATIO = 0.4;
-const OVERLAY_OPACITY = 0.6;
+const CARD_WIDTH_RATIO = 0.78;
+const CARD_CENTER_Y_RATIO = 0.42;
+const SCRIM_OPACITY = 0.45;
+const BRACKET_LEN = 30;
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+// Palette — signals layered over the live feed.
+const RIVER = "#208AEF"; // searching / scan
+const AMBER = "#FFAE04"; // hold steady
+const GREEN = "#22C55E"; // locked
+const REST = "rgba(255,255,255,0.9)";
 
-export default function Camera() {
-	const [permission, requestPermission] = useCameraPermissions();
-	const cameraRef = useRef<React.ComponentRef<typeof CameraView>>(null);
-	const [isProcessing, setIsProcessing] = useState(false);
-	const [processingStatus, setProcessingStatus] = useState("");
-	const [selectedLens, setSelectedLens] = useState<string | undefined>(undefined);
-	const [zoom, setZoom] = useState(0.1);
+// On-device scan tuning.
+const SCAN_INDEX_BASE = process.env.EXPO_PUBLIC_API_URL
+	? `${process.env.EXPO_PUBLIC_API_URL}/api/scan-index`
+	: null;
+const ONDEVICE_THRESHOLD = 0.8;
+const ONDEVICE_MARGIN = 0.05;
+const REQUIRED_HITS = 2;
+const AUTO_INTERVAL_MS = 550;
+const TAP_HINT_DELAY_MS = 6000;
+
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+type ScanState = "preparing" | "searching" | "locking" | "found";
+
+const RETICLE_COLOR: Record<ScanState, string> = {
+	preparing: "rgba(255,255,255,0.35)",
+	searching: REST,
+	locking: AMBER,
+	found: GREEN,
+};
+
+export default function CameraScreen() {
+	const device = useCameraDevice("back");
+	const { hasPermission, requestPermission } = useCameraPermission();
+	const photoOutput = usePhotoOutput({ qualityPrioritization: "speed" });
+	const cameraRef = useRef<CameraRef>(null);
+	const reduceMotion = useReducedMotion();
+
+	const [isActive, setIsActive] = useState(false);
 	const [torchEnabled, setTorchEnabled] = useState(false);
-	const statusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-	const navigationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const analyzeCardMutation = useAnalyzeCard();
+	const [indexReady, setIndexReady] = useState(false);
+	const [scanState, setScanState] = useState<ScanState>("preparing");
+	const [showTapHint, setShowTapHint] = useState(false);
 
-	// Pulse animation for processing indicator
-	const pulseOpacity = useSharedValue(1);
-	const pulseStyle = useAnimatedStyle(() => ({
-		opacity: pulseOpacity.value,
+	const onDeviceReadyRef = useRef(false);
+	const photoOutputRef = useRef(photoOutput);
+	photoOutputRef.current = photoOutput;
+	const loopRunningRef = useRef(false);
+	const navigatedRef = useRef(false);
+	const capturingRef = useRef(false);
+	const deactivateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const voteRef = useRef<{ id: string | null; hits: number }>({ id: null, hits: 0 });
+
+	// Card box (screen points) + the same box as preview fractions for cropping.
+	const cardWidth = Math.min(CARD_MAX_WIDTH, width * CARD_WIDTH_RATIO);
+	const cardHeight = cardWidth / CARD_ASPECT_RATIO;
+	const cardX = width / 2 - cardWidth / 2;
+	const cardY = height * CARD_CENTER_Y_RATIO - cardHeight / 2;
+	const scanRegion = useMemo(() => {
+		const pad = 0.04;
+		const nx = cardX / width;
+		const ny = cardY / height;
+		const nw = cardWidth / width;
+		const nh = cardHeight / height;
+		return {
+			x: Math.max(0, nx - nw * pad),
+			y: Math.max(0, ny - nh * pad),
+			w: Math.min(1, nw * (1 + 2 * pad)),
+			h: Math.min(1, nh * (1 + 2 * pad)),
+		};
+	}, [cardX, cardY, cardWidth, cardHeight]);
+
+	// Sweep line animation (the scan signal).
+	const sweep = useSharedValue(0);
+	const searching = scanState === "searching";
+	useEffect(() => {
+		if (searching && !reduceMotion) {
+			sweep.value = 0;
+			sweep.value = withRepeat(
+				withTiming(1, { duration: 1900, easing: Easing.inOut(Easing.quad) }),
+				-1,
+				false,
+			);
+		} else {
+			cancelAnimation(sweep);
+			sweep.value = 0;
+		}
+	}, [searching, reduceMotion, sweep]);
+	const sweepStyle = useAnimatedStyle(() => ({
+		transform: [{ translateY: sweep.value * (cardHeight - 3) }],
+		opacity: 0.95 - sweep.value * 0.45,
 	}));
 
-	// Pinch-to-zoom: pinchBase captures zoom at gesture start; lastPushed mirrors committed state for throttling
-	const pinchBase = useSharedValue(zoom);
-	const lastPushed = useSharedValue(zoom);
-	useEffect(() => {
-		lastPushed.value = zoom;
-	}, [zoom]);
-
-	const pinchGesture = Gesture.Pinch()
-		.onStart(() => {
-			pinchBase.value = lastPushed.value;
-		})
-		.onUpdate((e) => {
-			const next = Math.min(1, Math.max(0, pinchBase.value * e.scale));
-			const rounded = Math.round(next * 100) / 100;
-			if (Math.abs(rounded - lastPushed.value) >= 0.01) {
-				lastPushed.value = rounded;
-				runOnJS(setZoom)(rounded);
-			}
-		});
-
-	// Request camera permissions on load
-	useEffect(() => {
-		if (permission && !permission.granted) {
-			requestPermission();
-		}
-	}, [permission, requestPermission]);
-
-	// Cleanup on unmount
 	useEffect(() => {
 		return () => {
-			if (statusIntervalRef.current) clearInterval(statusIntervalRef.current);
-			if (navigationTimeoutRef.current) clearTimeout(navigationTimeoutRef.current);
+			if (deactivateTimer.current) clearTimeout(deactivateTimer.current);
 		};
 	}, []);
 
-	// Reset state when screen regains focus
-	useFocusEffect(
-		useCallback(() => {
-			setIsProcessing(false);
-			setProcessingStatus("");
-			if (statusIntervalRef.current) {
-				clearInterval(statusIntervalRef.current);
-				statusIntervalRef.current = null;
-			}
-			if (navigationTimeoutRef.current) {
-				clearTimeout(navigationTimeoutRef.current);
-				navigationTimeoutRef.current = null;
-			}
-		}, []),
+	const markReady = useCallback(() => {
+		onDeviceReadyRef.current = true;
+		setIndexReady(true);
+		setScanState((s) => (s === "preparing" ? "searching" : s));
+	}, []);
+
+	const goToCard = useCallback((id: string) => {
+		router.push({
+			pathname: "/(card)/[id]",
+			params: { id, image: `https://images.scrydex.com/pokemon/${id}/small` },
+		});
+	}, []);
+
+	const captureAndIdentify = useCallback(async (): Promise<
+		CardVision.CardMatch[] | null
+	> => {
+		const po = photoOutputRef.current;
+		if (!po || capturingRef.current || navigatedRef.current) return null;
+		capturingRef.current = true;
+		try {
+			const file = await po.capturePhotoToFile(
+				{ flashMode: "off", enableShutterSound: false },
+				{},
+			);
+			if (!file?.filePath || navigatedRef.current) return null;
+			return await CardVision.identifyInRegion(
+				file.filePath,
+				scanRegion,
+				width / height,
+				5,
+			);
+		} catch {
+			return null;
+		} finally {
+			capturingRef.current = false;
+		}
+	}, [scanRegion]);
+
+	const lockAndGo = useCallback(
+		(id: string) => {
+			navigatedRef.current = true;
+			loopRunningRef.current = false;
+			setScanState("found");
+			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+			setTimeout(() => goToCard(id), 180); // let the green snap register
+		},
+		[goToCard],
 	);
 
-	const statusMessages = ["Capturing photo...", "Analyzing card...", "Identifying card..."];
-
-	const startStatusProgression = useCallback(() => {
-		let currentIndex = 0;
-		setProcessingStatus(statusMessages[0]);
-		pulseOpacity.value = withRepeat(
-			withSequence(
-				withTiming(0.4, { duration: 600 }),
-				withTiming(1, { duration: 600 }),
-			),
-			-1,
-		);
-
-		statusIntervalRef.current = setInterval(() => {
-			if (currentIndex < statusMessages.length - 1) {
-				currentIndex++;
-				setProcessingStatus(statusMessages[currentIndex]);
+	const evaluate = useCallback(
+		(matches: CardVision.CardMatch[]) => {
+			const top = matches[0];
+			const margin = matches[1] ? top.score - matches[1].score : top?.score ?? 0;
+			if (top && top.score >= ONDEVICE_THRESHOLD && margin >= ONDEVICE_MARGIN) {
+				if (voteRef.current.id === top.id) voteRef.current.hits += 1;
+				else voteRef.current = { id: top.id, hits: 1 };
+				if (voteRef.current.hits >= REQUIRED_HITS) lockAndGo(top.id);
+				else setScanState("locking");
+			} else {
+				voteRef.current = { id: null, hits: 0 };
+				setScanState("searching");
 			}
-		}, 1500);
-	}, []);
+		},
+		[lockAndGo],
+	);
 
-	const stopStatusProgression = useCallback(() => {
-		if (statusIntervalRef.current) {
-			clearInterval(statusIntervalRef.current);
-			statusIntervalRef.current = null;
+	const runLoop = useCallback(async () => {
+		if (loopRunningRef.current) return;
+		loopRunningRef.current = true;
+		while (loopRunningRef.current && !navigatedRef.current) {
+			if (!onDeviceReadyRef.current) {
+				await delay(300);
+				continue;
+			}
+			const matches = await captureAndIdentify();
+			if (matches && !navigatedRef.current) evaluate(matches);
+			await delay(AUTO_INTERVAL_MS);
 		}
-		pulseOpacity.value = withTiming(1, { duration: 200 });
-	}, []);
+		loopRunningRef.current = false;
+	}, [captureAndIdentify, evaluate]);
 
-	// Lens selection
-	const selectBestLens = useCallback(async () => {
-		if (!cameraRef.current) return;
+	const ensureIndexLoaded = useCallback(async () => {
+		if (onDeviceReadyRef.current) return true;
+		if (!CardVision.isAvailable()) return false;
 		try {
-			const lenses = await cameraRef.current.getAvailableLensesAsync();
-			if (lenses.length > 0) {
-				setSelectedLens(lenses[lenses.length - 1]);
+			const local = await CardVision.loadBestLocal();
+			if (local.count > 0) {
+				markReady();
+				return true;
 			}
 		} catch {}
-	}, []);
+		return false;
+	}, [markReady]);
 
-	const handleCameraReady = useCallback(() => {
-		selectBestLens().catch(() => {});
-	}, [selectBestLens]);
+	useFocusEffect(
+		useCallback(() => {
+			navigatedRef.current = false;
+			voteRef.current = { id: null, hits: 0 };
+			setShowTapHint(false);
+			// Keep the camera live (cancel any pending deactivate from a prior blur)
+			// so returning to the scanner shows a live preview, never a frozen frame.
+			if (deactivateTimer.current) clearTimeout(deactivateTimer.current);
+			setIsActive(true);
+			setScanState(onDeviceReadyRef.current ? "searching" : "preparing");
 
-	const handleAvailableLensesChanged = useCallback(
-		(_event: AvailableLenses) => { selectBestLens(); },
-		[selectBestLens],
+			let cancelled = false;
+			(async () => {
+				await ensureIndexLoaded();
+				if (cancelled || !SCAN_INDEX_BASE) return;
+				try {
+					const r = await CardVision.refreshFromServer(
+						`${SCAN_INDEX_BASE}/version`,
+						`${SCAN_INDEX_BASE}/manifest.json`,
+						`${SCAN_INDEX_BASE}/index.f16`,
+					);
+					if (!cancelled && r.count > 0) markReady();
+				} catch {}
+			})();
+
+			const safety = setTimeout(() => !cancelled && setIndexReady(true), 12000);
+			const hint = setTimeout(
+				() => !cancelled && !navigatedRef.current && setShowTapHint(true),
+				TAP_HINT_DELAY_MS,
+			);
+			runLoop();
+
+			return () => {
+				cancelled = true;
+				clearTimeout(safety);
+				clearTimeout(hint);
+				// Stop scanning immediately, but keep the camera session alive briefly
+				// so a back-swipe shows a live preview through the transition (not a
+				// frozen frame or black). Free the camera if they linger off-screen.
+				loopRunningRef.current = false;
+				if (deactivateTimer.current) clearTimeout(deactivateTimer.current);
+				deactivateTimer.current = setTimeout(() => setIsActive(false), 20000);
+				// Clear the result UI so swiping back doesn't flash "Got it!".
+				voteRef.current = { id: null, hits: 0 };
+				setShowTapHint(false);
+				setScanState(onDeviceReadyRef.current ? "searching" : "preparing");
+			};
+		}, [ensureIndexLoaded, markReady, runLoop]),
 	);
 
 	const handleToggleTorch = useCallback(() => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-		setTorchEnabled((prev) => !prev);
+		setTorchEnabled((p) => !p);
 	}, []);
 
-	// Card overlay dimensions
-	const cardWidth = Math.min(CARD_MAX_WIDTH, width * CARD_WIDTH_RATIO);
-	const cardHeight = cardWidth / CARD_ASPECT_RATIO;
-	const cardCenterX = width / 2;
-	const cardCenterY = height * CARD_CENTER_Y_RATIO;
-	const cardX = cardCenterX - cardWidth / 2;
-	const cardY = cardCenterY - cardHeight / 2;
-
-	const handleScanCard = async () => {
-		if (!cameraRef.current || isProcessing) return;
-
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-
-		try {
-			setIsProcessing(true);
-			startStatusProgression();
-
-			const photo = await cameraRef.current.takePictureAsync({
-				quality: 0.8,
-				base64: true,
-			});
-
-			if (!photo?.base64) {
-				throw new Error("Camera is not ready. Please try again.");
-			}
-
-			try {
-				const result = await analyzeCardMutation.mutateAsync(photo.base64);
-				stopStatusProgression();
-				setProcessingStatus("Card found!");
-
-				const cardData = result.data;
-				// The scan already returns the full card, so pass its thumbnail as the
-				// `image` param (like the set/collection grids do). Without it the
-				// detail screen has no thumbnail/backdrop/fallback and the hero image
-				// reads as missing until — or unless — the refetch resolves one.
-				const cardImage = getCardImage(cardData, undefined, "small");
-				router.push({
-					pathname: "/(card)/[id]",
-					params: {
-						id: cardData.id,
-						name: getCardDisplayName(cardData),
-						...(cardImage ? { image: cardImage } : {}),
-					},
-				});
-
-				navigationTimeoutRef.current = setTimeout(() => {
-					setIsProcessing(false);
-					setProcessingStatus("");
-					setTorchEnabled(false);
-				}, 400);
-			} catch (error: any) {
-				const errorMessage = isNetworkError(error)
-					? "No internet connection. Check your connection and try again."
-					: error?.response?.data?.error?.message ||
-						error?.response?.data?.message ||
-						error?.message ||
-						"Failed to analyze the card. Please try again.";
-				Alert.alert("Error", errorMessage);
-				stopStatusProgression();
-				setIsProcessing(false);
-				setProcessingStatus("");
-			}
-		} catch (error: any) {
-			console.error("Camera scan error:", error);
-			stopStatusProgression();
-			Alert.alert("Error", error?.message || "Failed to capture or process the image. Please try again.");
-			setIsProcessing(false);
-			setProcessingStatus("");
+	// Tap anywhere = explicit single-frame capture (silent manual fallback).
+	const handleTapScan = useCallback(async () => {
+		if (!onDeviceReadyRef.current || navigatedRef.current) return;
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		const matches = await captureAndIdentify();
+		if (!matches || navigatedRef.current) return;
+		const top = matches[0];
+		const margin = matches[1] ? top.score - matches[1].score : top?.score ?? 0;
+		if (top && top.score >= ONDEVICE_THRESHOLD && margin >= ONDEVICE_MARGIN) {
+			lockAndGo(top.id);
+		} else {
+			Alert.alert(
+				"No match yet",
+				"Fill the frame with the card and keep it flat and well-lit.",
+			);
 		}
-	};
+	}, [captureAndIdentify, lockAndGo]);
 
-	// Permission not granted
-	if (permission && !permission.granted) {
-		const mustOpenSettings = !permission.canAskAgain;
+	// Permission gate
+	if (!hasPermission) {
 		return (
 			<View style={styles.container}>
 				<View style={styles.permissionContainer}>
 					<Ionicons name="camera-outline" size={48} color="#999" />
 					<Text style={styles.permissionText}>
-						Camera permission is required to scan cards.
+						Turn on the camera to scan your cards.
 					</Text>
 					<Pressable
 						style={styles.permissionButton}
 						onPress={async () => {
-							if (mustOpenSettings) {
-								Linking.openSettings();
-								return;
-							}
-							const result = await requestPermission();
-							if (!result.granted && !result.canAskAgain) {
-								Alert.alert(
-									"Permission Required",
-									"Camera permission is required. Please enable it in your device settings.",
-									[
-										{ text: "Cancel", style: "cancel" },
-										{
-											text: "Open Settings",
-											onPress: () => Linking.openSettings(),
-										},
-									],
-								);
-							}
+							const granted = await requestPermission();
+							if (!granted) Linking.openSettings();
 						}}
 					>
-						<Text style={styles.permissionButtonText}>
-							{mustOpenSettings ? "Open Settings" : "Grant Permission"}
-						</Text>
+						<Text style={styles.permissionButtonText}>Turn on camera</Text>
 					</Pressable>
 				</View>
 			</View>
 		);
 	}
 
-	// Loading permissions
-	if (!permission) {
+	if (!device) {
 		return (
 			<View style={styles.container}>
 				<View style={styles.permissionContainer}>
-					<Text style={styles.permissionText}>Loading...</Text>
+					<Text style={styles.permissionText}>Starting camera…</Text>
 				</View>
 			</View>
 		);
 	}
 
-	return (
-		<GestureDetector gesture={pinchGesture}>
-			<View style={styles.container}>
-				<Stack.Screen
-					options={{
-						headerRight: () => (
-							<Pressable
-								hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-								onPress={handleToggleTorch}
-							>
-								<Ionicons
-									name={torchEnabled ? "flashlight" : "flashlight-outline"}
-									size={22}
-									color={torchEnabled ? "#FFAE04" : "#fff"}
-								/>
-							</Pressable>
-						),
-					}}
-				/>
-				<CameraView
-					ref={cameraRef}
-					style={StyleSheet.absoluteFill}
-					selectedLens={selectedLens}
-					zoom={zoom}
-					enableTorch={torchEnabled}
-					onCameraReady={handleCameraReady}
-					onAvailableLensesChanged={handleAvailableLensesChanged}
-				/>
+	const reticle = RETICLE_COLOR[scanState];
+	const right = cardX + cardWidth;
+	const bottom = cardY + cardHeight;
+	const L = BRACKET_LEN;
+	const bracketPath = [
+		`M ${cardX} ${cardY + L} L ${cardX} ${cardY} L ${cardX + L} ${cardY}`,
+		`M ${right - L} ${cardY} L ${right} ${cardY} L ${right} ${cardY + L}`,
+		`M ${right} ${bottom - L} L ${right} ${bottom} L ${right - L} ${bottom}`,
+		`M ${cardX + L} ${bottom} L ${cardX} ${bottom} L ${cardX} ${bottom - L}`,
+	].join(" ");
 
-			{/* SVG overlay with card cutout */}
-			<Svg style={StyleSheet.absoluteFill} width={width} height={height}>
+	const primary =
+		scanState === "preparing"
+			? "Getting the scanner ready"
+			: scanState === "locking"
+				? "Hold steady…"
+				: scanState === "found"
+					? "Got it!"
+					: "Point your camera at a card";
+	const secondary =
+		scanState === "found"
+			? null
+			: scanState === "preparing"
+				? null
+				: scanState === "locking"
+					? "Almost there"
+					: "Scans automatically — no button needed";
+
+	return (
+		<View style={styles.container}>
+			<Stack.Screen
+				options={{
+					headerRight: () => (
+						<Pressable
+							hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+							onPress={handleToggleTorch}
+						>
+							<Ionicons
+								name={torchEnabled ? "flashlight" : "flashlight-outline"}
+								size={22}
+								color={torchEnabled ? AMBER : "#fff"}
+							/>
+						</Pressable>
+					),
+				}}
+			/>
+			<Camera
+				ref={cameraRef}
+				style={StyleSheet.absoluteFill}
+				device={device}
+				outputs={[photoOutput]}
+				isActive={isActive}
+				torchMode={torchEnabled ? "on" : "off"}
+				resizeMode="cover"
+				enableNativeZoomGesture
+			/>
+
+			{/* Tap anywhere to capture (silent manual fallback) */}
+			<Pressable
+				style={StyleSheet.absoluteFill}
+				onPress={handleTapScan}
+				accessibilityLabel="Scan the card in the frame"
+			/>
+
+			{/* Scrim + viewfinder reticle */}
+			<Svg
+				style={StyleSheet.absoluteFill}
+				width={width}
+				height={height}
+				pointerEvents="none"
+			>
 				<Defs>
 					<Mask id="holeMask">
 						<Rect width={width} height={height} fill="white" />
@@ -340,48 +427,51 @@ export default function Camera() {
 				<Rect
 					width={width}
 					height={height}
-					fill={`rgba(0,0,0,${OVERLAY_OPACITY})`}
+					fill={`rgba(0,0,0,${SCRIM_OPACITY})`}
 					mask="url(#holeMask)"
+				/>
+				<Path
+					d={bracketPath}
+					stroke={reticle}
+					strokeWidth={3}
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					fill="none"
 				/>
 			</Svg>
 
-			{/* Controls overlay */}
-			<View style={styles.content} pointerEvents="box-none">
-				<View style={styles.topSpacer} />
-				<View style={styles.cardArea} />
-
-				<View style={styles.bottomSection}>
-					{/* Scan button */}
-					<Pressable
-						style={({ pressed }) => [
-							styles.scanButton,
-							{ width: cardWidth, opacity: pressed && !isProcessing ? 0.8 : 1 },
-							isProcessing && styles.scanButtonDisabled,
-						]}
-						onPress={handleScanCard}
-						disabled={isProcessing || analyzeCardMutation.isPending}
-					>
-						{isProcessing ? (
-							<ActivityIndicator size="small" color="#000" style={{ marginRight: 8 }} />
-						) : (
-							<Ionicons name="scan" size={20} color="#000" style={{ marginRight: 8 }} />
-						)}
-						<Text style={styles.scanButtonText}>
-							{isProcessing ? "Processing..." : "Scan Card"}
-						</Text>
-					</Pressable>
-
-					{/* Status text */}
-					<Animated.Text
-						entering={FadeIn.duration(200)}
-						style={styles.statusText}
-					>
-						{processingStatus || "Center the card and scan to get started"}
-					</Animated.Text>
+			{/* Scan sweep line (searching only) */}
+			{searching && !reduceMotion && (
+				<View
+					pointerEvents="none"
+					style={[
+						styles.sweepClip,
+						{ left: cardX, top: cardY, width: cardWidth, height: cardHeight },
+					]}
+				>
+					<Animated.View style={[styles.sweepLine, sweepStyle]} />
 				</View>
+			)}
+
+			{/* Status */}
+			<View style={styles.statusWrap} pointerEvents="none">
+				{scanState === "found" && (
+					<Animated.View entering={FadeIn.duration(160)} style={styles.foundBadge}>
+						<Ionicons name="checkmark-circle" size={34} color={GREEN} />
+					</Animated.View>
+				)}
+				{scanState === "preparing" && (
+					<ActivityIndicator color="#fff" style={{ marginBottom: 12 }} />
+				)}
+				<Text style={styles.primary}>{primary}</Text>
+				{secondary && <Text style={styles.secondary}>{secondary}</Text>}
+				{showTapHint && scanState !== "found" && (
+					<Animated.Text entering={FadeIn.duration(200)} style={styles.tapHint}>
+						Trouble locking on? Tap anywhere to scan
+					</Animated.Text>
+				)}
 			</View>
-			</View>
-		</GestureDetector>
+		</View>
 	);
 }
 
@@ -390,48 +480,50 @@ const styles = StyleSheet.create({
 		flex: 1,
 		backgroundColor: "#000",
 	},
-	content: {
+	sweepClip: {
 		position: "absolute",
-		top: 0,
+		overflow: "hidden",
+		borderRadius: CARD_CORNER_RADIUS,
+	},
+	sweepLine: {
+		height: 3,
+		width: "100%",
+		backgroundColor: RIVER,
+		shadowColor: RIVER,
+		shadowOpacity: 0.9,
+		shadowRadius: 8,
+		shadowOffset: { width: 0, height: 0 },
+	},
+	statusWrap: {
+		position: "absolute",
 		left: 0,
 		right: 0,
-		bottom: 0,
-		flexDirection: "column",
-	},
-	topSpacer: {
-		flex: 0.1,
-	},
-	cardArea: {
-		flex: 2,
+		bottom: height * 0.12,
 		alignItems: "center",
-		justifyContent: "center",
+		paddingHorizontal: 32,
 	},
-	bottomSection: {
-		flex: 1,
-		alignItems: "center",
-		justifyContent: "flex-start",
+	foundBadge: {
+		marginBottom: 10,
 	},
-	scanButton: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: "#fff",
-		paddingVertical: 14,
-		borderRadius: 14,
-	},
-	scanButtonDisabled: {
-		opacity: 0.7,
-	},
-	scanButtonText: {
-		color: "#000",
-		fontSize: 16,
-		fontWeight: "700",
-	},
-	statusText: {
+	primary: {
 		color: "#fff",
+		fontSize: 19,
+		fontWeight: "700",
 		textAlign: "center",
-		fontSize: 14,
-		marginTop: 12,
+		letterSpacing: 0.2,
+	},
+	secondary: {
+		color: "rgba(255,255,255,0.65)",
+		fontSize: 13.5,
+		textAlign: "center",
+		marginTop: 6,
+	},
+	tapHint: {
+		color: "rgba(255,255,255,0.55)",
+		fontSize: 13,
+		textAlign: "center",
+		marginTop: 18,
+		textDecorationLine: "underline",
 	},
 	permissionContainer: {
 		flex: 1,

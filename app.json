@@ -26,13 +26,6 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan Pokemon cards.",
-          "microphonePermission": false
-        }
-      ],
       "expo-router",
       [
         "expo-splash-screen",

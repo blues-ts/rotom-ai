@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { useCameraPermissions } from "expo-camera";
+import { useCameraPermission } from "react-native-vision-camera";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -41,7 +41,7 @@ export default function Flow() {
   const [index, setIndex] = useState(0);
 
   const ctx = useOnboarding();
-  const [permission, requestPermission] = useCameraPermissions();
+  const { hasPermission, requestPermission } = useCameraPermission();
 
   const advance = useCallback(() => {
     if (index === STEPS.length - 1) {
@@ -75,18 +75,18 @@ export default function Flow() {
         return { title: "Continue", disabled: !ctx.budget, onPress: advance };
       case 7:
         return {
-          title: permission?.granted ? "Camera's on — Continue" : "Enable Camera",
+          title: hasPermission ? "Camera's on — Continue" : "Enable Camera",
           disabled: false,
           onPress: async () => {
-            const result = await requestPermission();
-            ctx.setCameraGranted(result.granted);
+            const granted = await requestPermission();
+            ctx.setCameraGranted(granted);
             advance();
           },
         };
       default:
         return { title: "Continue", disabled: false, onPress: advance };
     }
-  }, [index, ctx, advance, permission, requestPermission]);
+  }, [index, ctx, advance, hasPermission, requestPermission]);
 
   const current = STEPS[index];
   const StepComponent = current.Component;
