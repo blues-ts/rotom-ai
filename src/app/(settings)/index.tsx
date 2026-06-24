@@ -13,6 +13,7 @@ import {
 	clearCollectionValueHistory,
 	seedCollectionValueHistory,
 } from "@/lib/collectionValueHistory";
+import { resetTapHoldHint } from "@/hooks/useTapHoldHint";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
@@ -443,6 +444,24 @@ export default function Settings() {
 								]}
 							>
 								Trigger Test Crash
+							</Text>
+						</Pressable>
+						<Pressable
+							style={[
+								styles.signOutButton,
+								{ backgroundColor: colors.card },
+							]}
+							onPress={async () => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								await resetTapHoldHint();
+								toast.show(
+									"Tap & hold hint reset — open search or a set.",
+									"success",
+								);
+							}}
+						>
+							<Text style={[styles.label, { color: colors.foreground }]}>
+								Reset Tap & Hold Hint
 							</Text>
 						</Pressable>
 					</View>

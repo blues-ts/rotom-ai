@@ -1,9 +1,9 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
 import { formatCurrency } from "@/lib/format";
 import * as Haptics from "expo-haptics";
-import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
+import { Dimensions, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import CardPressable from "@/components/CardPressable";
 
 // Fixed thumbnail size based on a 4-card layout so 1–3 card collections
@@ -17,8 +17,6 @@ interface CollectionCardProps {
 	cardCount: number;
 	totalValue: number;
 	cardImages: string[];
-	onAddCards: () => void;
-	onMenuPress: () => void;
 	onPress?: () => void;
 }
 
@@ -27,8 +25,6 @@ export default function CollectionCard({
 	cardCount,
 	totalValue,
 	cardImages,
-	onAddCards,
-	onMenuPress,
 	onPress,
 }: CollectionCardProps) {
 	const { colors } = useTheme();
@@ -39,10 +35,7 @@ export default function CollectionCard({
 				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 				onPress?.();
 			}}
-			style={[
-				styles.container,
-				{ backgroundColor: colors.card, borderColor: colors.border },
-			]}
+			style={[styles.container, { backgroundColor: colors.card }]}
 		>
 			{/* Header */}
 			<View style={styles.header}>
@@ -64,49 +57,25 @@ export default function CollectionCard({
 				</View>
 			</View>
 
-			{/* Card Images */}
+			{/* Card Images — staggered fade-up, dealt left to right */}
 			{cardImages.length > 0 && (
 				<View style={[styles.imageScroll, styles.imageRow]}>
 					{cardImages.slice(0, 4).map((uri, i) => (
-						<View key={i} style={styles.cardImageWrapper}>
+						<Animated.View
+							key={uri}
+							entering={FadeInDown.delay(i * 70).duration(360)}
+							style={styles.cardImageWrapper}
+						>
 							<Image
 								source={{ uri }}
 								style={styles.cardImage}
 								contentFit="contain"
 							/>
-						</View>
+						</Animated.View>
 					))}
 				</View>
 			)}
 
-			{/* Footer */}
-			<View style={styles.footer}>
-				<Pressable
-					onPress={() => {
-						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-						onAddCards();
-					}}
-					style={({ pressed }) => [
-						styles.addButton,
-						{
-							borderColor: pressed ? colors.primary : colors.border,
-							backgroundColor: pressed ? colors.primary + "15" : "transparent",
-						},
-					]}
-				>
-					<Ionicons name="add" size={16} color={colors.foreground} />
-					<Text style={[styles.addButtonText, { color: colors.foreground }]}>
-						Add cards
-					</Text>
-				</Pressable>
-				<Pressable onPress={onMenuPress} style={styles.menuButton}>
-					<Ionicons
-						name="ellipsis-horizontal"
-						size={20}
-						color={colors.mutedForeground}
-					/>
-				</Pressable>
-			</View>
 		</CardPressable>
 	);
 }
@@ -114,7 +83,6 @@ export default function CollectionCard({
 const styles = StyleSheet.create({
 	container: {
 		borderRadius: 12,
-		borderWidth: 1,
 		padding: 16,
 	},
 	header: {
@@ -154,30 +122,5 @@ const styles = StyleSheet.create({
 	cardImage: {
 		width: "100%",
 		height: "100%",
-	},
-	footer: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		marginTop: 12,
-	},
-	addButton: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 6,
-		borderWidth: 1,
-		borderRadius: 20,
-		paddingHorizontal: 14,
-		paddingVertical: 8,
-		flex: 1,
-		justifyContent: "center",
-		marginRight: 10,
-	},
-	addButtonText: {
-		fontSize: 14,
-		fontWeight: "600",
-	},
-	menuButton: {
-		padding: 8,
 	},
 });

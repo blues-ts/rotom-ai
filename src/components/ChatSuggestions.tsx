@@ -91,28 +91,28 @@ export default function ChatSuggestions({
 	);
 }
 
-const GAP = 8;
+const GAP = 6;
 
 const styles = StyleSheet.create({
 	grid: {
-		flexDirection: "row",
-		flexWrap: "wrap",
+		// Stacked + centered: each pill hugs its content instead of stretching
+		// edge to edge.
 		gap: GAP,
+		alignItems: "center",
 		paddingHorizontal: 16,
-		marginTop: 16,
+		marginTop: 14,
 	},
 	card: {
-		// flexBasis < 50% so exactly two fit per row; flexGrow expands them to
-		// share the row evenly with a `GAP` gutter between (and between rows).
-		flexGrow: 1,
-		flexBasis: "40%",
+		// Shared fixed width so every pill is the same size (centered by the grid),
+		// rather than each hugging its own label width.
+		width: 230,
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 9,
+		gap: 8,
 		borderRadius: 12,
 		borderWidth: StyleSheet.hairlineWidth,
-		paddingVertical: 10,
-		paddingHorizontal: 11,
+		paddingVertical: 8,
+		paddingHorizontal: 14,
 	},
 	iconChip: {
 		width: 28,
@@ -122,7 +122,6 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	cardText: {
-		flex: 1,
 		fontSize: 13,
 		fontWeight: "600",
 		lineHeight: 16,

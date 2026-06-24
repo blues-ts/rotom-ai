@@ -5,7 +5,10 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useTheme } from "@/context/ThemeContext";
-import { useCollections } from "@/hooks/useCollections";
+import {
+	useCollections,
+	useRefreshCollectionPrices,
+} from "@/hooks/useCollections";
 
 export default function AddToCollection() {
   const { colors } = useTheme();
@@ -28,6 +31,7 @@ export default function AddToCollection() {
     }>();
 
   const { collections, addCardToCollection } = useCollections();
+  const refreshPrices = useRefreshCollectionPrices();
   // The collection that was just added to — its row outlines blue as the
   // success cue, then the sheet dismisses itself.
   const [addedId, setAddedId] = useState<string | null>(null);
@@ -65,6 +69,14 @@ export default function AddToCollection() {
         {
           onSuccess: () => {
             setAddedId(collectionId);
+            // Most callers pass a live price (card-detail's heroPrice, set-detail's
+            // market price) and store the real value directly. Catalog search
+            // results carry no price → stored as 0; only then fetch live prices for
+            // the collection so the card shows its real value immediately instead
+            // of $0.00. Pro-gated + async, so it's a no-op for non-Pro and never
+            // blocks the dismiss.
+            const hasPrice = (parseFloat(cardValue ?? "0") || 0) > 0;
+            if (!hasPrice) refreshPrices.mutate(collectionId);
             setTimeout(() => router.back(), 700);
           },
           onError: (error) => {
@@ -94,8 +106,25 @@ export default function AddToCollection() {
       {collections.length === 0 ? (
         <View style={styles.empty}>
           <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-            No collections yet. Create one first!
+            No collections yet — create one to add this card.
           </Text>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/create-collection");
+            }}
+            style={[styles.createButton, { backgroundColor: colors.primary }]}
+          >
+            <Ionicons name="add" size={18} color={colors.primaryForeground} />
+            <Text
+              style={[
+                styles.createButtonText,
+                { color: colors.primaryForeground },
+              ]}
+            >
+              Create Collection
+            </Text>
+          </Pressable>
         </View>
       ) : (
         <View style={styles.list}>
@@ -165,6 +194,22 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 15,
+    textAlign: "center",
+  },
+  createButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    alignSelf: "stretch",
+  },
+  createButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
   },
   list: {
     gap: 8,

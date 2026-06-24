@@ -9,16 +9,14 @@ import CollectionCard from "@/components/CollectionCard";
 import ErrorState from "@/components/ErrorState";
 import CollectionValueChart from "@/components/CollectionValueChart";
 import RefreshingPill from "@/components/RefreshingPill";
-import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
-import * as Haptics from "expo-haptics";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function Collections() {
 	const { colors } = useTheme();
 	const insets = useSafeAreaInsets();
-	const { collections, isLoading, isError, refetch, deleteCollection } =
-		useCollections();
+	const { collections, isLoading, isError, refetch } = useCollections();
 	const refreshPrices = useAutoRefreshStalePrices();
 	const queryClient = useQueryClient();
 
@@ -30,13 +28,16 @@ export default function Collections() {
 	return (
 		<SafeAreaView
 			style={[styles.container, { backgroundColor: colors.background }]}
-			edges={["bottom"]}
+			// No bottom edge: let the scroll surface reach the phone's bottom edge so
+			// content scrolls all the way down (home-indicator clearance is handled by
+			// the content's paddingBottom) instead of stopping short — the hard cutoff.
+			edges={[]}
 		>
 			<RefreshingPill visible={refreshPrices.isPending} topOffset={52 + 8} />
 			<ScrollView
 				contentContainerStyle={[
 					styles.content,
-					{ paddingTop: insets.top + 52 },
+					{ paddingTop: insets.top + 52, paddingBottom: insets.bottom + 24 },
 				]}
 				refreshControl={
 					<RefreshControl
@@ -105,25 +106,6 @@ export default function Collections() {
 										`/collection-detail?id=${c.id}&name=${encodeURIComponent(c.name)}&totalValue=${c.totalValue}&cardCount=${c.cardCount}`,
 									)
 								}
-								onAddCards={() => router.push("/(search)")}
-								onMenuPress={() => {
-									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-									Alert.alert(
-										"Delete Collection",
-										`Are you sure you want to delete "${c.name}"? This cannot be undone.`,
-										[
-											{ text: "Cancel", style: "cancel" },
-											{
-												text: "Delete",
-												style: "destructive",
-												onPress: () => {
-													Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-													deleteCollection.mutate(c.id);
-												},
-											},
-										],
-									);
-								}}
 							/>
 						</Animated.View>
 						))}
@@ -141,7 +123,8 @@ const styles = StyleSheet.create({
 	},
 	content: {
 		flexGrow: 1,
-		padding: 16,
+		paddingHorizontal: 16,
+		// paddingBottom is applied inline (needs the safe-area inset).
 	},
 	list: {
 		gap: 12,

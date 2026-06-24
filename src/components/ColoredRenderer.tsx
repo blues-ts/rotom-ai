@@ -10,7 +10,7 @@ import CodeBlock from "./CodeBlock";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-function CardImagePressable({ cardId, name, children }: { cardId: string; name: string; children: ReactNode }) {
+function CardImagePressable({ cardId, name, image, children }: { cardId: string; name: string; image: string; children: ReactNode }) {
 	const scale = useSharedValue(1);
 	const animatedStyle = useAnimatedStyle(() => ({
 		transform: [{ scale: scale.value }],
@@ -22,7 +22,12 @@ function CardImagePressable({ cardId, name, children }: { cardId: string; name: 
 			onPressOut={() => { scale.value = withTiming(1, { duration: 120 }); }}
 			onPress={() => {
 				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-				router.push(`/(card)/${cardId}?name=${encodeURIComponent(name)}`);
+				// Pass the (already-cached) chat image as the `image` param so the detail
+				// screen's hero shows instantly instead of waiting for a cold card fetch
+				// on first open — same as navigating from the set/search grids.
+				router.push(
+					`/(card)/${cardId}?name=${encodeURIComponent(name)}&image=${encodeURIComponent(image)}`,
+				);
 			}}
 			style={animatedStyle}
 		>
@@ -31,7 +36,10 @@ function CardImagePressable({ cardId, name, children }: { cardId: string; name: 
 	);
 }
 
-const PERCENT_REGEX = /(\([+-][\d.]+%\))/g;
+// No `g` flag: a global regex makes `.test()` stateful (it advances `lastIndex`),
+// which intermittently mis-fires across messages. `.split()` still splits every
+// match and keeps the capture group without it.
+const PERCENT_REGEX = /(\([+-][\d.]+%\))/;
 
 /**
  * Custom markdown renderer that colorizes percentage changes
@@ -65,7 +73,7 @@ export class ColoredRenderer extends Renderer {
 
 		if (cardId) {
 			return (
-				<CardImagePressable key={this.getKey()} cardId={cardId} name={alt || ""}>
+				<CardImagePressable key={this.getKey()} cardId={cardId} name={alt || ""} image={imageUrl}>
 					{image}
 				</CardImagePressable>
 			);
@@ -88,7 +96,6 @@ export class ColoredRenderer extends Renderer {
 			const parts = text.split(PERCENT_REGEX);
 			const children = parts.map((part, i) => {
 				if (PERCENT_REGEX.test(part)) {
-					PERCENT_REGEX.lastIndex = 0;
 					const isPositive = part.includes("+");
 					return (
 						<Text
@@ -102,7 +109,6 @@ export class ColoredRenderer extends Renderer {
 				return part;
 			});
 
-			PERCENT_REGEX.lastIndex = 0;
 			return (
 				<Text selectable key={this.getKey()} style={styles}>
 					{children}

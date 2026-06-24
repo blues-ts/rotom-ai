@@ -132,7 +132,7 @@ export default function CollectionDetail() {
 	// Explicit header offset: contentInsetAdjustmentBehavior applies its inset
 	// a frame after mount, which made the summary jump down on remounts.
 	const topPadding = insets.top + 52;
-	const { renameCollection } = useCollections();
+	const { renameCollection, deleteCollection } = useCollections();
 	const refreshPrices = useRefreshCollectionPrices();
 	const {
 		data: collection,
@@ -265,6 +265,25 @@ export default function CollectionDetail() {
 		);
 	}, [collection, id, renameCollection]);
 
+	const handleDelete = useCallback(() => {
+		Alert.alert(
+			"Delete Collection",
+			`Are you sure you want to delete "${
+				collection?.name ?? nameParam ?? "this collection"
+			}"? This cannot be undone.`,
+			[
+				{ text: "Cancel", style: "cancel" },
+				{
+					text: "Delete",
+					style: "destructive",
+					onPress: () => {
+						deleteCollection.mutate(id, { onSuccess: () => router.back() });
+					},
+				},
+			],
+		);
+	}, [collection, nameParam, id, deleteCollection]);
+
 	const renderItem = useCallback(
 		({ item, index }: { item: CollectionCard; index: number }) => {
 			// Fade-up only on an item's first appearance; recycled cells get no
@@ -345,7 +364,10 @@ export default function CollectionDetail() {
 							{/* Middle line always renders so card and sealed tiles
 							    keep identical heights. */}
 							<Text
-								style={[styles.infoNumber, { color: colors.primary }]}
+								style={[
+									styles.infoNumber,
+									{ color: colors.mutedForeground },
+								]}
 								numberOfLines={1}
 							>
 								{item.productType === "sealed"
@@ -362,7 +384,10 @@ export default function CollectionDetail() {
 									{formatCurrency(item.cardValue)}
 								</Text>
 								<Text
-									style={[styles.infoCondition, { color: colors.primary }]}
+									style={[
+										styles.infoCondition,
+										{ color: colors.mutedForeground },
+									]}
 									numberOfLines={1}
 								>
 									{item.productType === "sealed"
@@ -436,6 +461,19 @@ export default function CollectionDetail() {
 					headerBackButtonDisplayMode: "minimal",
 					headerRight: () => (
 						<View style={styles.headerRight}>
+							<Pressable
+								onPress={() => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+									handleDelete();
+								}}
+								style={styles.headerButton}
+							>
+								<Ionicons
+									name="trash-outline"
+									size={20}
+									color={colors.foreground}
+								/>
+							</Pressable>
 							<Pressable
 								onPress={() => {
 									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

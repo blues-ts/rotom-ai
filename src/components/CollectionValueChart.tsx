@@ -54,10 +54,7 @@ export default function CollectionValueChart() {
 	return (
 		<ProGate
 			ctaText="Unlock portfolio tracking"
-			style={[
-				styles.container,
-				{ backgroundColor: colors.card, borderColor: colors.border },
-			]}
+			style={[styles.container, { backgroundColor: colors.card }]}
 		>
 			<View style={styles.header}>
 				<Text style={[styles.title, { color: colors.mutedForeground }]}>
@@ -150,7 +147,7 @@ export default function CollectionValueChart() {
 			<View
 				style={[
 					styles.periodRow,
-					{ backgroundColor: colors.muted, borderColor: colors.border },
+					{ backgroundColor: colors.muted },
 				]}
 			>
 				{PERIODS.map((p) => {
@@ -192,7 +189,6 @@ export default function CollectionValueChart() {
 const styles = StyleSheet.create({
 	container: {
 		borderRadius: 12,
-		borderWidth: 1,
 		padding: 16,
 		marginBottom: 12,
 	},
@@ -263,7 +259,6 @@ const styles = StyleSheet.create({
 	periodRow: {
 		flexDirection: "row",
 		borderRadius: 8,
-		borderWidth: 1,
 		padding: 2,
 		gap: 2,
 		marginTop: 12,

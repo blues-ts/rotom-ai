@@ -37,10 +37,15 @@ import {
 	getCardDisplayName,
 	getCardImage,
 	getCardNumber,
+	getConditionOptions,
 	getExpansionDisplayName,
+	getVariantNames,
 } from "@/lib/scrydex";
 import CardImage from "@/components/CardImage";
 import CardPressable from "@/components/CardPressable";
+import CardContextMenu from "@/components/CardContextMenu";
+import TapHoldHintOverlay from "@/components/TapHoldHintOverlay";
+import { useTapHoldHint } from "@/hooks/useTapHoldHint";
 import ErrorState from "@/components/ErrorState";
 import { Image } from "expo-image";
 import { useQuery } from "@tanstack/react-query";
@@ -75,6 +80,10 @@ interface CardResult {
 	image: string;
 	cardNumber: string;
 	kind: "card" | "sealed";
+	// The card's default variant/condition (what the card-detail screen picks),
+	// so a quick-add stores a config that actually matches and shows controls.
+	variant: string;
+	condition: string;
 }
 
 const SKELETON_DATA = Array.from({ length: 15 }, (_, i) => ({
@@ -283,10 +292,7 @@ function SetsBrowser({
 						}}
 					>
 						<View
-							style={[
-								styles.setTile,
-								{ backgroundColor: colors.card, borderColor: colors.border },
-							]}
+							style={[styles.setTile, { backgroundColor: colors.card }]}
 						>
 							<View style={styles.setLogoBox}>
 								{item.logo ? (
@@ -445,15 +451,26 @@ export default function Search() {
 	const cards = useMemo<CardResult[]>(
 		() =>
 			data?.pages.flatMap((p) =>
-				p.data.map((item) => ({
-					id: item.id,
-					// Japanese cards display their English translation when available
-					name: "number" in item ? getCardDisplayName(item) : item.name,
-					image: getCardImage(item, undefined, "small") ?? "",
-					// Sealed products have no card number
-					cardNumber: "number" in item ? getCardNumber(item) : "",
-					kind: ("number" in item ? "card" : "sealed") as CardResult["kind"],
-				})),
+				p.data.map((item) => {
+					const isCard = "number" in item;
+					// Default variant/condition the card-detail screen would pick, so a
+					// quick-add's stored config matches and the controls appear.
+					const variant = getVariantNames(item)[0] ?? "normal";
+					const condition = isCard
+						? (getConditionOptions(item, variant)[0] ?? "NM")
+						: "NM";
+					return {
+						id: item.id,
+						// Japanese cards display their English translation when available
+						name: isCard ? getCardDisplayName(item) : item.name,
+						image: getCardImage(item, undefined, "small") ?? "",
+						// Sealed products have no card number
+						cardNumber: isCard ? getCardNumber(item) : "",
+						kind: (isCard ? "card" : "sealed") as CardResult["kind"],
+						variant,
+						condition,
+					};
+				}),
 			) ?? [],
 		[data],
 	);
@@ -492,12 +509,26 @@ export default function Search() {
 		}
 	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
+	// One-time "Tap and hold me!" nudge on the first card.
+	const { show: showTapHint, dismiss: dismissTapHint } = useTapHoldHint(
+		displayCards.length > 0,
+	);
+
 	const renderItem = useCallback(
-		({ item }: { item: CardResult; index: number }) => {
+		({ item, index }: { item: CardResult; index: number }) => {
 			const showPlaceholder = !item.image || failedImages.has(item.id);
 			return (
 				<View>
-					<CardPressable
+					<CardContextMenu
+						card={{
+							cardId: item.id,
+							cardName: item.name,
+							cardNumber: item.cardNumber || undefined,
+							cardImageUrl: item.image || undefined,
+							productType: item.kind === "sealed" ? "sealed" : "card",
+							variant: item.variant,
+							condition: item.condition,
+						}}
 						onPress={() => {
 							Keyboard.dismiss();
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -574,7 +605,14 @@ export default function Search() {
 								}}
 							/>
 						)}
-					</CardPressable>
+					</CardContextMenu>
+					{index === 0 && showTapHint && (
+						<TapHoldHintOverlay
+							width={imageWidth}
+							height={imageHeight}
+							onDismiss={dismissTapHint}
+						/>
+					)}
 				</View>
 			);
 		},
@@ -584,6 +622,8 @@ export default function Search() {
 			colors.mutedForeground,
 			failedImages,
 			prefetchDetail,
+			showTapHint,
+			dismissTapHint,
 		],
 	);
 
@@ -833,7 +873,8 @@ const styles = StyleSheet.create({
 	setTile: {
 		width: setTileWidth,
 		borderRadius: 12,
-		borderWidth: 1,
+		// No border: the faint card surface alone defines the tile. An outline on
+		// every cell turns a gallery of logos into a wall of buttons.
 		padding: 12,
 		alignItems: "center",
 	},
@@ -850,7 +891,7 @@ const styles = StyleSheet.create({
 	},
 	setName: {
 		fontSize: 13,
-		fontWeight: "700",
+		fontWeight: "600",
 		textAlign: "center",
 	},
 	// Skeleton mirroring the set tile layout: logo box + name line

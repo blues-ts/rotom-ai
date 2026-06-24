@@ -805,10 +805,11 @@ export default function CardDetail() {
 	const cardImageSmall =
 		(card ? getCardImage(card, variant || undefined, "small") : undefined) ??
 		initImage;
-	// Blurred background — strictly the thumbnail we navigated with (already
-	// cached, and plenty for a 30px-blur backdrop). Fixed for the whole screen:
-	// it shows instantly and never reloads on data load or variant change.
-	const bgImage = initImage;
+	// Blurred background — prefer the thumbnail we navigated with (already cached,
+	// shows instantly, and stays fixed so it never reloads on data load or variant
+	// change). Fall back to the fetched card image when no thumbnail was passed
+	// (e.g. some chat links) so the backdrop still loads instead of staying blank.
+	const bgImage = initImage ?? cardImageSmall;
 	const cardNumber = card ? getCardNumber(card) : undefined;
 	// Japanese cards display their English translation when available
 	const displayName = card ? getCardDisplayName(card) : (name ?? "Card");

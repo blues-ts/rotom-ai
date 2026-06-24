@@ -35,10 +35,14 @@ import {
 	getCardDisplayName,
 	getCardImage,
 	getCardNumber,
+	getConditionOptions,
+	getVariantNames,
 	toNumber,
 } from "@/lib/scrydex";
 import CardImage from "@/components/CardImage";
-import CardPressable from "@/components/CardPressable";
+import CardContextMenu from "@/components/CardContextMenu";
+import TapHoldHintOverlay from "@/components/TapHoldHintOverlay";
+import { useTapHoldHint } from "@/hooks/useTapHoldHint";
 import ErrorState from "@/components/ErrorState";
 import type { ScrydexCard, ScrydexSealedProduct } from "@/types/scrydex";
 
@@ -377,6 +381,11 @@ export default function SetDetail() {
 		</View>
 	);
 
+	// One-time "Tap and hold me!" nudge on the first card.
+	const { show: showHint, dismiss: dismissHint } = useTapHoldHint(
+		cards.length > 0,
+	);
+
 	const renderItem = useCallback(
 		({ item, index }: { item: SetItem; index: number }) => {
 			const image = getCardImage(item, undefined, "small") ?? "";
@@ -386,9 +395,19 @@ export default function SetDetail() {
 			const showPlaceholder = !image || failedImages.has(item.id);
 			// In value mode, open the item on the variant that drove its sort
 			// position so the hero price matches the ranking.
-			const bestVariant = isValueSort
-				? bestMarketPrice(item, sortCondition).variant
-				: undefined;
+			const priceInfo = bestMarketPrice(item, sortCondition);
+			const bestVariant = isValueSort ? priceInfo.variant : undefined;
+
+			// Quick-add must store a REAL variant/condition (what the card-detail
+			// screen would default to), else its config won't match and the
+			// in-collection controls won't show. Prefer the priced variant, fall
+			// back to the card's first variant.
+			const quickVariant =
+				priceInfo.variant ?? getVariantNames(item)[0] ?? "normal";
+			const quickCondition =
+				"number" in item
+					? (getConditionOptions(item, quickVariant)[0] ?? "NM")
+					: "NM";
 			// Animate in only on a card's first appearance; recycled cells get no
 			// `entering`, so scrolling back never replays the fade (the old jank).
 			const firstAppearance = !animatedIdsRef.current.has(item.id);
@@ -401,7 +420,18 @@ export default function SetDetail() {
 							: undefined
 					}
 				>
-					<CardPressable
+					<CardContextMenu
+						card={{
+							cardId: item.id,
+							cardName: displayName,
+							cardNumber: cardNumber || undefined,
+							setName: name,
+							cardImageUrl: image || undefined,
+							cardValue: priceInfo.value,
+							productType: isSealedMode ? "sealed" : "card",
+							variant: quickVariant,
+							condition: quickCondition,
+						}}
 						onPress={() => {
 							Keyboard.dismiss();
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -480,17 +510,27 @@ export default function SetDetail() {
 								}}
 							/>
 						)}
-					</CardPressable>
+					</CardContextMenu>
+					{index === 0 && showHint && (
+						<TapHoldHintOverlay
+							width={imageWidth}
+							height={imageHeight}
+							onDismiss={dismissHint}
+						/>
+					)}
 				</Animated.View>
 			);
 		},
 		[
 			colors,
+			name,
 			failedImages,
 			isValueSort,
 			isSealedMode,
 			sortCondition,
 			prefetchDetail,
+			showHint,
+			dismissHint,
 		],
 	);
 
