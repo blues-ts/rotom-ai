@@ -123,3 +123,60 @@ export function identifyInRegion(
     topN,
   );
 }
+
+/**
+ * Like {@link identifyInRegion} but matches the average of the last `window`
+ * frame embeddings — cancels moving holo glare for far more reliable foil scans.
+ * Call {@link resetSmoothing} when starting a fresh scan.
+ */
+export function identifyInRegionSmoothed(
+  uri: string,
+  region: { x: number; y: number; w: number; h: number },
+  previewAspect: number,
+  topN = 5,
+  window = 5,
+): Promise<CardMatch[]> {
+  return mod().identifyInRegionSmoothed(
+    uri,
+    region.x,
+    region.y,
+    region.w,
+    region.h,
+    previewAspect,
+    topN,
+    window,
+  );
+}
+
+/** Clear the frame-averaging buffer (start of a new scan session). */
+export function resetSmoothing(): void {
+  mod().resetSmoothing();
+}
+
+/** Raw OCR lines from a card, split by region. Parsed/normalised in JS. */
+export interface CardText {
+  bottom: string[]; // collector number lives here (e.g. "123/198", "TG02")
+  top: string[]; // name / set line — for EN-vs-JA disambiguation
+}
+
+/**
+ * Read text off the card via on-device OCR, within the same scan-guide region as
+ * {@link identifyInRegion}. Returns the raw recognised lines for the bottom strip
+ * (collector number) and top strip (name/set). Used to disambiguate near-twin
+ * holos that the visual match alone can't separate. Cheap, but ~100–300ms — call
+ * only on ambiguous frames, not every frame.
+ */
+export function readCardText(
+  uri: string,
+  region: { x: number; y: number; w: number; h: number },
+  previewAspect: number,
+): Promise<CardText> {
+  return mod().readCardText(
+    uri,
+    region.x,
+    region.y,
+    region.w,
+    region.h,
+    previewAspect,
+  );
+}

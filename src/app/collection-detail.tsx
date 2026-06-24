@@ -487,7 +487,7 @@ export default function CollectionDetail() {
 			</Stack.Toolbar>
 
 			<View style={[styles.container, { backgroundColor: colors.background }]}>
-				<RefreshingPill visible={refreshPrices.isPending} />
+				<RefreshingPill visible={refreshPrices.isPending} topOffset={52 + 8} />
 
 				{/* Card grid or empty state. Banner lives inside the list as its
 				    header (matching set-detail) so it shares the list's layout
@@ -515,9 +515,13 @@ export default function CollectionDetail() {
 						keyboardShouldPersistTaps="handled"
 						refreshControl={
 							<RefreshControl
-								refreshing={refreshPrices.isPending}
+								// The pill is the sole "updating" indicator — keep the native
+								// spinner from lingering behind it; pulling still refreshes.
+								refreshing={false}
 								onRefresh={() => refreshPrices.mutate(id)}
 								tintColor={colors.mutedForeground}
+								title="Pull to refresh prices"
+								titleColor={colors.mutedForeground}
 							/>
 						}
 					/>

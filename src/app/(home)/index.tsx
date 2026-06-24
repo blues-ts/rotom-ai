@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Alert, StyleSheet, View } from "react-native";
+import { Alert, InteractionManager, StyleSheet, View } from "react-native";
 
 import { router, Stack } from "expo-router";
 
@@ -24,12 +24,23 @@ import ChatMessageList, {
 import EmptyChat from "@/components/EmptyChat";
 import { useTheme } from "@/context/ThemeContext";
 import { useChat } from "@/hooks/useChat";
+import { warmScanner } from "@/lib/scannerWarmup";
 
 export default function Home() {
 	const { colors } = useTheme();
 	const { bottom } = useSafeAreaInsets();
 	const chatListRef = useRef<ChatMessageListRef>(null);
 	const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
+
+	// Warm the ~66 MB on-device scanner index once we're home — deferred until
+	// after the entry transition/animations settle so the heavy native load never
+	// janks the splash exit or this screen's mount. Idempotent (see scannerWarmup).
+	useEffect(() => {
+		const task = InteractionManager.runAfterInteractions(() => {
+			void warmScanner();
+		});
+		return () => task.cancel();
+	}, []);
 
 	const bottomSpacerStyle = useAnimatedStyle(() => ({
 		marginBottom: interpolate(

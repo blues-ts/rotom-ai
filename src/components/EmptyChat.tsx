@@ -1,32 +1,18 @@
-import { useEffect } from "react";
 import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
-import Animated, {
-	useSharedValue,
-	useAnimatedStyle,
-	withTiming,
-} from "react-native-reanimated";
+import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { useTheme } from "@/context/ThemeContext";
 
 export default function EmptyChat() {
 	const { colors, theme } = useTheme();
-	const opacity = useSharedValue(0);
-	const translateY = useSharedValue(10);
-
-	useEffect(() => {
-		opacity.value = withTiming(1, { duration: 500 });
-		translateY.value = withTiming(0, { duration: 500 });
-	}, []);
-
-	const animatedStyle = useAnimatedStyle(() => ({
-		opacity: opacity.value,
-		transform: [{ translateY: translateY.value }],
-	}));
 
 	return (
 		<Pressable style={styles.container} onPress={Keyboard.dismiss}>
-			<Animated.View style={animatedStyle}>
+			{/* Declarative entering animation — runs natively and always resolves to
+			    visible, unlike a mount-time useEffect that can be dropped mid-
+			    navigation and leave the header stuck at opacity 0. */}
+			<Animated.View entering={FadeInDown.duration(500)}>
 				<View style={styles.titleRow}>
 					<Text style={[styles.title, { color: colors.foreground }]}>
 						River

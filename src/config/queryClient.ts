@@ -14,7 +14,9 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000,
-      gcTime: 30 * 60 * 1000,
+      // Aligned with the persisted cache max-age: queries must stay in memory
+      // long enough to be written to (and restored from) the MMKV persister.
+      gcTime: 24 * 60 * 60 * 1000,
       retry: 1,
     },
   },

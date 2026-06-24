@@ -4,7 +4,6 @@ import { router, Stack, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
-	Alert,
 	Dimensions,
 	Linking,
 	Pressable,
@@ -12,17 +11,8 @@ import {
 	Text,
 	View,
 } from "react-native";
-import Animated, {
-	cancelAnimation,
-	Easing,
-	FadeIn,
-	useAnimatedStyle,
-	useReducedMotion,
-	useSharedValue,
-	withRepeat,
-	withTiming,
-} from "react-native-reanimated";
-import Svg, { Defs, Mask, Path, Rect } from "react-native-svg";
+import Animated, { FadeIn } from "react-native-reanimated";
+import Svg, { Defs, Mask, Rect } from "react-native-svg";
 import {
 	Camera,
 	useCameraDevice,
@@ -42,25 +32,83 @@ const CARD_MAX_WIDTH = 325;
 const CARD_WIDTH_RATIO = 0.78;
 const CARD_CENTER_Y_RATIO = 0.42;
 const SCRIM_OPACITY = 0.45;
-const BRACKET_LEN = 30;
 
 // Palette — signals layered over the live feed.
 const RIVER = "#208AEF"; // searching / scan
 const AMBER = "#FFAE04"; // hold steady
-const GREEN = "#22C55E"; // locked
 const REST = "rgba(255,255,255,0.9)";
 
 // On-device scan tuning.
 const SCAN_INDEX_BASE = process.env.EXPO_PUBLIC_API_URL
 	? `${process.env.EXPO_PUBLIC_API_URL}/api/scan-index`
 	: null;
-const ONDEVICE_THRESHOLD = 0.8;
-const ONDEVICE_MARGIN = 0.05;
-const REQUIRED_HITS = 2;
+const ONDEVICE_THRESHOLD = 0.7; // a frame this confident casts a vote
+const INSTANT_LOCK = 0.9; // single very-confident frame locks immediately
+// Holos make look-alikes cluster ~0.75 with tiny margins and the #1 swaps frame
+// to frame. So lock on the card that DOMINATES a window of recent frames, not
+// whichever is #1 right now: needs VOTE_NEEDED of the last VOTE_WINDOW frames
+// and a VOTE_LEAD edge over the runner-up. Won't lock when the cluster is tied.
+const VOTE_WINDOW = 8;
+const VOTE_NEEDED = 4;
+const VOTE_LEAD = 2;
 const AUTO_INTERVAL_MS = 550;
-const TAP_HINT_DELAY_MS = 6000;
+const REGION_PAD = 0.04;
+
+// Collector-number re-rank. When the visual match is a tight near-twin cluster
+// (holos), OCR the printed number and use it to break the tie — but only as a
+// reinforcement of the artwork, never an override (a candidate must clear
+// NUM_VISUAL_FLOOR to be eligible, so a misread number can't pull in a card the
+// camera never really saw).
+const OCR_FLOOR = 0.55; // below this the frame isn't a confident card — skip OCR
+const OCR_MARGIN = 0.06; // only OCR when the top two are this close (ambiguous)
+const OCR_TIE_BAND = 0.06; // a lettered number breaks ties within this band of #1
+const PHOTO_FINISH = 0.008; // a bare number may confirm only a leader/co-leader this close to #1
+const NUM_VISUAL_FLOOR = 0.55; // and never trusts a candidate below this absolute score
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Normalise a collector number for comparison: uppercase, drop a letter prefix's
+// leading zeros. "TG02" → "TG2", "010" → "10", "123" → "123".
+function normNum(raw: string): string | null {
+  const m = String(raw).toUpperCase().match(/([A-Z]{0,4})0*(\d{1,3})/);
+  return m ? m[1] + m[2] : null;
+}
+
+// The printed number is the Scrydex id's suffix after the LAST dash (set codes
+// themselves contain dashes, e.g. `tcgp-A4a-4`). `swsh10tg-TG02` → "TG2".
+function idNumber(id: string): string | null {
+  const i = id.lastIndexOf("-");
+  return i < 0 ? null : normNum(id.slice(i + 1));
+}
+
+// Collector numbers parsed from OCR lines, split by how trustworthy they are:
+//  - high: a LETTERED number ("XY133", "TG02", "SWSH165"). Those numbering schemes
+//    are set-bound, so the token alone identifies the card — safe to break a tie.
+//  - low: a bare 1–3 digit number ("21", "6"). Shared across thousands of cards
+//    (and "021/028"→"21" is no better — the set total is what's specific, and we
+//    don't have it), so a bare number may only CONFIRM the artwork's own pick.
+function parseNumbers(lines: string[]): { high: Set<string>; low: Set<string> } {
+  const high = new Set<string>();
+  const low = new Set<string>();
+  const token = /([A-Z]{0,4})0*(\d{1,3})/g;
+  for (const line of lines) {
+    const up = line.toUpperCase();
+    let m: RegExpExecArray | null;
+    token.lastIndex = 0;
+    while ((m = token.exec(up))) {
+      const t = m[1] + m[2];
+      if (m[1]) high.add(t); // letter prefix → set-specific
+      else low.add(t); // bare digits → common, confirm-only
+    }
+  }
+  return { high, low };
+}
+
+// Hiragana, katakana, or CJK present → this is the Japanese print of the card.
+// EN cards have no such characters, so absence is treated as English.
+function hasJapanese(lines: string[]): boolean {
+  return lines.some((l) => /[぀-ヿ㐀-鿿]/.test(l));
+}
 
 type ScanState = "preparing" | "searching" | "locking" | "found";
 
@@ -68,7 +116,7 @@ const RETICLE_COLOR: Record<ScanState, string> = {
 	preparing: "rgba(255,255,255,0.35)",
 	searching: REST,
 	locking: AMBER,
-	found: GREEN,
+	found: RIVER,
 };
 
 export default function CameraScreen() {
@@ -76,13 +124,11 @@ export default function CameraScreen() {
 	const { hasPermission, requestPermission } = useCameraPermission();
 	const photoOutput = usePhotoOutput({ qualityPrioritization: "speed" });
 	const cameraRef = useRef<CameraRef>(null);
-	const reduceMotion = useReducedMotion();
 
 	const [isActive, setIsActive] = useState(false);
 	const [torchEnabled, setTorchEnabled] = useState(false);
 	const [indexReady, setIndexReady] = useState(false);
 	const [scanState, setScanState] = useState<ScanState>("preparing");
-	const [showTapHint, setShowTapHint] = useState(false);
 
 	const onDeviceReadyRef = useRef(false);
 	const photoOutputRef = useRef(photoOutput);
@@ -91,7 +137,7 @@ export default function CameraScreen() {
 	const navigatedRef = useRef(false);
 	const capturingRef = useRef(false);
 	const deactivateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const voteRef = useRef<{ id: string | null; hits: number }>({ id: null, hits: 0 });
+	const voteRef = useRef<string[]>([]); // recent confident top-1 ids (windowed)
 
 	// Card box (screen points) + the same box as preview fractions for cropping.
 	const cardWidth = Math.min(CARD_MAX_WIDTH, width * CARD_WIDTH_RATIO);
@@ -99,7 +145,7 @@ export default function CameraScreen() {
 	const cardX = width / 2 - cardWidth / 2;
 	const cardY = height * CARD_CENTER_Y_RATIO - cardHeight / 2;
 	const scanRegion = useMemo(() => {
-		const pad = 0.04;
+		const pad = REGION_PAD;
 		const nx = cardX / width;
 		const ny = cardY / height;
 		const nw = cardWidth / width;
@@ -111,27 +157,6 @@ export default function CameraScreen() {
 			h: Math.min(1, nh * (1 + 2 * pad)),
 		};
 	}, [cardX, cardY, cardWidth, cardHeight]);
-
-	// Sweep line animation (the scan signal).
-	const sweep = useSharedValue(0);
-	const searching = scanState === "searching";
-	useEffect(() => {
-		if (searching && !reduceMotion) {
-			sweep.value = 0;
-			sweep.value = withRepeat(
-				withTiming(1, { duration: 1900, easing: Easing.inOut(Easing.quad) }),
-				-1,
-				false,
-			);
-		} else {
-			cancelAnimation(sweep);
-			sweep.value = 0;
-		}
-	}, [searching, reduceMotion, sweep]);
-	const sweepStyle = useAnimatedStyle(() => ({
-		transform: [{ translateY: sweep.value * (cardHeight - 3) }],
-		opacity: 0.95 - sweep.value * 0.45,
-	}));
 
 	useEffect(() => {
 		return () => {
@@ -152,9 +177,10 @@ export default function CameraScreen() {
 		});
 	}, []);
 
-	const captureAndIdentify = useCallback(async (): Promise<
-		CardVision.CardMatch[] | null
-	> => {
+	const captureAndIdentify = useCallback(async (): Promise<{
+		matches: CardVision.CardMatch[];
+		filePath: string;
+	} | null> => {
 		const po = photoOutputRef.current;
 		if (!po || capturingRef.current || navigatedRef.current) return null;
 		capturingRef.current = true;
@@ -164,12 +190,18 @@ export default function CameraScreen() {
 				{},
 			);
 			if (!file?.filePath || navigatedRef.current) return null;
-			return await CardVision.identifyInRegion(
+			// Smoothed: averages recent frames so holo glare (which moves) cancels.
+			// Top-12 (not 5): on EN/JA twins the correct print can sit several ranks
+			// down, and the OCR number needs it present as a candidate to pull it up.
+			const matches = await CardVision.identifyInRegionSmoothed(
 				file.filePath,
 				scanRegion,
 				width / height,
+				12,
 				5,
 			);
+			// Keep the file path: ambiguous frames re-read the printed number off it.
+			return { matches, filePath: file.filePath };
 		} catch {
 			return null;
 		} finally {
@@ -189,20 +221,110 @@ export default function CameraScreen() {
 	);
 
 	const evaluate = useCallback(
-		(matches: CardVision.CardMatch[]) => {
+		async (matches: CardVision.CardMatch[], filePath: string) => {
 			const top = matches[0];
 			const margin = matches[1] ? top.score - matches[1].score : top?.score ?? 0;
-			if (top && top.score >= ONDEVICE_THRESHOLD && margin >= ONDEVICE_MARGIN) {
-				if (voteRef.current.id === top.id) voteRef.current.hits += 1;
-				else voteRef.current = { id: top.id, hits: 1 };
-				if (voteRef.current.hits >= REQUIRED_HITS) lockAndGo(top.id);
+			if (__DEV__) {
+				console.log(
+					"[scan]",
+					matches
+						.slice(0, 3)
+						.map((m) => `${m.id} ${m.score.toFixed(3)}`)
+						.join("  |  "),
+					`margin=${margin.toFixed(3)}`,
+				);
+			}
+			if (top && top.score >= INSTANT_LOCK) {
+				// Very confident — lock right away.
+				lockAndGo(top.id);
+				return;
+			}
+			// Tight near-twin cluster (classic holo case): the artwork found the
+			// right look, but can't pick between siblings. Read the printed number
+			// and lock the one candidate it confirms — gated by a visual floor so
+			// the number reinforces the artwork rather than overriding it.
+			if (
+				top &&
+				top.score >= OCR_FLOOR &&
+				margin < OCR_MARGIN &&
+				!navigatedRef.current
+			) {
+				try {
+					const text = await CardVision.readCardText(
+						filePath,
+						scanRegion,
+						width / height,
+					);
+					if (navigatedRef.current) return;
+					const { high, low } = parseNumbers(text.bottom);
+					if (high.size || low.size) {
+						const ja = hasJapanese([...text.top, ...text.bottom]);
+						// (1) A LETTERED number may break a tie within the top cluster —
+						// candidates the artwork already scored within OCR_TIE_BAND of #1.
+						const cut = Math.max(NUM_VISUAL_FLOOR, top.score - OCR_TIE_BAND);
+						let hits = matches.filter((m) => {
+							const n = idNumber(m.id);
+							return m.score >= cut && n != null && high.has(n);
+						});
+						// EN/JA twin (same art + number): split on the script OCR read.
+						if (hits.length > 1) {
+							const byLang = hits.filter((m) => m.id.includes("_ja") === ja);
+							if (byLang.length) hits = byLang;
+						}
+						// (2) A bare number may only CONFIRM a visual leader / co-leader
+						// (a true photo-finish with #1) — never promote a lower card that
+						// merely shares the very common collector number.
+						const leaders = matches.filter(
+							(m) => m.score >= top.score - PHOTO_FINISH,
+						);
+						const confirmed = leaders.filter((m) => {
+							const n = idNumber(m.id);
+							return n != null && (high.has(n) || low.has(n));
+						});
+						if (__DEV__) {
+							console.log(
+								"[scan] ocr",
+								`hi:${[...high].join(",") || "-"} lo:${[...low].join(",") || "-"}`,
+								ja ? "(ja)" : "(en)",
+								"→",
+								hits.length === 1
+									? hits[0].id
+									: confirmed.length === 1
+										? `${confirmed[0].id} (confirms #1)`
+										: "(no eligible match)",
+							);
+						}
+						if (hits.length === 1) {
+							lockAndGo(hits[0].id);
+							return;
+						}
+						if (confirmed.length === 1) {
+							lockAndGo(confirmed[0].id);
+							return;
+						}
+					}
+				} catch {}
+			}
+			if (top && top.score >= ONDEVICE_THRESHOLD) {
+				// Record this frame's winner into the sliding window.
+				const w = voteRef.current;
+				w.push(top.id);
+				if (w.length > VOTE_WINDOW) w.shift();
+				// Tally the window; lock on a clear, dominant plurality.
+				const counts = new Map<string, number>();
+				for (const id of w) counts.set(id, (counts.get(id) ?? 0) + 1);
+				const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+				const [bestId, c1] = ranked[0];
+				const c2 = ranked[1]?.[1] ?? 0;
+				if (c1 >= VOTE_NEEDED && c1 - c2 >= VOTE_LEAD) lockAndGo(bestId);
 				else setScanState("locking");
 			} else {
-				voteRef.current = { id: null, hits: 0 };
-				setScanState("searching");
+				// Low-confidence frame: age out one old vote so stale picks fade.
+				if (voteRef.current.length) voteRef.current.shift();
+				setScanState(voteRef.current.length ? "locking" : "searching");
 			}
 		},
-		[lockAndGo],
+		[lockAndGo, scanRegion],
 	);
 
 	const runLoop = useCallback(async () => {
@@ -213,8 +335,9 @@ export default function CameraScreen() {
 				await delay(300);
 				continue;
 			}
-			const matches = await captureAndIdentify();
-			if (matches && !navigatedRef.current) evaluate(matches);
+			const result = await captureAndIdentify();
+			if (result && !navigatedRef.current)
+				await evaluate(result.matches, result.filePath);
 			await delay(AUTO_INTERVAL_MS);
 		}
 		loopRunningRef.current = false;
@@ -223,6 +346,12 @@ export default function CameraScreen() {
 	const ensureIndexLoaded = useCallback(async () => {
 		if (onDeviceReadyRef.current) return true;
 		if (!CardVision.isAvailable()) return false;
+		// The launch warm-up usually has the index loaded already — use it as-is
+		// instead of reloading 66 MB from disk again.
+		if (CardVision.isLoaded()) {
+			markReady();
+			return true;
+		}
 		try {
 			const local = await CardVision.loadBestLocal();
 			if (local.count > 0) {
@@ -236,8 +365,8 @@ export default function CameraScreen() {
 	useFocusEffect(
 		useCallback(() => {
 			navigatedRef.current = false;
-			voteRef.current = { id: null, hits: 0 };
-			setShowTapHint(false);
+			voteRef.current = [];
+			if (CardVision.isAvailable()) CardVision.resetSmoothing();
 			// Keep the camera live (cancel any pending deactivate from a prior blur)
 			// so returning to the scanner shows a live preview, never a frozen frame.
 			if (deactivateTimer.current) clearTimeout(deactivateTimer.current);
@@ -259,16 +388,11 @@ export default function CameraScreen() {
 			})();
 
 			const safety = setTimeout(() => !cancelled && setIndexReady(true), 12000);
-			const hint = setTimeout(
-				() => !cancelled && !navigatedRef.current && setShowTapHint(true),
-				TAP_HINT_DELAY_MS,
-			);
 			runLoop();
 
 			return () => {
 				cancelled = true;
 				clearTimeout(safety);
-				clearTimeout(hint);
 				// Stop scanning immediately, but keep the camera session alive briefly
 				// so a back-swipe shows a live preview through the transition (not a
 				// frozen frame or black). Free the camera if they linger off-screen.
@@ -276,8 +400,7 @@ export default function CameraScreen() {
 				if (deactivateTimer.current) clearTimeout(deactivateTimer.current);
 				deactivateTimer.current = setTimeout(() => setIsActive(false), 20000);
 				// Clear the result UI so swiping back doesn't flash "Got it!".
-				voteRef.current = { id: null, hits: 0 };
-				setShowTapHint(false);
+				voteRef.current = [];
 				setScanState(onDeviceReadyRef.current ? "searching" : "preparing");
 			};
 		}, [ensureIndexLoaded, markReady, runLoop]),
@@ -287,24 +410,6 @@ export default function CameraScreen() {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 		setTorchEnabled((p) => !p);
 	}, []);
-
-	// Tap anywhere = explicit single-frame capture (silent manual fallback).
-	const handleTapScan = useCallback(async () => {
-		if (!onDeviceReadyRef.current || navigatedRef.current) return;
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-		const matches = await captureAndIdentify();
-		if (!matches || navigatedRef.current) return;
-		const top = matches[0];
-		const margin = matches[1] ? top.score - matches[1].score : top?.score ?? 0;
-		if (top && top.score >= ONDEVICE_THRESHOLD && margin >= ONDEVICE_MARGIN) {
-			lockAndGo(top.id);
-		} else {
-			Alert.alert(
-				"No match yet",
-				"Fill the frame with the card and keep it flat and well-lit.",
-			);
-		}
-	}, [captureAndIdentify, lockAndGo]);
 
 	// Permission gate
 	if (!hasPermission) {
@@ -340,15 +445,6 @@ export default function CameraScreen() {
 	}
 
 	const reticle = RETICLE_COLOR[scanState];
-	const right = cardX + cardWidth;
-	const bottom = cardY + cardHeight;
-	const L = BRACKET_LEN;
-	const bracketPath = [
-		`M ${cardX} ${cardY + L} L ${cardX} ${cardY} L ${cardX + L} ${cardY}`,
-		`M ${right - L} ${cardY} L ${right} ${cardY} L ${right} ${cardY + L}`,
-		`M ${right} ${bottom - L} L ${right} ${bottom} L ${right - L} ${bottom}`,
-		`M ${cardX + L} ${bottom} L ${cardX} ${bottom} L ${cardX} ${bottom - L}`,
-	].join(" ");
 
 	const primary =
 		scanState === "preparing"
@@ -396,13 +492,6 @@ export default function CameraScreen() {
 				enableNativeZoomGesture
 			/>
 
-			{/* Tap anywhere to capture (silent manual fallback) */}
-			<Pressable
-				style={StyleSheet.absoluteFill}
-				onPress={handleTapScan}
-				accessibilityLabel="Scan the card in the frame"
-			/>
-
 			{/* Scrim + viewfinder reticle */}
 			<Svg
 				style={StyleSheet.absoluteFill}
@@ -430,34 +519,25 @@ export default function CameraScreen() {
 					fill={`rgba(0,0,0,${SCRIM_OPACITY})`}
 					mask="url(#holeMask)"
 				/>
-				<Path
-					d={bracketPath}
+				{/* Outline of the hole — colors through the scan state */}
+				<Rect
+					x={cardX}
+					y={cardY}
+					width={cardWidth}
+					height={cardHeight}
+					rx={CARD_CORNER_RADIUS}
+					ry={CARD_CORNER_RADIUS}
+					fill="none"
 					stroke={reticle}
 					strokeWidth={3}
-					strokeLinecap="round"
-					strokeLinejoin="round"
-					fill="none"
 				/>
 			</Svg>
-
-			{/* Scan sweep line (searching only) */}
-			{searching && !reduceMotion && (
-				<View
-					pointerEvents="none"
-					style={[
-						styles.sweepClip,
-						{ left: cardX, top: cardY, width: cardWidth, height: cardHeight },
-					]}
-				>
-					<Animated.View style={[styles.sweepLine, sweepStyle]} />
-				</View>
-			)}
 
 			{/* Status */}
 			<View style={styles.statusWrap} pointerEvents="none">
 				{scanState === "found" && (
 					<Animated.View entering={FadeIn.duration(160)} style={styles.foundBadge}>
-						<Ionicons name="checkmark-circle" size={34} color={GREEN} />
+						<Ionicons name="checkmark-circle" size={34} color={RIVER} />
 					</Animated.View>
 				)}
 				{scanState === "preparing" && (
@@ -465,11 +545,6 @@ export default function CameraScreen() {
 				)}
 				<Text style={styles.primary}>{primary}</Text>
 				{secondary && <Text style={styles.secondary}>{secondary}</Text>}
-				{showTapHint && scanState !== "found" && (
-					<Animated.Text entering={FadeIn.duration(200)} style={styles.tapHint}>
-						Trouble locking on? Tap anywhere to scan
-					</Animated.Text>
-				)}
 			</View>
 		</View>
 	);
@@ -479,20 +554,6 @@ const styles = StyleSheet.create({
 	container: {
 		flex: 1,
 		backgroundColor: "#000",
-	},
-	sweepClip: {
-		position: "absolute",
-		overflow: "hidden",
-		borderRadius: CARD_CORNER_RADIUS,
-	},
-	sweepLine: {
-		height: 3,
-		width: "100%",
-		backgroundColor: RIVER,
-		shadowColor: RIVER,
-		shadowOpacity: 0.9,
-		shadowRadius: 8,
-		shadowOffset: { width: 0, height: 0 },
 	},
 	statusWrap: {
 		position: "absolute",
@@ -517,13 +578,6 @@ const styles = StyleSheet.create({
 		fontSize: 13.5,
 		textAlign: "center",
 		marginTop: 6,
-	},
-	tapHint: {
-		color: "rgba(255,255,255,0.55)",
-		fontSize: 13,
-		textAlign: "center",
-		marginTop: 18,
-		textDecorationLine: "underline",
 	},
 	permissionContainer: {
 		flex: 1,

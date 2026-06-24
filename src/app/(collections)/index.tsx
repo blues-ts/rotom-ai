@@ -32,7 +32,7 @@ export default function Collections() {
 			style={[styles.container, { backgroundColor: colors.background }]}
 			edges={["bottom"]}
 		>
-			<RefreshingPill visible={refreshPrices.isPending} />
+			<RefreshingPill visible={refreshPrices.isPending} topOffset={52 + 8} />
 			<ScrollView
 				contentContainerStyle={[
 					styles.content,
@@ -40,10 +40,14 @@ export default function Collections() {
 				]}
 				refreshControl={
 					<RefreshControl
-						refreshing={refreshPrices.isPending}
+						// The pill is the sole "updating" indicator — keep the native
+						// spinner from lingering behind it; pulling still refreshes.
+						refreshing={false}
 						onRefresh={() => refreshPrices.mutate(undefined)}
 						tintColor={colors.mutedForeground}
 						progressViewOffset={insets.top + 52}
+						title="Pull to refresh prices"
+						titleColor={colors.mutedForeground}
 					/>
 				}
 			>

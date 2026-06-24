@@ -32,6 +32,8 @@ public class CardVisionModule: Module {
   private var dim: Int = 0
   private var count: Int = 0
   private var loadedRev: Int = -1
+  // Rolling buffer of recent query embeddings for holo-glare smoothing.
+  private var recent: [[Float]] = []
 
   public func definition() -> ModuleDefinition {
     Name("CardVision")
@@ -157,6 +159,130 @@ public class CardVisionModule: Module {
         ["id": $0.id, "score": Double($0.score)]
       }
     }
+
+    // Like identifyInRegion, but matches the AVERAGE of the last `window` frame
+    // embeddings. Holo glare moves frame-to-frame, so averaging cancels much of
+    // the specular noise and pulls the result toward the matte art — far more
+    // reliable on foils. The buffer auto-resets when the scene changes a lot
+    // (new card / camera moved away).
+    AsyncFunction("identifyInRegionSmoothed") {
+      (uri: String, x: Double, y: Double, w: Double, h: Double,
+       previewAspect: Double, topN: Int, window: Int) -> [[String: Any]] in
+      guard self.count > 0 else { throw VisionError(description: "Index not loaded") }
+      guard let cg = self.loadUpright(self.stripScheme(uri)) else {
+        throw VisionError(description: "Failed to load image")
+      }
+      let region = self.cropToPreviewRegion(
+        cg, nx: x, ny: y, nw: w, nh: h, previewAspect: previewAspect) ?? cg
+      guard let v = self.embedCGImage(region, crop: true) else {
+        throw VisionError(description: "Failed to embed image")
+      }
+
+      // Scene-change guard: if this frame barely resembles the running average,
+      // the card/scene changed — start the buffer over so we don't blend cards.
+      if let last = self.recent.last {
+        var s: Float = 0
+        let n = min(last.count, v.count)
+        for i in 0..<n { s += last[i] * v[i] }
+        if s < 0.55 { self.recent.removeAll() }
+      }
+      self.recent.append(v)
+      let cap = max(1, window)
+      if self.recent.count > cap { self.recent.removeFirst(self.recent.count - cap) }
+
+      let avg = self.normalised(self.averageVectors(self.recent))
+      return self.topMatches(query: avg, k: topN).map {
+        ["id": $0.id, "score": Double($0.score)]
+      }
+    }
+
+    // Clear the smoothing buffer (call when starting a fresh scan session).
+    Function("resetSmoothing") {
+      self.recent.removeAll()
+    }
+
+    // Read text off a card via on-device OCR (VNRecognizeTextRequest). Crops to
+    // the same preview region as identify, refines to the card rectangle, then
+    // recognises the BOTTOM strip (where the collector number lives) and the TOP
+    // strip (card name / set — used later for EN-vs-JA disambiguation). Returns
+    // the raw recognised lines per strip; ALL parsing/normalisation is done in JS
+    // so the matching can be tuned without a native rebuild.
+    AsyncFunction("readCardText") {
+      (uri: String, x: Double, y: Double, w: Double, h: Double,
+       previewAspect: Double) -> [String: Any] in
+      guard let cg = self.loadUpright(self.stripScheme(uri)) else {
+        throw VisionError(description: "Failed to load image")
+      }
+      let region = self.cropToPreviewRegion(
+        cg, nx: x, ny: y, nw: w, nh: h, previewAspect: previewAspect) ?? cg
+      // Refine to the card so the strips line up with the print layout. Fall back
+      // to the region itself if rectangle detection fails on this frame.
+      let card = self.detectAndCrop(region) ?? region
+      // Bottom = collector number: Latin/digits only, so JA recognition can't
+      // mangle "123/198". Top = name: include Japanese so EN-vs-JA prints are
+      // separable by the script the OCR actually returns.
+      return [
+        "bottom": self.ocrStrip(card, yFrac: 0.80, hFrac: 0.20, languages: ["en-US"]),
+        "top": self.ocrStrip(card, yFrac: 0.0, hFrac: 0.18, languages: ["ja", "en-US"]),
+      ]
+    }
+  }
+
+  /// Recognise text in a horizontal strip of an upright card image. `yFrac`/`hFrac`
+  /// are fractions of the card height (origin top-left). `languages` is the
+  /// recognition-language priority. Returns the best line per observation. Language
+  /// correction is OFF — we want raw alphanumerics like "123/198" or "TG02", not
+  /// dictionary-"corrected" words.
+  private func ocrStrip(
+    _ cg: CGImage, yFrac: CGFloat, hFrac: CGFloat, languages: [String]
+  ) -> [String] {
+    let iw = CGFloat(cg.width), ih = CGFloat(cg.height)
+    guard iw > 1, ih > 1 else { return [] }
+    let rect = CGRect(x: 0, y: ih * yFrac, width: iw, height: ih * hFrac)
+      .integral
+      .intersection(CGRect(x: 0, y: 0, width: iw, height: ih))
+    guard !rect.isNull, rect.width > 1, rect.height > 1,
+          let cropped = cg.cropping(to: rect) else { return [] }
+    // The collector number is tiny relative to the strip. Upscale short strips so
+    // its digits clear the recogniser's minimum text height, and recognise small
+    // text explicitly. Big help on foil/full-art cards where the number is faint.
+    let strip = self.upscaled(cropped, minHeight: 720) ?? cropped
+    let req = VNRecognizeTextRequest()
+    req.recognitionLevel = .accurate
+    req.usesLanguageCorrection = false
+    req.recognitionLanguages = languages
+    req.minimumTextHeight = 0.015
+    let handler = VNImageRequestHandler(cgImage: strip, orientation: .up, options: [:])
+    do { try handler.perform([req]) } catch { return [] }
+    return (req.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+  }
+
+  /// Upscale (never downscale) a CGImage so its height is at least `minHeight`,
+  /// using Lanczos for clean edges — gives Vision more pixels on small print.
+  private func upscaled(_ cg: CGImage, minHeight: CGFloat) -> CGImage? {
+    let h = CGFloat(cg.height)
+    guard h > 1, h < minHeight else { return cg }
+    let scale = minHeight / h
+    let ci = CIImage(cgImage: cg)
+    guard let f = CIFilter(name: "CILanczosScaleTransform") else { return cg }
+    f.setValue(ci, forKey: kCIInputImageKey)
+    f.setValue(scale, forKey: kCIInputScaleKey)
+    f.setValue(1.0, forKey: kCIInputAspectRatioKey)
+    guard let out = f.outputImage else { return cg }
+    return CIContext().createCGImage(out, from: out.extent)
+  }
+
+  private func averageVectors(_ vs: [[Float]]) -> [Float] {
+    guard let first = vs.first else { return [] }
+    if vs.count == 1 { return first }
+    var sum = [Float](repeating: 0, count: first.count)
+    for v in vs {
+      let n = min(v.count, sum.count)
+      for i in 0..<n { sum[i] += v[i] }
+    }
+    let inv = 1 / Float(vs.count)
+    for i in 0..<sum.count { sum[i] *= inv }
+    return sum
   }
 
   private func stripScheme(_ uri: String) -> String {

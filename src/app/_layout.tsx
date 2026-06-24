@@ -1,6 +1,11 @@
 import AuthSync from "@/components/AuthSync";
 import { usePrefetchExpansions } from "@/hooks/usePrefetchExpansions";
 import { queryClient } from "@/config/queryClient";
+import {
+	createQueryPersister,
+	QUERY_CACHE_BUSTER,
+	QUERY_CACHE_MAX_AGE,
+} from "@/config/storage";
 import { RevenueCatProvider, useRevenueCat } from "@/context/RevenueCatContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { ToastProvider } from "@/context/ToastContext";
@@ -13,6 +18,7 @@ import {
 	ThemeProvider as NavigationThemeProvider,
 } from "expo-router/react-navigation";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import {
 	router,
 	SplashScreen,
@@ -258,12 +264,27 @@ function AppContent() {
 }
 
 export default function RootLayout() {
+	// Persist the React Query cache to MMKV so cold starts paint from disk. Null
+	// when the native module isn't present yet (runs without persistence then).
+	const persister = React.useMemo(() => createQueryPersister(), []);
 
 	if (!publishableKey) {
 		throw new Error(
 			"Add EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY to your .env file",
 		);
 	}
+
+	const tree = (
+		<ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+			<ClerkLoaded>
+				<RevenueCatProvider>
+					<ToastProvider>
+						<AppContent />
+					</ToastProvider>
+				</RevenueCatProvider>
+			</ClerkLoaded>
+		</ClerkProvider>
+	);
 
 	return (
 		<GestureHandlerRootView style={{ flex: 1 }}>
@@ -273,20 +294,22 @@ export default function RootLayout() {
 			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
 				<ThemeProvider>
 					<KeyboardProvider>
-						<QueryClientProvider client={queryClient}>
-							<ClerkProvider
-								publishableKey={publishableKey}
-								tokenCache={tokenCache}
+						{persister ? (
+							<PersistQueryClientProvider
+								client={queryClient}
+								persistOptions={{
+									persister,
+									maxAge: QUERY_CACHE_MAX_AGE,
+									buster: QUERY_CACHE_BUSTER,
+								}}
 							>
-								<ClerkLoaded>
-									<RevenueCatProvider>
-										<ToastProvider>
-											<AppContent />
-										</ToastProvider>
-									</RevenueCatProvider>
-								</ClerkLoaded>
-							</ClerkProvider>
-						</QueryClientProvider>
+								{tree}
+							</PersistQueryClientProvider>
+						) : (
+							<QueryClientProvider client={queryClient}>
+								{tree}
+							</QueryClientProvider>
+						)}
 					</KeyboardProvider>
 				</ThemeProvider>
 			</SafeAreaProvider>
