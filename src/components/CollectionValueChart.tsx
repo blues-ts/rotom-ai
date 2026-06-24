@@ -115,6 +115,13 @@ export default function CollectionValueChart() {
 								]}
 							/>
 							<LineChart.DatetimeText
+								options={{
+									year: "numeric",
+									month: "numeric",
+									day: "numeric",
+									hour: "numeric",
+									minute: "2-digit",
+								}}
 								style={[
 									styles.chartHoverDate,
 									{ color: colors.foreground, opacity: 0.7 },
@@ -213,19 +220,29 @@ const styles = StyleSheet.create({
 	},
 	chartHoverHeader: {
 		flexDirection: "row",
-		alignItems: "baseline",
+		alignItems: "center",
 		gap: 10,
 		marginTop: 8,
 		minHeight: 22,
 	},
+	// wagmi's PriceText/DatetimeText render single-line TextInputs, which clip to
+	// their box rather than growing to fit. Give the price flex so it always shows
+	// the full number, and the date a fixed width (with seconds dropped) so it
+	// shows in full too — never a truncating "…".
 	chartHoverPrice: {
+		flex: 1,
 		fontSize: 16,
 		fontWeight: "700",
 		fontVariant: ["tabular-nums"],
+		padding: 0,
 	},
 	chartHoverDate: {
+		flexShrink: 0,
+		width: 140,
+		textAlign: "right",
 		fontSize: 12,
 		fontWeight: "500",
+		padding: 0,
 	},
 	chartContainer: {
 		height: 180,

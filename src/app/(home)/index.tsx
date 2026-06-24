@@ -21,6 +21,7 @@ import ChatInput from "@/components/ChatInput";
 import ChatMessageList, {
 	type ChatMessageListRef,
 } from "@/components/ChatMessageList";
+import ChatSuggestions from "@/components/ChatSuggestions";
 import EmptyChat from "@/components/EmptyChat";
 import { useTheme } from "@/context/ThemeContext";
 import { useChat } from "@/hooks/useChat";
@@ -141,7 +142,10 @@ export default function Home() {
 				keyboardVerticalOffset={0}
 			>
 				{messages.length === 0 && !isStreaming ? (
-					<EmptyChat />
+					<View style={styles.emptyWrap}>
+						<EmptyChat />
+						<ChatSuggestions onSelect={sendMessage} />
+					</View>
 				) : (
 					<View style={styles.flex}>
 						<ChatMessageList
@@ -169,5 +173,11 @@ export default function Home() {
 const styles = StyleSheet.create({
 	flex: {
 		flex: 1,
+	},
+	// Center the empty-state hero + suggestion cards as a single group so the
+	// cards sit directly under the tagline rather than at the bottom of the screen.
+	emptyWrap: {
+		flex: 1,
+		justifyContent: "center",
 	},
 });

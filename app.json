@@ -31,11 +31,11 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-wordmark.png",
-          "imageWidth": 200,
+          "image": "./assets/images/splash-logo.png",
+          "imageWidth": 151,
           "android": {
-            "image": "./assets/images/splash-wordmark.png",
-            "imageWidth": 180
+            "image": "./assets/images/splash-logo.png",
+            "imageWidth": 151
           }
         }
       ],
