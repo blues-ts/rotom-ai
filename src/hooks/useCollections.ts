@@ -208,6 +208,31 @@ export function useCollections() {
     onError: onMutationError,
   });
 
+  // Delete specific rows by their unique id (multi-select). Unlike
+  // removeCardFromCollection (which keys on card_id and drops every variant), this
+  // removes exactly the selected tiles.
+  const removeCardRows = useMutation({
+    mutationFn: ({ ids }: { collectionId: string; ids: string[] }) => {
+      if (ids.length > 0) {
+        const placeholders = ids.map(() => "?").join(",");
+        db.runSync(
+          `DELETE FROM collection_cards WHERE id IN (${placeholders})`,
+          ids,
+        );
+      }
+      return Promise.resolve();
+    },
+    onSuccess: (_data, { collectionId }) => {
+      recordCollectionValueSnapshot();
+      queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
+      queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
+      queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
+      queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
+      queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
+    },
+    onError: onMutationError,
+  });
+
   const incrementCardQuantity = useMutation({
     mutationFn: ({
       collectionId,
@@ -326,6 +351,7 @@ export function useCollections() {
     renameCollection,
     addCardToCollection,
     removeCardFromCollection,
+    removeCardRows,
     incrementCardQuantity,
     decrementCardQuantity,
     updateCardPricePaid,

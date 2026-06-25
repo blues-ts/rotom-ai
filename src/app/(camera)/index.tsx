@@ -152,6 +152,15 @@ export default function CameraScreen() {
 	const [torchEnabled, setTorchEnabled] = useState(false);
 	const [indexReady, setIndexReady] = useState(false);
 	const [scanState, setScanState] = useState<ScanState>("preparing");
+	// User-controlled scanning pause (the play/pause button). The loop idles while
+	// paused but the camera preview stays live. Mirrored to a ref so the async
+	// scan loop can read it without re-subscribing.
+	const [scanningPaused, setScanningPaused] = useState(false);
+	const scanningPausedRef = useRef(false);
+	const setPaused = useCallback((v: boolean) => {
+		scanningPausedRef.current = v;
+		setScanningPaused(v);
+	}, []);
 	// The card currently flying from the reticle into the library button. `key`
 	// re-arms the flight effect for each capture (even back-to-back same image).
 	const [flyingCard, setFlyingCard] = useState<{
@@ -421,12 +430,16 @@ export default function CameraScreen() {
 		if (loopRunningRef.current) return;
 		loopRunningRef.current = true;
 		while (loopRunningRef.current) {
-			if (!onDeviceReadyRef.current || pausedRef.current) {
-				await delay(pausedRef.current ? 120 : 300);
+			if (
+				!onDeviceReadyRef.current ||
+				pausedRef.current ||
+				scanningPausedRef.current
+			) {
+				await delay(pausedRef.current || scanningPausedRef.current ? 120 : 300);
 				continue;
 			}
 			const result = await captureAndIdentify();
-			if (result && !pausedRef.current)
+			if (result && !pausedRef.current && !scanningPausedRef.current)
 				await evaluate(result.matches, result.filePath);
 			await delay(AUTO_INTERVAL_MS);
 		}
@@ -488,14 +501,23 @@ export default function CameraScreen() {
 				// so a back-swipe shows a live preview through the transition (not a
 				// frozen frame or black). Free the camera if they linger off-screen.
 				loopRunningRef.current = false;
+				// Auto-pause when navigating away — returning shows a paused scanner so
+				// it never grabs a card while the user is mid-navigation; they tap play
+				// to resume.
+				setPaused(true);
 				if (deactivateTimer.current) clearTimeout(deactivateTimer.current);
 				deactivateTimer.current = setTimeout(() => setIsActive(false), 20000);
 				// Clear the result UI so swiping back doesn't flash "Got it!".
 				voteRef.current = [];
 				setScanState(onDeviceReadyRef.current ? "searching" : "preparing");
 			};
-		}, [ensureIndexLoaded, markReady, runLoop]),
+		}, [ensureIndexLoaded, markReady, runLoop, setPaused]),
 	);
+
+	const handleTogglePause = useCallback(() => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+		setPaused(!scanningPausedRef.current);
+	}, [setPaused]);
 
 	const handleToggleTorch = useCallback(() => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -535,18 +557,20 @@ export default function CameraScreen() {
 		);
 	}
 
-	const reticle = RETICLE_COLOR[scanState];
+	const reticle = scanningPaused ? REST : RETICLE_COLOR[scanState];
 
-	const primary =
-		scanState === "preparing"
+	const primary = scanningPaused
+		? "Scanning paused"
+		: scanState === "preparing"
 			? "Getting the scanner ready"
 			: scanState === "locking"
 				? "Hold steady…"
 				: scanState === "found"
 					? "Captured!"
 					: "Point your camera at a card";
-	const secondary =
-		scanState === "found"
+	const secondary = scanningPaused
+		? "Tap play to resume"
+		: scanState === "found"
 			? "Added to your scans"
 			: scanState === "preparing"
 				? null
@@ -560,6 +584,13 @@ export default function CameraScreen() {
 				options={{
 					headerRight: () => (
 						<View style={styles.headerActions}>
+							<Pressable style={styles.headerButton} onPress={handleTogglePause}>
+								<Ionicons
+									name={scanningPaused ? "play" : "pause"}
+									size={23}
+									color={scanningPaused ? RIVER : "#fff"}
+								/>
+							</Pressable>
 							<Pressable style={styles.headerButton} onPress={handleToggleTorch}>
 								<Ionicons
 									name={torchEnabled ? "flashlight" : "flashlight-outline"}
@@ -635,14 +666,17 @@ export default function CameraScreen() {
 
 			{/* Status */}
 			<View style={styles.statusWrap} pointerEvents="none">
-				{scanState === "found" && (
+				{scanningPaused ? (
+					<Animated.View entering={FadeIn.duration(160)} style={styles.foundBadge}>
+						<Ionicons name="pause-circle" size={34} color={REST} />
+					</Animated.View>
+				) : scanState === "found" ? (
 					<Animated.View entering={FadeIn.duration(160)} style={styles.foundBadge}>
 						<Ionicons name="checkmark-circle" size={34} color={RIVER} />
 					</Animated.View>
-				)}
-				{scanState === "preparing" && (
+				) : scanState === "preparing" ? (
 					<ActivityIndicator color="#fff" style={{ marginBottom: 12 }} />
-				)}
+				) : null}
 				<Text style={styles.primary}>{primary}</Text>
 				{secondary && <Text style={styles.secondary}>{secondary}</Text>}
 			</View>

@@ -17,6 +17,7 @@ import Animated, {
 	withRepeat,
 	withSequence,
 	withTiming,
+	ZoomOut,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack, useLocalSearchParams } from "expo-router";
@@ -132,8 +133,26 @@ export default function CollectionDetail() {
 	// Explicit header offset: contentInsetAdjustmentBehavior applies its inset
 	// a frame after mount, which made the summary jump down on remounts.
 	const topPadding = insets.top + 52;
-	const { renameCollection, deleteCollection } = useCollections();
+	const { renameCollection, deleteCollection, removeCardRows } =
+		useCollections();
 	const refreshPrices = useRefreshCollectionPrices();
+
+	// Multi-select (delete) mode.
+	const [selectMode, setSelectMode] = useState(false);
+	const [selected, setSelected] = useState<Set<string>>(new Set());
+	const exitSelect = useCallback(() => {
+		setSelectMode(false);
+		setSelected(new Set());
+	}, []);
+	const toggleSelected = useCallback((rowId: string) => {
+		Haptics.selectionAsync();
+		setSelected((prev) => {
+			const next = new Set(prev);
+			if (next.has(rowId)) next.delete(rowId);
+			else next.add(rowId);
+			return next;
+		});
+	}, []);
 	const {
 		data: collection,
 		isError: collectionError,
@@ -284,6 +303,26 @@ export default function CollectionDetail() {
 		);
 	}, [collection, nameParam, id, deleteCollection]);
 
+	const handleDeleteSelected = useCallback(() => {
+		const ids = [...selected];
+		if (ids.length === 0) return;
+		Alert.alert(
+			`Delete ${ids.length} ${ids.length === 1 ? "card" : "cards"}?`,
+			"This removes them from this collection.",
+			[
+				{ text: "Cancel", style: "cancel" },
+				{
+					text: "Delete",
+					style: "destructive",
+					onPress: () => {
+						removeCardRows.mutate({ collectionId: id, ids });
+						exitSelect();
+					},
+				},
+			],
+		);
+	}, [selected, removeCardRows, id, exitSelect]);
+
 	const renderItem = useCallback(
 		({ item, index }: { item: CollectionCard; index: number }) => {
 			// Fade-up only on an item's first appearance; recycled cells get no
@@ -291,6 +330,7 @@ export default function CollectionDetail() {
 			// as the set tiles and set-detail cards.
 			const firstAppearance = !animatedIdsRef.current.has(item.id);
 			if (firstAppearance) animatedIdsRef.current.add(item.id);
+			const isSelected = selected.has(item.id);
 			return (
 				<Animated.View
 					entering={
@@ -298,9 +338,15 @@ export default function CollectionDetail() {
 							? FadeInDown.delay(Math.min(index * 22, 200)).duration(240)
 							: undefined
 					}
+					// Deleted cards (removed from the list on delete) shrink + fade out.
+					exiting={ZoomOut.duration(200)}
 				>
 				<CardPressable
 					onPress={() => {
+						if (selectMode) {
+							toggleSelected(item.id);
+							return;
+						}
 						Keyboard.dismiss();
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 						prefetchDetail(
@@ -442,12 +488,27 @@ export default function CollectionDetail() {
 								/>
 							</View>
 						)}
+
+						{selectMode && (
+							<View
+								style={[
+									styles.check,
+									isSelected
+										? { backgroundColor: colors.primary, borderColor: colors.primary }
+										: { backgroundColor: "rgba(0,0,0,0.4)", borderColor: "#fff" },
+								]}
+							>
+								{isSelected && (
+									<Ionicons name="checkmark" size={15} color="#fff" />
+								)}
+							</View>
+						)}
 					</View>
 				</CardPressable>
 			</Animated.View>
 			);
 		},
-		[colors, prefetchDetail],
+		[colors, prefetchDetail, selectMode, selected, toggleSelected],
 	);
 
 	return (
@@ -457,47 +518,88 @@ export default function CollectionDetail() {
 					// Static title from a route param + no inline headerStyle —
 					// matches set-detail's transparent header exactly so content
 					// layout is stable on mount (no pop).
-					headerTitle: nameParam ?? collection?.name ?? "",
+					headerTitle: selectMode
+						? selected.size > 0
+							? `${selected.size} Selected`
+							: "Select cards"
+						: (nameParam ?? collection?.name ?? ""),
 					headerBackButtonDisplayMode: "minimal",
-					headerRight: () => (
-						<View style={styles.headerRight}>
-							<Pressable
-								onPress={() => {
-									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-									handleDelete();
-								}}
-								style={styles.headerButton}
-							>
-								<Ionicons
-									name="trash-outline"
-									size={20}
-									color={colors.foreground}
-								/>
-							</Pressable>
-							<Pressable
-								onPress={() => {
-									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-									handleRename();
-								}}
-								style={styles.headerButton}
-							>
-								<Ionicons
-									name="pencil-outline"
-									size={20}
-									color={colors.foreground}
-								/>
-							</Pressable>
-							<Pressable
-								onPress={() => {
-									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-									router.push("/(search)");
-								}}
-								style={styles.headerButton}
-							>
-								<Ionicons name="add" size={26} color={colors.foreground} />
-							</Pressable>
-						</View>
-					),
+					headerRight: () =>
+						selectMode ? (
+							<View style={styles.headerRight}>
+								{selected.size > 0 && (
+									<Pressable
+										onPress={handleDeleteSelected}
+										style={styles.headerButton}
+									>
+										<Ionicons
+											name="trash-outline"
+											size={20}
+											color={colors.destructive}
+										/>
+									</Pressable>
+								)}
+								<Pressable onPress={exitSelect} style={styles.headerButton}>
+									<Ionicons name="checkmark" size={24} color={colors.primary} />
+								</Pressable>
+							</View>
+						) : (
+							<View style={styles.headerRight}>
+								<Pressable
+									onPress={() => {
+										Haptics.selectionAsync();
+										setSelectMode(true);
+									}}
+									style={styles.headerButton}
+									disabled={(cards?.length ?? 0) === 0}
+								>
+									<Ionicons
+										name="checkmark-circle-outline"
+										size={22}
+										color={
+											(cards?.length ?? 0) === 0
+												? colors.mutedForeground
+												: colors.foreground
+										}
+									/>
+								</Pressable>
+								<Pressable
+									onPress={() => {
+										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+										handleDelete();
+									}}
+									style={styles.headerButton}
+								>
+									<Ionicons
+										name="trash-outline"
+										size={20}
+										color={colors.foreground}
+									/>
+								</Pressable>
+								<Pressable
+									onPress={() => {
+										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+										handleRename();
+									}}
+									style={styles.headerButton}
+								>
+									<Ionicons
+										name="pencil-outline"
+										size={20}
+										color={colors.foreground}
+									/>
+								</Pressable>
+								<Pressable
+									onPress={() => {
+										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+										router.push("/(search)");
+									}}
+									style={styles.headerButton}
+								>
+									<Ionicons name="add" size={26} color={colors.foreground} />
+								</Pressable>
+							</View>
+						),
 				}}
 			/>
 
@@ -545,6 +647,7 @@ export default function CollectionDetail() {
 						keyExtractor={(item) => item.id}
 						numColumns={COLUMNS}
 						renderItem={renderItem}
+						extraData={selectMode ? selected : null}
 						ListHeaderComponent={summaryHeader ?? summarySkeleton}
 						contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}
 						columnWrapperStyle={styles.row}
@@ -580,54 +683,54 @@ export default function CollectionDetail() {
 						columnWrapperStyle={styles.row}
 						scrollEnabled={false}
 					/>
+				) : (cards?.length ?? 0) === 0 ? (
+					// Truly empty collection — center the empty state to the screen,
+					// matching the collections list and the scanner library. (Rendered
+					// as a plain view, NOT a FlatList ListEmptyComponent, which would sit
+					// below the value banner instead of centering.)
+					<View
+						style={[
+							styles.emptyState,
+							{ paddingTop: topPadding, paddingBottom: insets.bottom + 24 },
+						]}
+					>
+						<Ionicons
+							name="folder-open-outline"
+							size={48}
+							color={colors.mutedForeground}
+						/>
+						<Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+							No Cards Yet
+						</Text>
+						<Text
+							style={[styles.emptySubtitle, { color: colors.mutedForeground }]}
+						>
+							Tap + to search and add cards to this collection
+						</Text>
+					</View>
 				) : (
+					// Filter matched nothing (the collection DOES have cards) — keep the
+					// banner + in-list message.
 					<FlatList
 						data={[]}
 						keyExtractor={() => "none"}
-						// Match the other branches' column count: these FlatLists reconcile
-						// as one element across branches, and a differing numColumns (default
-						// 1 here vs COLUMNS) trips "Changing numColumns on the fly" when a
-						// collection is empty (skeleton → empty transition).
 						numColumns={COLUMNS}
 						renderItem={null}
 						ListHeaderComponent={summaryHeader ?? summarySkeleton}
 						contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}
 						ListEmptyComponent={
-							filterQuery.trim().length > 0 ? (
-								<View style={styles.emptyStateCentered}>
-									<Ionicons
-										name="search-outline"
-										size={48}
-										color={colors.mutedForeground}
-									/>
-									<Text
-										style={[styles.emptyTitle, { color: colors.foreground }]}
-									>
-										No matching cards
-									</Text>
-								</View>
-							) : (
-								<View style={styles.emptyState}>
-									<Ionicons
-										name="folder-open-outline"
-										size={48}
-										color={colors.mutedForeground}
-									/>
-									<Text
-										style={[styles.emptyTitle, { color: colors.foreground }]}
-									>
-										No Cards Yet
-									</Text>
-									<Text
-										style={[
-											styles.emptySubtitle,
-											{ color: colors.mutedForeground },
-										]}
-									>
-										Tap + to search and add cards to this collection
-									</Text>
-								</View>
-							)
+							<View style={styles.emptyStateCentered}>
+								<Ionicons
+									name="search-outline"
+									size={48}
+									color={colors.mutedForeground}
+								/>
+								<Text
+									style={[styles.emptyTitle, { color: colors.foreground }]}
+								>
+									No matching cards
+								</Text>
+							</View>
 						}
 					/>
 				)}
@@ -678,6 +781,18 @@ const styles = StyleSheet.create({
 	cardCell: {
 		width: imageWidth,
 		position: "relative",
+	},
+	check: {
+		position: "absolute",
+		top: 6,
+		right: 6,
+		width: 24,
+		height: 24,
+		borderRadius: 12,
+		borderWidth: 2,
+		alignItems: "center",
+		justifyContent: "center",
+		zIndex: 2,
 	},
 	cardImage: {
 		position: "absolute",

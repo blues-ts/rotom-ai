@@ -198,12 +198,17 @@ export default function ScanLibraryScreen() {
 			/>
 
 			{count === 0 ? (
-				<View style={styles.empty}>
+				<View
+					style={[
+						styles.empty,
+						{ paddingTop: insets.top + 52, paddingBottom: insets.bottom + 24 },
+					]}
+				>
 					<Ionicons name="scan-outline" size={48} color={colors.mutedForeground} />
 					<Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-						No scans yet
+						No Scans Yet
 					</Text>
-					<Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
+					<Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
 						Point the scanner at a card and it&apos;ll land here.
 					</Text>
 				</View>
@@ -268,11 +273,11 @@ const styles = StyleSheet.create({
 		flex: 1,
 		alignItems: "center",
 		justifyContent: "center",
-		paddingHorizontal: 40,
+		paddingHorizontal: 32,
 		gap: 10,
 	},
-	emptyTitle: { fontSize: 18, fontWeight: "700" },
-	emptyBody: { fontSize: 14, textAlign: "center", lineHeight: 20 },
+	emptyTitle: { fontSize: 20, fontWeight: "700", marginTop: 8 },
+	emptySubtitle: { fontSize: 15, textAlign: "center", lineHeight: 21 },
 	grid: {
 		flexDirection: "row",
 		flexWrap: "wrap",

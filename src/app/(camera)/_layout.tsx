@@ -31,7 +31,7 @@ export default function CameraLayout() {
 							router.back();
 						}}
 					>
-						<Ionicons name="close" size={24} color={colors.foreground} />
+						<Ionicons name="close" size={24} color="#fff" />
 					</Pressable>
 				),
 			}}
