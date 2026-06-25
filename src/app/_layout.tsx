@@ -9,6 +9,7 @@ import {
 import { RevenueCatProvider, useRevenueCat } from "@/context/RevenueCatContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { ToastProvider } from "@/context/ToastContext";
+import { ScanSessionProvider } from "@/context/ScanSessionContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { ClerkLoaded, ClerkProvider } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
@@ -279,7 +280,9 @@ export default function RootLayout() {
 			<ClerkLoaded>
 				<RevenueCatProvider>
 					<ToastProvider>
-						<AppContent />
+						<ScanSessionProvider>
+							<AppContent />
+						</ScanSessionProvider>
 					</ToastProvider>
 				</RevenueCatProvider>
 			</ClerkLoaded>

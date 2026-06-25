@@ -11,7 +11,17 @@ import {
 	Text,
 	View,
 } from "react-native";
-import Animated, { FadeIn } from "react-native-reanimated";
+import Animated, {
+	Easing,
+	FadeIn,
+	interpolate,
+	runOnJS,
+	useAnimatedStyle,
+	useSharedValue,
+	withTiming,
+} from "react-native-reanimated";
+import { Image } from "expo-image";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Defs, Mask, Rect } from "react-native-svg";
 import {
 	Camera,
@@ -22,6 +32,16 @@ import {
 } from "react-native-vision-camera";
 
 import * as CardVision from "../../../modules/card-vision";
+import { useScanSession } from "@/context/ScanSessionContext";
+import { playCaptureFeedback } from "@/lib/captureSound";
+
+const cardImageUrl = (id: string) =>
+	`https://images.scrydex.com/pokemon/${id}/small`;
+
+// The captured card flies into the library button over this long; the scan loop
+// stays paused for the same window so a card held in the reticle counts once.
+const FLY_MS = 520;
+const CAPTURE_FLASH_MS = FLY_MS + 80;
 
 const { width, height } = Dimensions.get("window");
 
@@ -125,18 +145,34 @@ export default function CameraScreen() {
 	const photoOutput = usePhotoOutput({ qualityPrioritization: "speed" });
 	const cameraRef = useRef<CameraRef>(null);
 
+	const { count, addScan } = useScanSession();
+	const insets = useSafeAreaInsets();
+
 	const [isActive, setIsActive] = useState(false);
 	const [torchEnabled, setTorchEnabled] = useState(false);
 	const [indexReady, setIndexReady] = useState(false);
 	const [scanState, setScanState] = useState<ScanState>("preparing");
+	// The card currently flying from the reticle into the library button. `key`
+	// re-arms the flight effect for each capture (even back-to-back same image).
+	const [flyingCard, setFlyingCard] = useState<{
+		image: string;
+		key: number;
+	} | null>(null);
+	const fly = useSharedValue(0); // 0 = at reticle, 1 = landed in the library button
 
 	const onDeviceReadyRef = useRef(false);
 	const photoOutputRef = useRef(photoOutput);
 	photoOutputRef.current = photoOutput;
 	const loopRunningRef = useRef(false);
-	const navigatedRef = useRef(false);
+	// True while the post-capture flash plays — the loop skips frames so a card
+	// held in the reticle is captured exactly once.
+	const pausedRef = useRef(false);
+	// The last card we captured; held until the reticle empties, so the same card
+	// can't double-count but a second physical copy (re-presented) still can.
+	const lastCapturedIdRef = useRef<string | null>(null);
 	const capturingRef = useRef(false);
 	const deactivateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const voteRef = useRef<string[]>([]); // recent confident top-1 ids (windowed)
 
 	// Card box (screen points) + the same box as preview fractions for cropping.
@@ -158,9 +194,42 @@ export default function CameraScreen() {
 		};
 	}, [cardX, cardY, cardWidth, cardHeight]);
 
+	// Flight path: reticle centre → the library button at the top-right of the
+	// header. The card shrinks and arcs up into the button on each capture.
+	const reticleCx = cardX + cardWidth / 2;
+	const reticleCy = cardY + cardHeight / 2;
+	const flyDX = width - 30 - reticleCx;
+	const flyDY = insets.top + 24 - reticleCy;
+	const flyStyle = useAnimatedStyle(() => {
+		const p = fly.value;
+		return {
+			opacity: interpolate(p, [0, 0.75, 1], [1, 1, 0]),
+			transform: [
+				{ translateX: flyDX * p },
+				{ translateY: flyDY * p - 26 * Math.sin(p * Math.PI) },
+				{ scale: interpolate(p, [0, 1], [1, 0.1]) },
+				{ rotateZ: `${interpolate(p, [0, 1], [0, 10])}deg` },
+			],
+		};
+	});
+
+	// Run the flight whenever a new card is captured (key changes), then clear it.
+	useEffect(() => {
+		if (!flyingCard) return;
+		fly.value = 0;
+		fly.value = withTiming(
+			1,
+			{ duration: FLY_MS, easing: Easing.in(Easing.cubic) },
+			(finished) => {
+				if (finished) runOnJS(setFlyingCard)(null);
+			},
+		);
+	}, [flyingCard, fly]);
+
 	useEffect(() => {
 		return () => {
 			if (deactivateTimer.current) clearTimeout(deactivateTimer.current);
+			if (flashTimer.current) clearTimeout(flashTimer.current);
 		};
 	}, []);
 
@@ -170,11 +239,10 @@ export default function CameraScreen() {
 		setScanState((s) => (s === "preparing" ? "searching" : s));
 	}, []);
 
-	const goToCard = useCallback((id: string) => {
-		router.push({
-			pathname: "/(card)/[id]",
-			params: { id, image: `https://images.scrydex.com/pokemon/${id}/small` },
-		});
+	const goToLibrary = useCallback(() => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		setTorchEnabled(false); // don't leave the torch burning on the library screen
+		router.push("/(camera)/library");
 	}, []);
 
 	const captureAndIdentify = useCallback(async (): Promise<{
@@ -182,14 +250,14 @@ export default function CameraScreen() {
 		filePath: string;
 	} | null> => {
 		const po = photoOutputRef.current;
-		if (!po || capturingRef.current || navigatedRef.current) return null;
+		if (!po || capturingRef.current || pausedRef.current) return null;
 		capturingRef.current = true;
 		try {
 			const file = await po.capturePhotoToFile(
 				{ flashMode: "off", enableShutterSound: false },
 				{},
 			);
-			if (!file?.filePath || navigatedRef.current) return null;
+			if (!file?.filePath || pausedRef.current) return null;
 			// Smoothed: averages recent frames so holo glare (which moves) cancels.
 			// Top-12 (not 5): on EN/JA twins the correct print can sit several ranks
 			// down, and the OCR number needs it present as a candidate to pull it up.
@@ -209,15 +277,32 @@ export default function CameraScreen() {
 		}
 	}, [scanRegion]);
 
-	const lockAndGo = useCallback(
-		(id: string) => {
-			navigatedRef.current = true;
-			loopRunningRef.current = false;
+	// Capture a locked card into the current scanning session, then keep scanning.
+	// Unlike before, this does NOT navigate away — it plays the captured cue, adds
+	// the card to the session, and flies its thumbnail into the library button.
+	const captureCard = useCallback(
+		(id: string, score: number) => {
+			if (pausedRef.current) return; // a capture is already flying
+			if (id === lastCapturedIdRef.current) return; // same card still in frame
+			pausedRef.current = true;
+			lastCapturedIdRef.current = id;
+			voteRef.current = [];
 			setScanState("found");
-			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-			setTimeout(() => goToCard(id), 180); // let the green snap register
+
+			const image = cardImageUrl(id);
+			// New object + key launches the flight effect; the card lands in the badge.
+			setFlyingCard({ image, key: Date.now() });
+
+			playCaptureFeedback();
+			addScan({ id, image, score });
+
+			if (flashTimer.current) clearTimeout(flashTimer.current);
+			flashTimer.current = setTimeout(() => {
+				pausedRef.current = false;
+				setScanState(onDeviceReadyRef.current ? "searching" : "preparing");
+			}, CAPTURE_FLASH_MS);
 		},
-		[goToCard],
+		[addScan],
 	);
 
 	const evaluate = useCallback(
@@ -234,9 +319,10 @@ export default function CameraScreen() {
 					`margin=${margin.toFixed(3)}`,
 				);
 			}
+			if (pausedRef.current) return; // mid-capture flash — ignore this frame
 			if (top && top.score >= INSTANT_LOCK) {
-				// Very confident — lock right away.
-				lockAndGo(top.id);
+				// Very confident — capture right away.
+				captureCard(top.id, top.score);
 				return;
 			}
 			// Tight near-twin cluster (classic holo case): the artwork found the
@@ -247,7 +333,7 @@ export default function CameraScreen() {
 				top &&
 				top.score >= OCR_FLOOR &&
 				margin < OCR_MARGIN &&
-				!navigatedRef.current
+				!pausedRef.current
 			) {
 				try {
 					const text = await CardVision.readCardText(
@@ -255,7 +341,7 @@ export default function CameraScreen() {
 						scanRegion,
 						width / height,
 					);
-					if (navigatedRef.current) return;
+					if (pausedRef.current) return;
 					const { high, low } = parseNumbers(text.bottom);
 					if (high.size || low.size) {
 						const ja = hasJapanese([...text.top, ...text.bottom]);
@@ -295,11 +381,11 @@ export default function CameraScreen() {
 							);
 						}
 						if (hits.length === 1) {
-							lockAndGo(hits[0].id);
+							captureCard(hits[0].id, hits[0].score);
 							return;
 						}
 						if (confirmed.length === 1) {
-							lockAndGo(confirmed[0].id);
+							captureCard(confirmed[0].id, confirmed[0].score);
 							return;
 						}
 					}
@@ -316,27 +402,31 @@ export default function CameraScreen() {
 				const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
 				const [bestId, c1] = ranked[0];
 				const c2 = ranked[1]?.[1] ?? 0;
-				if (c1 >= VOTE_NEEDED && c1 - c2 >= VOTE_LEAD) lockAndGo(bestId);
+				if (c1 >= VOTE_NEEDED && c1 - c2 >= VOTE_LEAD)
+					captureCard(bestId, top.score);
 				else setScanState("locking");
 			} else {
 				// Low-confidence frame: age out one old vote so stale picks fade.
 				if (voteRef.current.length) voteRef.current.shift();
+				// Reticle has emptied — release the dedupe lock so a second copy of
+				// the just-captured card can be scanned when re-presented.
+				if (!voteRef.current.length) lastCapturedIdRef.current = null;
 				setScanState(voteRef.current.length ? "locking" : "searching");
 			}
 		},
-		[lockAndGo, scanRegion],
+		[captureCard, scanRegion],
 	);
 
 	const runLoop = useCallback(async () => {
 		if (loopRunningRef.current) return;
 		loopRunningRef.current = true;
-		while (loopRunningRef.current && !navigatedRef.current) {
-			if (!onDeviceReadyRef.current) {
-				await delay(300);
+		while (loopRunningRef.current) {
+			if (!onDeviceReadyRef.current || pausedRef.current) {
+				await delay(pausedRef.current ? 120 : 300);
 				continue;
 			}
 			const result = await captureAndIdentify();
-			if (result && !navigatedRef.current)
+			if (result && !pausedRef.current)
 				await evaluate(result.matches, result.filePath);
 			await delay(AUTO_INTERVAL_MS);
 		}
@@ -364,7 +454,8 @@ export default function CameraScreen() {
 
 	useFocusEffect(
 		useCallback(() => {
-			navigatedRef.current = false;
+			pausedRef.current = false;
+			lastCapturedIdRef.current = null;
 			voteRef.current = [];
 			if (CardVision.isAvailable()) CardVision.resetSmoothing();
 			// Keep the camera live (cancel any pending deactivate from a prior blur)
@@ -452,11 +543,11 @@ export default function CameraScreen() {
 			: scanState === "locking"
 				? "Hold steady…"
 				: scanState === "found"
-					? "Got it!"
+					? "Captured!"
 					: "Point your camera at a card";
 	const secondary =
 		scanState === "found"
-			? null
+			? "Added to your scans"
 			: scanState === "preparing"
 				? null
 				: scanState === "locking"
@@ -468,16 +559,25 @@ export default function CameraScreen() {
 			<Stack.Screen
 				options={{
 					headerRight: () => (
-						<Pressable
-							hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-							onPress={handleToggleTorch}
-						>
-							<Ionicons
-								name={torchEnabled ? "flashlight" : "flashlight-outline"}
-								size={22}
-								color={torchEnabled ? AMBER : "#fff"}
-							/>
-						</Pressable>
+						<View style={styles.headerActions}>
+							<Pressable style={styles.headerButton} onPress={handleToggleTorch}>
+								<Ionicons
+									name={torchEnabled ? "flashlight" : "flashlight-outline"}
+									size={22}
+									color={torchEnabled ? AMBER : "#fff"}
+								/>
+							</Pressable>
+							<Pressable style={styles.headerButton} onPress={goToLibrary}>
+								<Ionicons name="albums" size={23} color="#fff" />
+								{count > 0 && (
+									<View style={styles.headerBadge}>
+										<Text style={styles.headerBadgeText}>
+											{count > 99 ? "99+" : count}
+										</Text>
+									</View>
+								)}
+							</Pressable>
+						</View>
 					),
 				}}
 			/>
@@ -546,6 +646,25 @@ export default function CameraScreen() {
 				<Text style={styles.primary}>{primary}</Text>
 				{secondary && <Text style={styles.secondary}>{secondary}</Text>}
 			</View>
+
+			{/* The captured card flies from the reticle into the library button. */}
+			{flyingCard && (
+				<Animated.View
+					key={flyingCard.key}
+					style={[
+						styles.flyCard,
+						{ left: cardX, top: cardY, width: cardWidth, height: cardHeight },
+						flyStyle,
+					]}
+					pointerEvents="none"
+				>
+					<Image
+						source={{ uri: flyingCard.image }}
+						style={styles.flyCardImage}
+						contentFit="contain"
+					/>
+				</Animated.View>
+			)}
 		</View>
 	);
 }
@@ -601,5 +720,40 @@ const styles = StyleSheet.create({
 		color: "#000",
 		fontSize: 16,
 		fontWeight: "600",
+	},
+	flyCard: {
+		position: "absolute",
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	flyCardImage: {
+		width: "100%",
+		height: "100%",
+		borderRadius: CARD_CORNER_RADIUS,
+	},
+	headerActions: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 4,
+	},
+	headerButton: {
+		padding: 8,
+	},
+	headerBadge: {
+		position: "absolute",
+		top: 2,
+		right: 0,
+		minWidth: 17,
+		height: 17,
+		paddingHorizontal: 4,
+		borderRadius: 8.5,
+		backgroundColor: "#FF3B30",
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	headerBadgeText: {
+		color: "#fff",
+		fontSize: 11,
+		fontWeight: "800",
 	},
 });

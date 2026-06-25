@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.riverai.app"
+      "bundleIdentifier": "com.riverai.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "River AI uses the camera to scan and identify your trading cards."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -44,7 +47,8 @@
       "expo-secure-store",
       "expo-sqlite",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,

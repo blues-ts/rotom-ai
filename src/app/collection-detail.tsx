@@ -584,6 +584,11 @@ export default function CollectionDetail() {
 					<FlatList
 						data={[]}
 						keyExtractor={() => "none"}
+						// Match the other branches' column count: these FlatLists reconcile
+						// as one element across branches, and a differing numColumns (default
+						// 1 here vs COLUMNS) trips "Changing numColumns on the fly" when a
+						// collection is empty (skeleton → empty transition).
+						numColumns={COLUMNS}
 						renderItem={null}
 						ListHeaderComponent={summaryHeader ?? summarySkeleton}
 						contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}

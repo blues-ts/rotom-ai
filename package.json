@@ -22,6 +22,7 @@
     "@tanstack/react-query-persist-client": "^5.101.0",
     "axios": "^1.13.6",
     "expo": "^56.0.0",
+    "expo-audio": "~56.0.12",
     "expo-auth-session": "~56.0.13",
     "expo-blur": "~56.0.3",
     "expo-clipboard": "~56.0.3",

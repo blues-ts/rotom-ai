@@ -12,11 +12,23 @@ export default function CreateCollection() {
 	const [name, setName] = useState("");
 	const canCreate = name.trim().length > 0;
 
-	const handleCreate = useCallback(() => {
-		if (!name.trim()) return;
+	const handleCreate = useCallback(async () => {
+		const trimmed = name.trim();
+		if (!trimmed) return;
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-		createCollection.mutate(name.trim());
-		router.back();
+		try {
+			// createCollection returns the new row's id — dismiss this sheet and open
+			// the freshly created (empty) collection so the user can start adding.
+			const id = await createCollection.mutateAsync(trimmed);
+			router.back();
+			router.push({
+				pathname: "/collection-detail",
+				params: { id, name: trimmed, totalValue: "0", cardCount: "0" },
+			});
+		} catch {
+			// onMutationError already surfaces the failure; just close the sheet.
+			router.back();
+		}
 	}, [name, createCollection]);
 
 	return (

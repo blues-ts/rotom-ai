@@ -167,7 +167,10 @@ export function useCollections() {
           );
         }
       } else {
-        const id = Date.now().toString();
+        // Random suffix: batch-adding several cards calls this in the same
+        // millisecond, so a bare Date.now() id collides on the PRIMARY KEY and
+        // only one row survives. Keep it unique per insert.
+        const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
         db.runSync(
           "INSERT INTO collection_cards (id, collection_id, card_id, card_name, card_number, set_name, card_image_url, card_value, pricing_type, product_type, variant, condition, graded_company, graded_grade, quantity, price_paid, card_value_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
           [id, collectionId, cardId, cardName, cardNumber ?? null, setName ?? null, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany ?? null, gradedGrade ?? null, pricePaid ?? null, new Date().toISOString()],

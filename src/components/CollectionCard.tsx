@@ -62,7 +62,10 @@ export default function CollectionCard({
 				<View style={[styles.imageScroll, styles.imageRow]}>
 					{cardImages.slice(0, 4).map((uri, i) => (
 						<Animated.View
-							key={uri}
+							// Index-qualified: a collection can hold the same card in two
+							// variants/conditions, so image URLs aren't unique → a bare
+							// `key={uri}` collides and crashes the list.
+							key={`${uri}-${i}`}
 							entering={FadeInDown.delay(i * 70).duration(360)}
 							style={styles.cardImageWrapper}
 						>

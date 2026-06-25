@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
@@ -9,11 +9,24 @@ import {
 	useCollections,
 	useRefreshCollectionPrices,
 } from "@/hooks/useCollections";
+import { useApi } from "@/lib/axios";
+import { getPricedBatch } from "@/lib/api/pricing";
+import {
+	getCardDisplayName,
+	getCardImage,
+	getCardNumber,
+	getConditionOptions,
+	getExpansionDisplayName,
+	getVariantNames,
+	selectPrice,
+} from "@/lib/scrydex";
+import { useScanSession } from "@/context/ScanSessionContext";
 
 export default function AddToCollection() {
   const { colors } = useTheme();
+  const api = useApi();
 
-  const { cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade, pricePaid } =
+  const { cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade, pricePaid, cardIds, cardImages } =
     useLocalSearchParams<{
       cardId: string;
       cardName: string;
@@ -28,13 +41,85 @@ export default function AddToCollection() {
       gradedCompany: string;
       gradedGrade: string;
       pricePaid?: string;
+      /** Batch mode (scanner library): comma-joined card ids + parallel images. */
+      cardIds?: string;
+      cardImages?: string;
     }>();
 
   const { collections, addCardToCollection } = useCollections();
   const refreshPrices = useRefreshCollectionPrices();
+  // Batch adds come from the scanner library — clear those cards from the
+  // session once they've landed in a collection.
+  const { removeScans } = useScanSession();
   // The collection that was just added to — its row outlines blue as the
   // success cue, then the sheet dismisses itself.
   const [addedId, setAddedId] = useState<string | null>(null);
+
+  // Batch mode: a list of card ids (no metadata). Names/numbers are resolved
+  // from the catalog at add time; prices come from the post-add refresh.
+  const batchIds = useMemo(
+    () => (cardIds ? cardIds.split(",").filter(Boolean) : []),
+    [cardIds],
+  );
+  const batchImages = useMemo(
+    () => (cardImages ? cardImages.split(",").map(decodeURIComponent) : []),
+    [cardImages],
+  );
+  const isBatch = batchIds.length > 0;
+
+  const handleSelectBatch = useCallback(
+    async (collectionId: string) => {
+      if (addedId || batchIds.length === 0) return;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setAddedId(collectionId);
+      try {
+        // Pull the fully PRICED cards in one batch (same source the collection's
+        // price refresh uses), then resolve each card's real default variant /
+        // condition / value exactly like the search long-press quick-add does —
+        // storing "normal"/"NM" blindly meant holo/V cards never matched a price.
+        const { cards } = await getPricedBatch(api, {
+          cardIds: batchIds,
+          sealedIds: [],
+        });
+        const byId = new Map(cards.map((c) => [c.id, c]));
+        batchIds.forEach((id, i) => {
+          const card = byId.get(id);
+          const variant = card ? (getVariantNames(card)[0] ?? "normal") : "normal";
+          const condition = card
+            ? (getConditionOptions(card, variant)[0] ?? "NM")
+            : "NM";
+          const value = card
+            ? (selectPrice(card, variant, { kind: "raw", condition })?.value ?? 0)
+            : 0;
+          addCardToCollection.mutate({
+            collectionId,
+            cardId: id,
+            cardName: card ? getCardDisplayName(card) : id,
+            cardNumber: card ? getCardNumber(card) || undefined : undefined,
+            setName: card?.expansion
+              ? getExpansionDisplayName(card.expansion)
+              : undefined,
+            cardImageUrl:
+              (card && getCardImage(card, variant, "small")) ||
+              batchImages[i] ||
+              `https://images.scrydex.com/pokemon/${id}/small`,
+            cardValue: value,
+            pricingType: "Raw",
+            productType: "card",
+            variant,
+            condition,
+          });
+        });
+        // They're filed away now — drop them from the scanning session.
+        removeScans(batchIds);
+        setTimeout(() => router.back(), 700);
+      } catch {
+        setAddedId(null);
+        Alert.alert("Error", "Couldn't add the cards. Please try again.");
+      }
+    },
+    [api, addedId, batchIds, batchImages, addCardToCollection, removeScans],
+  );
 
   const handleSelect = useCallback(
     (collectionId: string) => {
@@ -101,7 +186,9 @@ export default function AddToCollection() {
       contentContainerStyle={styles.container}
     >
       <Text style={[styles.title, { color: colors.foreground }]}>
-        Add to Collection
+        {isBatch
+          ? `Add ${batchIds.length} ${batchIds.length === 1 ? "card" : "cards"} to Collection`
+          : "Add to Collection"}
       </Text>
       {collections.length === 0 ? (
         <View style={styles.empty}>
@@ -133,7 +220,11 @@ export default function AddToCollection() {
             return (
               <Pressable
                 key={collection.id}
-                onPress={() => handleSelect(collection.id)}
+                onPress={() =>
+                  isBatch
+                    ? handleSelectBatch(collection.id)
+                    : handleSelect(collection.id)
+                }
                 disabled={!!addedId}
                 style={({ pressed }) => [
                   styles.collectionRow,
