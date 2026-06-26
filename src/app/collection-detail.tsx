@@ -489,6 +489,9 @@ export default function CollectionDetail() {
 							</View>
 						)}
 
+						{selectMode && !isSelected && (
+							<View style={styles.greyOverlay} />
+						)}
 						{selectMode && (
 							<View
 								style={[
@@ -801,6 +804,16 @@ const styles = StyleSheet.create({
 		width: imageWidth,
 		height: imageHeight,
 		borderRadius: 8,
+	},
+	greyOverlay: {
+		position: "absolute",
+		top: 0,
+		left: 0,
+		width: imageWidth,
+		height: imageHeight,
+		borderRadius: 8,
+		backgroundColor: "rgba(120,120,120,0.5)",
+		zIndex: 1,
 	},
 	placeholder: {
 		alignItems: "center",

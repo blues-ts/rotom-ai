@@ -67,7 +67,16 @@ export async function getCard(api: AxiosInstance, id: string): Promise<ScrydexCa
  */
 export async function getPricedBatch(
   api: AxiosInstance,
-  ids: { cardIds: string[]; sealedIds: string[] },
+  ids: {
+    cardIds: string[];
+    sealedIds: string[];
+    /**
+     * Skip the server's raw-USD price_history backfill so each card is a single
+     * GET /cards/{id}. The scanner collection-add sets this — the NM price on the
+     * card response is enough to store.
+     */
+    skipRawBackfill?: boolean;
+  },
 ): Promise<{ cards: ScrydexCard[]; sealed: ScrydexSealedProduct[] }> {
   const res = await api.post<{
     success: boolean;

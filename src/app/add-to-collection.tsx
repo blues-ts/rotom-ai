@@ -80,6 +80,9 @@ export default function AddToCollection() {
         const { cards } = await getPricedBatch(api, {
           cardIds: batchIds,
           sealedIds: [],
+          // Scanner adds only need the NM price on the card response — skip the
+          // extra raw-USD price_history backfill so it's one GET per card.
+          skipRawBackfill: true,
         });
         const byId = new Map(cards.map((c) => [c.id, c]));
         batchIds.forEach((id, i) => {

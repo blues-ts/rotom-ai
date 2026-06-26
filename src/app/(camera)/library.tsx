@@ -250,9 +250,12 @@ export default function ScanLibraryScreen() {
 								<CardPressable onPress={() => onTilePress(card)}>
 									<Image
 										source={{ uri: card.image }}
-										style={[styles.cardImage, isSelected && styles.cardSelected]}
+										style={styles.cardImage}
 										contentFit="contain"
 									/>
+									{selectMode && !isSelected && (
+										<View style={styles.greyOverlay} />
+									)}
 									{selectMode && (
 										<View
 											style={[
@@ -299,7 +302,15 @@ const styles = StyleSheet.create({
 	},
 	tile: { width: imageWidth },
 	cardImage: { width: imageWidth, height: imageHeight, borderRadius: 8 },
-	cardSelected: { opacity: 0.55 },
+	greyOverlay: {
+		position: "absolute",
+		top: 0,
+		left: 0,
+		width: imageWidth,
+		height: imageHeight,
+		borderRadius: 8,
+		backgroundColor: "rgba(120,120,120,0.5)",
+	},
 	check: {
 		position: "absolute",
 		top: 6,
