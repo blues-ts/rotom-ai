@@ -8,7 +8,7 @@
     "scheme": "riverai",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/apple-icon.icon",
       "bundleIdentifier": "com.riverai.app",
       "infoPlist": {
         "NSCameraUsageDescription": "River AI uses the camera to scan and identify your trading cards."
