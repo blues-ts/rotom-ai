@@ -414,6 +414,13 @@ function resolvePriceForRow(
   card: ScrydexCard | ScrydexSealedProduct,
   row: CollectionCardRow,
 ): number | undefined {
+  // Sealed products price on the raw "Unopened" (U) row. A quick-add stores the
+  // generic "normal"/"NM" variant+condition, which matches neither the sealed
+  // product's variant nor its U condition — so look up the U price directly
+  // (any variant) instead of the stored selector, which leaves the row at $0.
+  if (row.product_type === "sealed") {
+    return selectPrice(card, undefined, { kind: "raw", condition: "U" })?.value;
+  }
   const selector: PriceSelector =
     row.pricing_type === "Graded" && row.graded_company && row.graded_grade
       ? { kind: "graded", company: row.graded_company, grade: row.graded_grade }
