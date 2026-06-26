@@ -65,10 +65,30 @@ const CARD_CORNER_RADIUS = 14;
 const CARD_MAX_WIDTH = 325;
 const CARD_WIDTH_RATIO = 0.78;
 const CARD_CENTER_Y_RATIO = 0.42;
-const SCRIM_OPACITY = 0.45;
+const SCRIM_OPACITY = 0.25;
 
 // Palette — signals layered over the live feed.
 const RIVER = "#208AEF"; // searching / scan
+
+// Blue glow framing the screen. Drawn as concentric rounded-rect strokes from
+// the edge inward — one continuous frame so the corners stay seamless — with
+// opacity falling off toward the centre. Thickness is capped by the side margin
+// so the glow never reaches the card rectangle.
+const _ringCardW = Math.min(CARD_MAX_WIDTH, width * CARD_WIDTH_RATIO);
+const RING_GAP = 16; // keep the glow this far clear of the card
+const RING_THICKNESS = Math.max(0, (width - _ringCardW) / 2 - RING_GAP);
+const RING_STEPS = 18;
+const RING_STROKE = RING_THICKNESS / RING_STEPS + 1.5;
+const SCREEN_CORNER = 52;
+const RING_RECTS = Array.from({ length: RING_STEPS }, (_, i) => {
+	const t = i / (RING_STEPS - 1); // 0 at the edge → 1 at the inner extent
+	const inset = t * RING_THICKNESS;
+	return {
+		inset,
+		rx: Math.max(2, SCREEN_CORNER - inset),
+		opacity: 0.5 * Math.pow(1 - t, 1.7),
+	};
+});
 const AMBER = "#FFAE04"; // hold steady
 const REST = "rgba(255,255,255,0.9)";
 
@@ -655,6 +675,30 @@ export default function CameraScreen() {
 					stroke={reticle}
 					strokeWidth={3}
 				/>
+			</Svg>
+
+			{/* Blue glow framing the screen — concentric strokes keep corners seamless. */}
+			<Svg
+				style={StyleSheet.absoluteFill}
+				width={width}
+				height={height}
+				pointerEvents="none"
+			>
+				{RING_RECTS.map((r, i) => (
+					<Rect
+						key={i}
+						x={r.inset}
+						y={r.inset}
+						width={width - 2 * r.inset}
+						height={height - 2 * r.inset}
+						rx={r.rx}
+						ry={r.rx}
+						fill="none"
+						stroke={RIVER}
+						strokeOpacity={r.opacity}
+						strokeWidth={RING_STROKE}
+					/>
+				))}
 			</Svg>
 
 			{/* Bottom bar — native SwiftUI glass buttons: info (left), scan status
