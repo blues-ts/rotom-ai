@@ -1,9 +1,6 @@
 {
   "fill" : {
-    "linear-gradient" : [
-      "display-p3:0.05123,0.58536,0.96783,1.00000",
-      "display-p3:0.11281,0.83479,1.00000,1.00000"
-    ],
+    "automatic-gradient" : "display-p3:0.03922,0.43529,0.76078,1.00000",
     "orientation" : {
       "start" : {
         "x" : 0.5,
