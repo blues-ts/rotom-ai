@@ -3,7 +3,6 @@ import * as Haptics from "expo-haptics";
 import { router, Stack, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-	ActivityIndicator,
 	Dimensions,
 	Linking,
 	Pressable,
@@ -13,7 +12,6 @@ import {
 } from "react-native";
 import Animated, {
 	Easing,
-	FadeIn,
 	interpolate,
 	runOnJS,
 	useAnimatedStyle,
@@ -23,6 +21,22 @@ import Animated, {
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Defs, Mask, Rect } from "react-native-svg";
+import {
+	Button,
+	Host,
+	HStack,
+	Image as UIImage,
+	Spacer,
+	Text as UIText,
+} from "@expo/ui/swift-ui";
+import {
+	buttonStyle,
+	controlSize,
+	font,
+	foregroundStyle,
+	glassEffect,
+	padding,
+} from "@expo/ui/swift-ui/modifiers";
 import {
 	Camera,
 	useCameraDevice,
@@ -524,6 +538,11 @@ export default function CameraScreen() {
 		setTorchEnabled((p) => !p);
 	}, []);
 
+	const handleOpenTips = useCallback(() => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		router.push("/(camera)/scanner-tips");
+	}, []);
+
 	// Permission gate
 	if (!hasPermission) {
 		return (
@@ -559,25 +578,6 @@ export default function CameraScreen() {
 
 	const reticle = scanningPaused ? REST : RETICLE_COLOR[scanState];
 
-	const primary = scanningPaused
-		? "Scanning paused"
-		: scanState === "preparing"
-			? "Getting the scanner ready"
-			: scanState === "locking"
-				? "Hold steady…"
-				: scanState === "found"
-					? "Captured!"
-					: "Point your camera at a card";
-	const secondary = scanningPaused
-		? "Tap play to resume"
-		: scanState === "found"
-			? "Added to your scans"
-			: scanState === "preparing"
-				? null
-				: scanState === "locking"
-					? "Almost there"
-					: "Scans automatically — no button needed";
-
 	return (
 		<View style={styles.container}>
 			<Stack.Screen
@@ -589,13 +589,6 @@ export default function CameraScreen() {
 									name={scanningPaused ? "play" : "pause"}
 									size={23}
 									color={scanningPaused ? RIVER : "#fff"}
-								/>
-							</Pressable>
-							<Pressable style={styles.headerButton} onPress={handleToggleTorch}>
-								<Ionicons
-									name={torchEnabled ? "flashlight" : "flashlight-outline"}
-									size={22}
-									color={torchEnabled ? AMBER : "#fff"}
 								/>
 							</Pressable>
 							<Pressable style={styles.headerButton} onPress={goToLibrary}>
@@ -664,21 +657,46 @@ export default function CameraScreen() {
 				/>
 			</Svg>
 
-			{/* Status */}
-			<View style={styles.statusWrap} pointerEvents="none">
-				{scanningPaused ? (
-					<Animated.View entering={FadeIn.duration(160)} style={styles.foundBadge}>
-						<Ionicons name="pause-circle" size={34} color={REST} />
-					</Animated.View>
-				) : scanState === "found" ? (
-					<Animated.View entering={FadeIn.duration(160)} style={styles.foundBadge}>
-						<Ionicons name="checkmark-circle" size={34} color={RIVER} />
-					</Animated.View>
-				) : scanState === "preparing" ? (
-					<ActivityIndicator color="#fff" style={{ marginBottom: 12 }} />
-				) : null}
-				<Text style={styles.primary}>{primary}</Text>
-				{secondary && <Text style={styles.secondary}>{secondary}</Text>}
+			{/* Bottom bar — native SwiftUI glass buttons: info (left), scan status
+			    (centre), torch (right). */}
+			<View
+				style={[styles.toolbar, { bottom: insets.bottom + 10 }]}
+				pointerEvents="box-none"
+			>
+				<Host style={styles.toolbarHost}>
+					<HStack>
+						<Button
+							onPress={handleOpenTips}
+							modifiers={[buttonStyle("glass"), controlSize("large")]}
+						>
+							<UIImage systemName="info.circle" size={20} color="#fff" />
+						</Button>
+						<Spacer />
+						<UIText
+							modifiers={[
+								font({ size: 15, weight: "semibold" }),
+								foregroundStyle("#fff"),
+								padding({ horizontal: 16, vertical: 9 }),
+								glassEffect({ shape: "capsule" }),
+							]}
+						>
+							{scanningPaused ? "Scanner paused" : "Scanning..."}
+						</UIText>
+						<Spacer />
+						<Button
+							onPress={handleToggleTorch}
+							modifiers={[buttonStyle("glass"), controlSize("large")]}
+						>
+							<UIImage
+								systemName={
+									torchEnabled ? "flashlight.on.fill" : "flashlight.off.fill"
+								}
+								size={20}
+								color={torchEnabled ? AMBER : "#fff"}
+							/>
+						</Button>
+					</HStack>
+				</Host>
 			</View>
 
 			{/* The captured card flies from the reticle into the library button. */}
@@ -708,29 +726,14 @@ const styles = StyleSheet.create({
 		flex: 1,
 		backgroundColor: "#000",
 	},
-	statusWrap: {
+	toolbar: {
 		position: "absolute",
-		left: 0,
-		right: 0,
-		bottom: height * 0.12,
-		alignItems: "center",
-		paddingHorizontal: 32,
+		left: 16,
+		right: 16,
+		alignItems: "stretch",
 	},
-	foundBadge: {
-		marginBottom: 10,
-	},
-	primary: {
-		color: "#fff",
-		fontSize: 19,
-		fontWeight: "700",
-		textAlign: "center",
-		letterSpacing: 0.2,
-	},
-	secondary: {
-		color: "rgba(255,255,255,0.65)",
-		fontSize: 13.5,
-		textAlign: "center",
-		marginTop: 6,
+	toolbarHost: {
+		height: 56,
 	},
 	permissionContainer: {
 		flex: 1,

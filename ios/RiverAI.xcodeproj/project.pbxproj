@@ -8,27 +8,27 @@
 
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		1583F44A2AA57184261A1E40 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87478C822BC1E25CE6F7532A /* ExpoModulesProvider.swift */; };
-		18DC2951FE28024CD5664070 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9B89BF076F9877E1320896E8 /* PrivacyInfo.xcprivacy */; };
-		1E23FCD07E1E6BC6896AD730 /* libPods-RiverAI.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 95AA1E666E8DF1DC9143217D /* libPods-RiverAI.a */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		B4211E6841344D52B4AB2D03 /* expo.icon in Resources */ = {isa = PBXBuildFile; fileRef = CEFDCFD2864E48C4AE1E2458 /* expo.icon */; };
+		667B5D91AD8C49A1AC0F6D0D /* expo.icon in Resources */ = {isa = PBXBuildFile; fileRef = 4EFB2A6309E6478A9D4A40A9 /* expo.icon */; };
+		7A2CFC306F2C06361C8BCD60 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B7D031A02A0ED36940164681 /* PrivacyInfo.xcprivacy */; };
+		A92BEA0CEC95EEA30B0C520E /* libPods-RiverAI.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5B26E1F85AD17EBE06A62D6F /* libPods-RiverAI.a */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
+		FE514A946C35DB527BCE2926 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0956750BA8A4C1DE038CFF7 /* ExpoModulesProvider.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		1226DC06FC00045D4B8F7558 /* Pods-RiverAI.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RiverAI.debug.xcconfig"; path = "Target Support Files/Pods-RiverAI/Pods-RiverAI.debug.xcconfig"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* RiverAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RiverAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = RiverAI/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = RiverAI/Info.plist; sourceTree = "<group>"; };
-		66A315A23B7E6A0A7F56CB97 /* Pods-RiverAI.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RiverAI.debug.xcconfig"; path = "Target Support Files/Pods-RiverAI/Pods-RiverAI.debug.xcconfig"; sourceTree = "<group>"; };
-		87478C822BC1E25CE6F7532A /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-RiverAI/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		95AA1E666E8DF1DC9143217D /* libPods-RiverAI.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-RiverAI.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		9B89BF076F9877E1320896E8 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = RiverAI/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		4EFB2A6309E6478A9D4A40A9 /* expo.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = expo.icon; path = RiverAI/expo.icon; sourceTree = "<group>"; };
+		5B26E1F85AD17EBE06A62D6F /* libPods-RiverAI.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-RiverAI.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		5C2D14149336DA43A8E202DE /* Pods-RiverAI.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RiverAI.release.xcconfig"; path = "Target Support Files/Pods-RiverAI/Pods-RiverAI.release.xcconfig"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = RiverAI/SplashScreen.storyboard; sourceTree = "<group>"; };
-		AEE2173F805B39237AE998AA /* Pods-RiverAI.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RiverAI.release.xcconfig"; path = "Target Support Files/Pods-RiverAI/Pods-RiverAI.release.xcconfig"; sourceTree = "<group>"; };
+		B0956750BA8A4C1DE038CFF7 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-RiverAI/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		B7D031A02A0ED36940164681 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = RiverAI/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		CEFDCFD2864E48C4AE1E2458 /* expo.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = expo.icon; path = RiverAI/expo.icon; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = RiverAI/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* RiverAI-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "RiverAI-Bridging-Header.h"; path = "RiverAI/RiverAI-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -39,7 +39,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1E23FCD07E1E6BC6896AD730 /* libPods-RiverAI.a in Frameworks */,
+				A92BEA0CEC95EEA30B0C520E /* libPods-RiverAI.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -55,17 +55,17 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				CEFDCFD2864E48C4AE1E2458 /* expo.icon */,
-				9B89BF076F9877E1320896E8 /* PrivacyInfo.xcprivacy */,
+				4EFB2A6309E6478A9D4A40A9 /* expo.icon */,
+				B7D031A02A0ED36940164681 /* PrivacyInfo.xcprivacy */,
 			);
 			name = RiverAI;
 			sourceTree = "<group>";
 		};
-		1595FC99257098AAFEA20933 /* Pods */ = {
+		2183020AA96CBCFA9DB59D7F /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				66A315A23B7E6A0A7F56CB97 /* Pods-RiverAI.debug.xcconfig */,
-				AEE2173F805B39237AE998AA /* Pods-RiverAI.release.xcconfig */,
+				1226DC06FC00045D4B8F7558 /* Pods-RiverAI.debug.xcconfig */,
+				5C2D14149336DA43A8E202DE /* Pods-RiverAI.release.xcconfig */,
 			);
 			name = Pods;
 			path = Pods;
@@ -75,9 +75,17 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				95AA1E666E8DF1DC9143217D /* libPods-RiverAI.a */,
+				5B26E1F85AD17EBE06A62D6F /* libPods-RiverAI.a */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		2E6446E851DE27C336871208 /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				C376652C05D94E1285C1CC2B /* RiverAI */,
+			);
+			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -94,8 +102,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				1595FC99257098AAFEA20933 /* Pods */,
-				E0E47A1B9224344DF8EC2002 /* ExpoModulesProviders */,
+				2183020AA96CBCFA9DB59D7F /* Pods */,
+				2E6446E851DE27C336871208 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -110,14 +118,6 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		B4AE4BEF745966D98DB881F3 /* RiverAI */ = {
-			isa = PBXGroup;
-			children = (
-				87478C822BC1E25CE6F7532A /* ExpoModulesProvider.swift */,
-			);
-			name = RiverAI;
-			sourceTree = "<group>";
-		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
 			isa = PBXGroup;
 			children = (
@@ -127,12 +127,12 @@
 			path = RiverAI/Supporting;
 			sourceTree = "<group>";
 		};
-		E0E47A1B9224344DF8EC2002 /* ExpoModulesProviders */ = {
+		C376652C05D94E1285C1CC2B /* RiverAI */ = {
 			isa = PBXGroup;
 			children = (
-				B4AE4BEF745966D98DB881F3 /* RiverAI */,
+				B0956750BA8A4C1DE038CFF7 /* ExpoModulesProvider.swift */,
 			);
-			name = ExpoModulesProviders;
+			name = RiverAI;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -143,13 +143,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "RiverAI" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				27D1420FB70DAD09EE952C90 /* [Expo] Configure project */,
+				991105C71607E80B253A5E7E /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				DE90D5E069056B0C25BDA1F0 /* [CP] Embed Pods Frameworks */,
+				D96670CD0B90CAA472125949 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -201,8 +201,8 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				B4211E6841344D52B4AB2D03 /* expo.icon in Resources */,
-				18DC2951FE28024CD5664070 /* PrivacyInfo.xcprivacy in Resources */,
+				667B5D91AD8C49A1AC0F6D0D /* expo.icon in Resources */,
+				7A2CFC306F2C06361C8BCD60 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -248,30 +248,6 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		27D1420FB70DAD09EE952C90 /* [Expo] Configure project */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/.xcode.env",
-				"$(SRCROOT)/.xcode.env.local",
-				"$(SRCROOT)/RiverAI/RiverAI.entitlements",
-				"$(SRCROOT)/Pods/Target Support Files/Pods-RiverAI/expo-configure-project.sh",
-			);
-			name = "[Expo] Configure project";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(SRCROOT)/Pods/Target Support Files/Pods-RiverAI/ExpoModulesProvider.swift",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-RiverAI/expo-configure-project.sh\"\n";
-		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -314,7 +290,31 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-RiverAI/Pods-RiverAI-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		DE90D5E069056B0C25BDA1F0 /* [CP] Embed Pods Frameworks */ = {
+		991105C71607E80B253A5E7E /* [Expo] Configure project */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/.xcode.env",
+				"$(SRCROOT)/.xcode.env.local",
+				"$(SRCROOT)/RiverAI/RiverAI.entitlements",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-RiverAI/expo-configure-project.sh",
+			);
+			name = "[Expo] Configure project";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Pods/Target Support Files/Pods-RiverAI/ExpoModulesProvider.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-RiverAI/expo-configure-project.sh\"\n";
+		};
+		D96670CD0B90CAA472125949 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -366,7 +366,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				1583F44A2AA57184261A1E40 /* ExpoModulesProvider.swift in Sources */,
+				FE514A946C35DB527BCE2926 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -375,7 +375,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 66A315A23B7E6A0A7F56CB97 /* Pods-RiverAI.debug.xcconfig */;
+			baseConfigurationReference = 1226DC06FC00045D4B8F7558 /* Pods-RiverAI.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = expo;
 				CLANG_ENABLE_MODULES = YES;
@@ -415,7 +415,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = AEE2173F805B39237AE998AA /* Pods-RiverAI.release.xcconfig */;
+			baseConfigurationReference = 5C2D14149336DA43A8E202DE /* Pods-RiverAI.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = expo;
 				CLANG_ENABLE_MODULES = YES;

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useTheme } from "@/context/ThemeContext";
@@ -185,11 +185,13 @@ export default function AddToCollection() {
       style={{ backgroundColor: colors.card }}
       contentContainerStyle={styles.container}
     >
-      <Text style={[styles.title, { color: colors.foreground }]}>
-        {isBatch
-          ? `Add ${batchIds.length} ${batchIds.length === 1 ? "card" : "cards"} to Collection`
-          : "Add to Collection"}
-      </Text>
+      <Stack.Screen
+        options={{
+          headerTitle: isBatch
+            ? `Add ${batchIds.length} ${batchIds.length === 1 ? "Card" : "Cards"}`
+            : "Add to Collection",
+        }}
+      />
       {collections.length === 0 ? (
         <View style={styles.empty}>
           <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
@@ -272,11 +274,6 @@ const styles = StyleSheet.create({
   container: {
     padding: 20,
     paddingTop: 24,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 16,
   },
   empty: {
     paddingVertical: 24,

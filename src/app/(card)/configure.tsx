@@ -1,14 +1,13 @@
 import { useEffect, useMemo } from "react";
-import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
+import { Dimensions, StyleSheet, Text, View } from "react-native";
 import Animated, {
 	interpolate,
 	useAnimatedStyle,
 	useSharedValue,
 	withTiming,
 } from "react-native-reanimated";
-import { router, Stack } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { Stack } from "expo-router";
+import { SheetDoneButton } from "@/components/SheetDoneButton";
 import { useQuery } from "@tanstack/react-query";
 import { useApi } from "@/lib/axios";
 import { getCard } from "@/lib/api/pricing";
@@ -170,21 +169,7 @@ export default function ConfigureCard() {
 			<Stack.Screen
 				options={{
 					headerStyle: { backgroundColor: colors.card },
-					headerRight: () => (
-						<Pressable
-							hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-							onPress={() => {
-								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-								router.back();
-							}}
-						>
-							<Ionicons
-								name="checkmark"
-								size={26}
-								color={colors.primary}
-							/>
-						</Pressable>
-					),
+					headerRight: () => <SheetDoneButton />,
 				}}
 			/>
 

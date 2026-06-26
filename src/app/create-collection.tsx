@@ -1,10 +1,11 @@
 import { useCallback, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
+import { router, Stack } from "expo-router";
 
 import { useTheme } from "@/context/ThemeContext";
 import { useCollections } from "@/hooks/useCollections";
+import { SheetDoneButton } from "@/components/SheetDoneButton";
 
 export default function CreateCollection() {
 	const { colors } = useTheme();
@@ -33,9 +34,13 @@ export default function CreateCollection() {
 
 	return (
 		<View style={[styles.content, { backgroundColor: colors.card }]}>
-			<Text style={[styles.title, { color: colors.foreground }]}>
-				New Collection
-			</Text>
+			<Stack.Screen
+				options={{
+					headerRight: () => (
+						<SheetDoneButton onPress={handleCreate} disabled={!canCreate} />
+					),
+				}}
+			/>
 			<Text style={[styles.label, { color: colors.mutedForeground }]}>
 				COLLECTION NAME
 			</Text>
@@ -57,31 +62,6 @@ export default function CreateCollection() {
 				autoFocus
 				maxLength={50}
 			/>
-			<Pressable
-				onPress={handleCreate}
-				disabled={!canCreate}
-				style={[
-					styles.createButton,
-					{
-						backgroundColor: canCreate
-							? colors.primary
-							: colors.muted,
-					},
-				]}
-			>
-				<Text
-					style={[
-						styles.createButtonText,
-						{
-							color: canCreate
-								? colors.primaryForeground
-								: colors.mutedForeground,
-						},
-					]}
-				>
-					Create Collection
-				</Text>
-			</Pressable>
 		</View>
 	);
 }
@@ -91,11 +71,6 @@ const styles = StyleSheet.create({
 		flex: 1,
 		padding: 20,
 		paddingTop: 24,
-	},
-	title: {
-		fontSize: 18,
-		fontWeight: "700",
-		marginBottom: 16,
 	},
 	label: {
 		fontSize: 11,
@@ -110,14 +85,5 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 14,
 		paddingVertical: 12,
 		marginBottom: 16,
-	},
-	createButton: {
-		borderRadius: 10,
-		paddingVertical: 14,
-		alignItems: "center",
-	},
-	createButtonText: {
-		fontSize: 16,
-		fontWeight: "600",
 	},
 });

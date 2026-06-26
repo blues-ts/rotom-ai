@@ -144,6 +144,18 @@ export default function ScanLibraryScreen() {
 			<Stack.Screen
 				options={{
 					headerTitle,
+					headerLeft: () => (
+						<Pressable
+							hitSlop={8}
+							style={styles.headerIconBtn}
+							onPress={() => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								router.back();
+							}}
+						>
+							<Ionicons name="close" size={24} color={colors.foreground} />
+						</Pressable>
+					),
 					headerRight: () => {
 						if (count === 0) return null;
 						if (!selectMode) {

@@ -35,6 +35,23 @@ export default function CameraLayout() {
 					</Pressable>
 				),
 			}}
-		/>
+		>
+			<Stack.Screen
+				name="scanner-tips"
+				options={{
+					presentation: "formSheet",
+					sheetAllowedDetents: [0.6, 1.0],
+					sheetGrabberVisible: true,
+					sheetCornerRadius: 20,
+					headerShown: true,
+					headerTransparent: false,
+					headerStyle: { backgroundColor: colors.card },
+					headerTintColor: colors.foreground,
+					headerShadowVisible: false,
+					headerLeft: () => null,
+					contentStyle: { backgroundColor: colors.card },
+				}}
+			/>
+		</Stack>
 	);
 }

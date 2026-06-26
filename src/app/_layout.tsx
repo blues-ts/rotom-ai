@@ -1,4 +1,5 @@
 import AuthSync from "@/components/AuthSync";
+import { SheetDoneButton } from "@/components/SheetDoneButton";
 import { usePrefetchExpansions } from "@/hooks/usePrefetchExpansions";
 import { queryClient } from "@/config/queryClient";
 import {
@@ -203,7 +204,13 @@ function AppContent() {
 						sheetAllowedDetents: [0.35],
 						sheetGrabberVisible: true,
 						sheetCornerRadius: 20,
-						headerShown: false,
+						headerShown: true,
+						headerTransparent: false,
+						headerTitle: "New Collection",
+						headerStyle: { backgroundColor: colors.card },
+						headerTintColor: colors.foreground,
+						headerShadowVisible: false,
+						headerLeft: () => null,
 						contentStyle: { backgroundColor: colors.card },
 					}}
 				/>
@@ -215,7 +222,14 @@ function AppContent() {
 						sheetGrabberVisible: true,
 						sheetCornerRadius: 20,
 						sheetExpandsWhenScrolledToEdge: true,
-						headerShown: false,
+						headerShown: true,
+						headerTransparent: false,
+						headerTitle: "Add to Collection",
+						headerStyle: { backgroundColor: colors.card },
+						headerTintColor: colors.foreground,
+						headerShadowVisible: false,
+						headerLeft: () => null,
+						headerRight: () => <SheetDoneButton />,
 						contentStyle: { backgroundColor: colors.card },
 					}}
 				/>
