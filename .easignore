@@ -1,0 +1,42 @@
+# EAS upload ignore list.
+#
+# When this file exists, EAS Build uses it INSTEAD of every .gitignore in the
+# project. We mirror the root .gitignore's real exclusions here (so secrets and
+# build junk still never leave the machine) but deliberately DO NOT replay the
+# nested modules/card-vision/ios/assets/.gitignore — that's what was stripping
+# the 68 MB on-device scanner index out of cloud builds, leaving the scanner
+# with no index to match against on TestFlight.
+#
+# The CardVision podspec bundles assets/* into CardVisionAssets.bundle, so once
+# these files are uploaded they ship inside the app for an instant, offline
+# first scan. (Keep the server refresh working too for index updates.)
+
+node_modules/
+.expo/
+dist/
+web-build/
+.DS_Store
+*.orig.*
+
+# Signing material / secrets — never upload.
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+android/app/google-services.json
+ios/GoogleService-Info.plist
+
+# Environment files (EXPO_PUBLIC_* prod vars come from eas.json, not these).
+.env
+.env.local
+.env.production
+.env.development
+
+expo-env.d.ts
+
+# Belt-and-suspenders: make sure the scanner index ships, regardless of how
+# nested ignores are handled.
+!modules/card-vision/ios/assets/index.f16
+!modules/card-vision/ios/assets/index.manifest.json

@@ -291,9 +291,7 @@ function SetsBrowser({
 							});
 						}}
 					>
-						<View
-							style={[styles.setTile, { backgroundColor: colors.card }]}
-						>
+						<View style={styles.setTile}>
 							<View style={styles.setLogoBox}>
 								{item.logo ? (
 									<Image
@@ -873,8 +871,9 @@ const styles = StyleSheet.create({
 	setTile: {
 		width: setTileWidth,
 		borderRadius: 12,
-		// No border: the faint card surface alone defines the tile. An outline on
-		// every cell turns a gallery of logos into a wall of buttons.
+		// Transparent: the logo sits directly on the screen background. No surface
+		// or border — an outline on every cell turns a gallery of logos into a wall
+		// of buttons.
 		padding: 12,
 		alignItems: "center",
 	},
