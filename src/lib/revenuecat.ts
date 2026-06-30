@@ -6,7 +6,7 @@ import Purchases, {
 } from "react-native-purchases";
 import RevenueCatUI, { type PAYWALL_RESULT } from "react-native-purchases-ui";
 
-export const PRO_ENTITLEMENT_ID = "River AI Pro";
+export const PRO_ENTITLEMENT_ID = "River AI TCG Pro";
 
 let configured = false;
 

@@ -17,6 +17,7 @@ ios/GoogleService-Info.plist
 .env
 .env.local
 .env.production
+.env.development
 
 # Expo
 expo-env.d.ts

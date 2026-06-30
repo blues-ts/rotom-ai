@@ -46,6 +46,12 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     }
 
     const listener = (info: CustomerInfo) => {
+      console.log(
+        "[RevenueCat] active entitlements:",
+        Object.keys(info.entitlements.active),
+        "| all:",
+        Object.keys(info.entitlements.all),
+      );
       setCustomerInfo(info);
     };
     Purchases.addCustomerInfoUpdateListener(listener);

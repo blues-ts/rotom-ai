@@ -15,7 +15,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 const Index = () => {
   useWarmUpBrowser();
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const { bottom } = useSafeAreaInsets();
   const { loadingStrategy, handleSocialAuth } = useSocialAuth();
 
@@ -37,7 +37,12 @@ const Index = () => {
           contentFit="contain"
         />
         <Text style={[styles.title, { color: colors.foreground }]}>River AI</Text>
-        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+        <Text
+          style={[
+            styles.subtitle,
+            { color: theme === "dark" ? "#ffffff" : colors.mutedForeground },
+          ]}
+        >
           Your Pokemon TCG AI Assistant
         </Text>
       </View>

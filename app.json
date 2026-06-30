@@ -11,7 +11,7 @@
       "icon": "./assets/apple-icon.icon",
       "bundleIdentifier": "com.riverai.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "River AI uses the camera to scan and identify your trading cards."
+        "NSCameraUsageDescription": "River AI TCG uses the camera to scan and identify your trading cards."
       }
     },
     "android": {
