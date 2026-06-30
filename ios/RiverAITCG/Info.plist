@@ -46,7 +46,7 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>River AI uses the camera to scan and identify your trading cards.</string>
+	<string>River AI TCG uses the camera to scan and identify your trading cards.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
 	<key>NSMicrophoneUsageDescription</key>
