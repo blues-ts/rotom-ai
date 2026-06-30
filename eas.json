@@ -14,7 +14,12 @@
     },
     "production": {
       "autoIncrement": true,
-      "channel": "production"
+      "channel": "production",
+      "env": {
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsucml2ZXJ0Y2cuY29tJA",
+        "EXPO_PUBLIC_API_URL": "https://api.rivertcg.com",
+        "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "appl_luSDauTvGcoFmstVuZRYlcOlfII"
+      }
     }
   },
   "submit": {
