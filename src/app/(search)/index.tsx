@@ -34,6 +34,7 @@ import { searchCards, searchSealed } from "@/lib/api/pricing";
 import {
 	buildSearchFallbackQ,
 	buildSearchQ,
+	extractSearchLanguage,
 	getCardDisplayName,
 	getCardImage,
 	getCardNumber,
@@ -411,10 +412,13 @@ export default function Search() {
 			// Non-Pro: search the local catalog (no pricing API). Cards only —
 			// sealed search is a Pro feature (the catalog has no sealed products).
 			if (!isPro) {
+				// A standalone "jp"/"en" tag becomes the catalog language filter.
+				const { rest, language } = extractSearchLanguage(debouncedQuery);
 				const res = await searchCatalogCards(api, {
-					q: debouncedQuery,
+					q: rest,
 					page,
 					pageSize: 30,
+					language,
 				});
 				return {
 					data: res.data.map(catalogCardToScrydex),

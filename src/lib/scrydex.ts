@@ -62,8 +62,45 @@ export function formatVariantLabel(variant: string): string {
  */
 const ONLINE_ONLY_EXCLUSION = "-expansion.is_online_only:true";
 
-function parseSearchTerms(raw: string): { nameTokens: string[]; number?: string } {
+const LANGUAGE_TAGS: Record<string, "en" | "ja"> = {
+  en: "en",
+  eng: "en",
+  english: "en",
+  ja: "ja",
+  jp: "ja",
+  jpn: "ja",
+  japanese: "ja",
+};
+
+/**
+ * Pull a standalone language tag out of a search ("charizard jp" → Japanese
+ * prints only). The tag can sit anywhere in the query, but only counts when
+ * other terms remain — searching just "jp" stays a plain name search.
+ */
+export function extractSearchLanguage(raw: string): {
+  rest: string;
+  language?: "en" | "ja";
+} {
   const tokens = raw.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) return { rest: raw.trim() };
+  let language: "en" | "ja" | undefined;
+  const rest: string[] = [];
+  for (const t of tokens) {
+    const lang = LANGUAGE_TAGS[t.toLowerCase()];
+    if (lang && !language) language = lang;
+    else rest.push(t);
+  }
+  if (rest.length === 0) return { rest: raw.trim() };
+  return { rest: rest.join(" "), language };
+}
+
+function parseSearchTerms(raw: string): {
+  nameTokens: string[];
+  number?: string;
+  language?: "en" | "ja";
+} {
+  const { rest, language } = extractSearchLanguage(raw);
+  const tokens = rest.split(/\s+/).filter(Boolean);
   let nameTokens = tokens;
   let number: string | undefined;
 
@@ -83,7 +120,7 @@ function parseSearchTerms(raw: string): { nameTokens: string[]; number?: string 
     .replace(/["#:*()[\]{}]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  return { nameTokens: cleaned ? cleaned.split(" ") : [], number };
+  return { nameTokens: cleaned ? cleaned.split(" ") : [], number, language };
 }
 
 /**
@@ -97,12 +134,15 @@ function parseSearchTerms(raw: string): { nameTokens: string[]; number?: string 
  * with leading zeros stripped.
  */
 export function buildSearchQ(raw: string): string {
-  const { nameTokens, number } = parseSearchTerms(raw);
+  const { nameTokens, number, language } = parseSearchTerms(raw);
   const clauses = nameTokens.map(
     (tok) => `(name:${tok}* OR expansion.name:${tok}*)`,
   );
   if (number) clauses.push(`number:${number}`);
   if (clauses.length === 0) return "";
+  // A standalone "jp"/"en" tag filters to that language's prints
+  // ("charizard jp" → Japanese Charizards only).
+  if (language) clauses.push(`language_code:${language}`);
   clauses.push(ONLINE_ONLY_EXCLUSION);
   return clauses.join(" ");
 }
@@ -127,10 +167,11 @@ export function buildSetCardsQ(expansionId: string, filter: string): string {
  * stay unquoted — quoted fieldless phrases are not supported by Scrydex.
  */
 export function buildSearchFallbackQ(raw: string): string {
-  const { nameTokens, number } = parseSearchTerms(raw);
+  const { nameTokens, number, language } = parseSearchTerms(raw);
   if (nameTokens.length === 0) return "";
   const clauses: string[] = [nameTokens.join(" ")];
   if (number) clauses.push(`number:${number}`);
+  if (language) clauses.push(`language_code:${language}`);
   clauses.push(ONLINE_ONLY_EXCLUSION);
   return clauses.join(" ");
 }

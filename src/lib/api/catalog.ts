@@ -79,10 +79,16 @@ export interface CatalogSearchPage {
 
 export async function searchCatalogCards(
   api: AxiosInstance,
-  opts: { q: string; page?: number; pageSize?: number },
+  opts: { q: string; page?: number; pageSize?: number; language?: "en" | "ja" },
 ): Promise<CatalogSearchPage> {
+  const params: Record<string, string | number> = {
+    q: opts.q,
+    page: opts.page ?? 1,
+    pageSize: opts.pageSize ?? 30,
+  };
+  if (opts.language) params.language = opts.language;
   const res = await api.get<{ success: boolean } & CatalogSearchPage>("/api/catalog/cards", {
-    params: { q: opts.q, page: opts.page ?? 1, pageSize: opts.pageSize ?? 30 },
+    params,
   });
   return { data: res.data.data, total: res.data.total, page: res.data.page, pageSize: res.data.pageSize };
 }

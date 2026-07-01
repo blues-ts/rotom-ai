@@ -36,7 +36,7 @@ const Index = () => {
           style={styles.sprite}
           contentFit="contain"
         />
-        <Text style={[styles.title, { color: colors.foreground }]}>River AI</Text>
+        <Text style={[styles.title, { color: colors.foreground }]}>River</Text>
         <Text
           style={[
             styles.subtitle,
