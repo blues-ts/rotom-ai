@@ -70,9 +70,16 @@ export interface ScrydexImage {
   large?: string;
 }
 
+export interface ScrydexMarketplace {
+  name: string;
+  product_id?: number | string;
+  purchase_url?: string;
+}
+
 export interface ScrydexVariant {
   name: string;
   images?: ScrydexImage[];
+  marketplaces?: ScrydexMarketplace[];
   prices?: ScrydexPrice[];
 }
 

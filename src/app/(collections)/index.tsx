@@ -28,17 +28,17 @@ export default function Collections() {
 	return (
 		<SafeAreaView
 			style={[styles.container, { backgroundColor: colors.background }]}
-			// No bottom edge: let the scroll surface reach the phone's bottom edge so
-			// content scrolls all the way down (home-indicator clearance is handled by
-			// the content's paddingBottom) instead of stopping short — the hard cutoff.
+			// No bottom edge: the sheet surface runs to the phone's bottom edge
+			// (home-indicator clearance is handled by the sheet's paddingBottom).
 			edges={[]}
 		>
 			<RefreshingPill visible={refreshPrices.isPending} topOffset={52 + 8} />
 			<ScrollView
 				contentContainerStyle={[
 					styles.content,
-					{ paddingTop: insets.top + 52, paddingBottom: insets.bottom + 24 },
+					{ paddingTop: insets.top + 52 },
 				]}
+				showsVerticalScrollIndicator={false}
 				refreshControl={
 					<RefreshControl
 						// The pill is the sole "updating" indicator — keep the native
@@ -53,11 +53,13 @@ export default function Collections() {
 				}
 			>
 				{isError ? (
-					<ErrorState
-						title="Couldn't load collections"
-						message="Something went wrong reading your collections."
-						onRetry={() => refetch()}
-					/>
+					<View style={styles.statePad}>
+						<ErrorState
+							title="Couldn't load collections"
+							message="Something went wrong reading your collections."
+							onRetry={() => refetch()}
+						/>
+					</View>
 				) : collections.length === 0 ? (
 					isLoading ? null : (
 					<View style={styles.emptyState}>
@@ -87,29 +89,53 @@ export default function Collections() {
 					)
 				) : (
 					<>
+					{/* Portfolio chart is the hero on the stage — the collections
+					    rest on the counter below, like the card detail screen. */}
 					<CollectionValueChart />
-					<Animated.View style={styles.list} layout={LinearTransition.duration(300)}>
-						{collections.map((c) => (
-							<Animated.View
-								key={c.id}
-								entering={FadeIn.duration(300)}
-								exiting={FadeOut.duration(200)}
-								layout={LinearTransition.duration(300)}
-							>
-							<CollectionCard
-								name={c.name}
-								cardCount={c.cardCount}
-								totalValue={c.totalValue}
-								cardImages={c.cardImages}
-								onPress={() =>
-									router.push(
-										`/collection-detail?id=${c.id}&name=${encodeURIComponent(c.name)}&totalValue=${c.totalValue}&cardCount=${c.cardCount}`,
-									)
-								}
-							/>
+					<View
+						style={[
+							styles.sheet,
+							{
+								backgroundColor: colors.card,
+								borderColor: colors.border,
+								paddingBottom: 40 + insets.bottom,
+							},
+						]}
+					>
+						<Text
+							style={[
+								styles.sheetTitle,
+								{ color: colors.mutedForeground },
+							]}
+						>
+							Collections
+						</Text>
+						<Animated.View style={styles.list} layout={LinearTransition.duration(300)}>
+							{collections.map((c) => (
+								<Animated.View
+									key={c.id}
+									entering={FadeIn.duration(300)}
+									exiting={FadeOut.duration(200)}
+									layout={LinearTransition.duration(300)}
+								>
+								<CollectionCard
+									name={c.name}
+									cardCount={c.cardCount}
+									totalValue={c.totalValue}
+									cardImages={c.cardImages}
+									// `border` (not `muted`) so blocks stay visible against
+									// the sheet's `card` — same trick as the card detail.
+									backgroundColor={colors.border}
+									onPress={() =>
+										router.push(
+											`/collection-detail?id=${c.id}&name=${encodeURIComponent(c.name)}&totalValue=${c.totalValue}&cardCount=${c.cardCount}`,
+										)
+									}
+								/>
+							</Animated.View>
+							))}
 						</Animated.View>
-						))}
-					</Animated.View>
+					</View>
 					</>
 				)}
 			</ScrollView>
@@ -122,12 +148,42 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 	content: {
+		// Full-bleed so the sheet reaches the screen edges; children pad
+		// themselves. Grow to the viewport so the sheet stretches to the bottom.
 		flexGrow: 1,
+	},
+
+	// The counter — one solid surface rising beneath the chart hero, holding
+	// the collections (mirrors the card detail sheet).
+	sheet: {
+		borderTopLeftRadius: 28,
+		borderTopRightRadius: 28,
+		borderTopWidth: StyleSheet.hairlineWidth,
+		marginTop: 18,
+		paddingTop: 22,
 		paddingHorizontal: 16,
-		// paddingBottom is applied inline (needs the safe-area inset).
+		// Fill the remaining height below the chart when the list is short.
+		flexGrow: 1,
+		// Lift the lip off the stage so the chart reads as floating above it.
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: -8 },
+		shadowOpacity: 0.22,
+		shadowRadius: 18,
+		elevation: 12,
+	},
+	sheetTitle: {
+		fontSize: 13,
+		fontWeight: "600",
+		letterSpacing: 0.2,
+		marginBottom: 12,
+		paddingHorizontal: 6,
 	},
 	list: {
 		gap: 12,
+	},
+	statePad: {
+		flex: 1,
+		paddingHorizontal: 16,
 	},
 	emptyState: {
 		flex: 1,

@@ -292,6 +292,31 @@ export function getCardDisplayRarity(card: ScrydexCard): string | undefined {
 }
 
 /**
+ * TCGplayer product page for the selected variant. Falls back to any variant
+ * carrying a tcgplayer id — a TCGplayer product page covers every printing of
+ * a card, so a sibling variant's id still lands on the right page.
+ */
+export function getTcgplayerProductUrl(
+  item: { variants?: ScrydexVariant[] },
+  variant?: string,
+): string | undefined {
+  const variants = item.variants ?? [];
+  const ordered = variant
+    ? [
+        ...variants.filter((v) => v.name === variant),
+        ...variants.filter((v) => v.name !== variant),
+      ]
+    : variants;
+  for (const v of ordered) {
+    const mp = v.marketplaces?.find((m) => m.name === "tcgplayer");
+    if (mp?.product_id) {
+      return `https://www.tcgplayer.com/product/${mp.product_id}`;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Flatten history days into chart points for one variant + selector.
  * History rows for a tier path are already outlier-filtered server-side,
  * but keep the filter as defense. Sorted ascending by date.

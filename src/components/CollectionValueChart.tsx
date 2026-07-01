@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
 	Dimensions,
@@ -15,6 +15,7 @@ import { ProGate } from "@/components/ProGate";
 import {
 	useCollectionValueHistory,
 	type ValueHistoryPeriod,
+	type ValueHistoryPoint,
 } from "@/hooks/useCollectionValueHistory";
 
 const PERIODS: ValueHistoryPeriod[] = ["7d", "30d", "90d", "1y", "all"];
@@ -27,16 +28,94 @@ const PERIOD_LABELS: Record<ValueHistoryPeriod, string> = {
 	all: "all time",
 };
 
-const SCREEN_WIDTH = Dimensions.get("window").width;
-const CHART_WIDTH = SCREEN_WIDTH - 64; // 16 screen pad × 2 + 16 card pad × 2
+const PERIOD_DAYS: Record<ValueHistoryPeriod, number | null> = {
+	"7d": 7,
+	"30d": 30,
+	"90d": 90,
+	"1y": 365,
+	all: null,
+};
 
-export default function CollectionValueChart() {
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const SCREEN_WIDTH = Dimensions.get("window").width;
+const CHART_WIDTH = SCREEN_WIDTH - 40; // hero horizontal padding (20 × 2)
+// One point per ~2px is visually identical to the full series but keeps the
+// SVG path and cursor work bounded however long the snapshot history grows.
+const MAX_CHART_POINTS = Math.round(CHART_WIDTH / 2);
+
+/**
+ * Largest-Triangle-Three-Buckets downsampling — picks the point per bucket
+ * that preserves the line's visual shape, so spikes and dips survive (unlike
+ * striding or averaging). First and last points are always kept.
+ */
+function lttb(data: ValueHistoryPoint[], threshold: number): ValueHistoryPoint[] {
+	const n = data.length;
+	if (threshold >= n || threshold < 3) return data;
+
+	const sampled: ValueHistoryPoint[] = [data[0]];
+	const every = (n - 2) / (threshold - 2);
+	let a = 0;
+
+	for (let i = 0; i < threshold - 2; i++) {
+		// Average of the *next* bucket anchors the triangle's third vertex.
+		const avgStart = Math.floor((i + 1) * every) + 1;
+		const avgEnd = Math.min(Math.floor((i + 2) * every) + 1, n);
+		let avgX = 0;
+		let avgY = 0;
+		for (let j = avgStart; j < avgEnd; j++) {
+			avgX += data[j].timestamp;
+			avgY += data[j].value;
+		}
+		avgX /= avgEnd - avgStart;
+		avgY /= avgEnd - avgStart;
+
+		const rangeStart = Math.floor(i * every) + 1;
+		const rangeEnd = Math.min(Math.floor((i + 1) * every) + 1, n);
+		const ax = data[a].timestamp;
+		const ay = data[a].value;
+
+		let maxArea = -1;
+		let maxIdx = rangeStart;
+		for (let j = rangeStart; j < rangeEnd; j++) {
+			const area = Math.abs(
+				(ax - avgX) * (data[j].value - ay) -
+					(ax - data[j].timestamp) * (avgY - ay),
+			);
+			if (area > maxArea) {
+				maxArea = area;
+				maxIdx = j;
+			}
+		}
+		sampled.push(data[maxIdx]);
+		a = maxIdx;
+	}
+
+	sampled.push(data[n - 1]);
+	return sampled;
+}
+
+/**
+ * Portfolio value hero — sits on the stage above the collections sheet
+ * (mirrors the card detail layout, with the chart standing in for the card
+ * image). Loads the full history once; period taps slice in memory.
+ */
+function CollectionValueChartInner() {
 	const { colors } = useTheme();
 	const [period, setPeriod] = useState<ValueHistoryPeriod>("30d");
-	const { data, isLoading } = useCollectionValueHistory(period);
+	const { data: allHistory, isLoading } = useCollectionValueHistory();
+
+	const data = useMemo(() => {
+		const all = allHistory ?? [];
+		const days = PERIOD_DAYS[period];
+		const sliced = days
+			? all.filter((p) => p.timestamp >= Date.now() - days * DAY_MS)
+			: all;
+		return lttb(sliced, MAX_CHART_POINTS);
+	}, [allHistory, period]);
 
 	const { current, delta, deltaPct } = useMemo(() => {
-		if (!data || data.length === 0) {
+		if (data.length === 0) {
 			return { current: 0, delta: 0, deltaPct: 0 };
 		}
 		const last = data[data.length - 1].value;
@@ -52,21 +131,16 @@ export default function CollectionValueChart() {
 	const deltaText = `${deltaSign}${formatCurrency(Math.abs(delta))} (${Math.abs(deltaPct).toFixed(1)}%) ${PERIOD_LABELS[period]}`;
 
 	return (
-		<ProGate
-			ctaText="Unlock portfolio tracking"
-			style={[styles.container, { backgroundColor: colors.card }]}
-		>
-			<View style={styles.header}>
-				<Text style={[styles.title, { color: colors.mutedForeground }]}>
-					Portfolio Value
-				</Text>
-			</View>
+		<ProGate ctaText="Unlock portfolio tracking" style={styles.container}>
+			<Text style={[styles.title, { color: colors.mutedForeground }]}>
+				Portfolio Value
+			</Text>
 
 			<Text style={[styles.totalValue, { color: colors.foreground }]}>
 				{formatCurrency(current)}
 			</Text>
 
-			{data && data.length > 1 && (
+			{data.length > 1 && (
 				<Text style={[styles.deltaText, { color: deltaColor }]}>
 					{deltaText}
 				</Text>
@@ -76,7 +150,7 @@ export default function CollectionValueChart() {
 				<View style={styles.chartPlaceholder}>
 					<ActivityIndicator size="small" color={colors.mutedForeground} />
 				</View>
-			) : !data || data.length === 0 ? (
+			) : data.length === 0 ? (
 				<View style={styles.chartPlaceholder}>
 					<Text
 						style={[styles.emptyText, { color: colors.mutedForeground }]}
@@ -186,16 +260,15 @@ export default function CollectionValueChart() {
 	);
 }
 
+// No props, and everything it renders derives from its own query + period
+// state — memo shields it from list-driven re-renders on the screen above.
+export default memo(CollectionValueChartInner);
+
 const styles = StyleSheet.create({
+	// Hero on the stage — no card chrome; the sheet below provides the surface.
 	container: {
-		borderRadius: 12,
-		padding: 16,
-		marginBottom: 12,
-	},
-	header: {
-		flexDirection: "row",
-		justifyContent: "space-between",
-		alignItems: "center",
+		paddingHorizontal: 20,
+		paddingTop: 8,
 	},
 	title: {
 		fontSize: 13,
@@ -203,7 +276,7 @@ const styles = StyleSheet.create({
 		letterSpacing: 0.2,
 	},
 	totalValue: {
-		fontSize: 28,
+		fontSize: 38,
 		fontWeight: "700",
 		marginTop: 4,
 		fontVariant: ["tabular-nums"],

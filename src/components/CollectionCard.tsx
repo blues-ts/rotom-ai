@@ -18,6 +18,9 @@ interface CollectionCardProps {
 	totalValue: number;
 	cardImages: string[];
 	onPress?: () => void;
+	// Override when the card sits on a `card`-colored surface (e.g. the
+	// collections sheet) where its default background would blend in.
+	backgroundColor?: string;
 }
 
 export default function CollectionCard({
@@ -26,6 +29,7 @@ export default function CollectionCard({
 	totalValue,
 	cardImages,
 	onPress,
+	backgroundColor,
 }: CollectionCardProps) {
 	const { colors } = useTheme();
 
@@ -35,7 +39,10 @@ export default function CollectionCard({
 				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 				onPress?.();
 			}}
-			style={[styles.container, { backgroundColor: colors.card }]}
+			style={[
+				styles.container,
+				{ backgroundColor: backgroundColor ?? colors.card },
+			]}
 		>
 			{/* Header */}
 			<View style={styles.header}>

@@ -54,6 +54,7 @@ import {
 	getExpansionDisplayName,
 	getConditionOptions,
 	getGradedOptions,
+	getTcgplayerProductUrl,
 	getVariantNames,
 	historyToChartPoints,
 	isLikelyGradedListing,
@@ -419,12 +420,6 @@ function LoadingSkeleton({
 					{ backgroundColor: colors.card, borderColor: colors.border },
 				]}
 			>
-				<View
-					style={[
-						styles.grabber,
-						{ backgroundColor: colors.mutedForeground + "66" },
-					]}
-				/>
 				{/* Estimate Block — same container + line heights as the real frosted
 			    card: 12pt label (~16), 44pt price (~54), ~28 chips. */}
 				{/* Value header placeholder */}
@@ -825,45 +820,61 @@ export default function CardDetail() {
 	const dRawCondition = useDebouncedValue(rawCondition, 350);
 	const dGradedCompany = useDebouncedValue(gradedCompany, 350);
 	const dGradedGrade = useDebouncedValue(gradedGrade, 350);
-	const dHistoryPeriod = useDebouncedValue(historyPeriod, 350);
 
 	const dGradedTierKey =
 		dGradedCompany && dGradedGrade
 			? buildGradedTierKey(dGradedCompany, dGradedGrade)
 			: null;
-	const historyDays = PERIOD_TO_DAYS[dHistoryPeriod] ?? 30;
 
-	const { data: rawHistory, isLoading: rawHistoryLoading } = useQuery({
-		queryKey: ["history", id, dRawCondition, dHistoryPeriod],
-		queryFn: () => getCardHistory(api, id, dRawCondition, historyDays),
+	// Always fetch the full year and slice per-period client-side, so the period
+	// toggle never waits on the network (or the settle debounce — a period tap is
+	// a single deliberate gesture, unlike flicking through conditions).
+	const {
+		data: rawHistory,
+		isLoading: rawHistoryLoading,
+		isPlaceholderData: rawHistoryStale,
+	} = useQuery({
+		queryKey: ["history", id, dRawCondition],
+		queryFn: () => getCardHistory(api, id, dRawCondition, 365),
 		enabled: isPro && !!id && !!dRawCondition && dTab !== "Graded",
 		placeholderData: keepPreviousData,
 		staleTime: 60 * 60 * 1000,
 	});
 
-	const { data: gradedHistory, isLoading: gradedHistoryLoading } = useQuery({
-		queryKey: ["history", id, dGradedTierKey, dHistoryPeriod],
-		queryFn: () => getCardHistory(api, id, dGradedTierKey!, historyDays),
+	const {
+		data: gradedHistory,
+		isLoading: gradedHistoryLoading,
+		isPlaceholderData: gradedHistoryStale,
+	} = useQuery({
+		queryKey: ["history", id, dGradedTierKey],
+		queryFn: () => getCardHistory(api, id, dGradedTierKey!, 365),
 		enabled: isPro && !!id && !!dGradedTierKey && dTab === "Graded",
 		placeholderData: keepPreviousData,
 		staleTime: 60 * 60 * 1000,
 	});
 
-	// Chart data — flatten history days for the settled variant/tier (wagmi-charts format)
+	// Chart data — flatten history days for the settled variant/tier (wagmi-charts
+	// format), then slice to the selected period. The slice reads the live (not
+	// debounced) period so switching ranges is instant and never refetches.
 	const chartData = useMemo(() => {
 		if (!variant) return [];
+		let points: { timestamp: number; value: number }[];
 		if (dTab === "Graded") {
 			if (!dGradedCompany || !dGradedGrade) return [];
-			return historyToChartPoints(gradedHistory ?? [], variant, {
+			points = historyToChartPoints(gradedHistory ?? [], variant, {
 				kind: "graded",
 				company: dGradedCompany,
 				grade: dGradedGrade,
 			});
+		} else {
+			points = historyToChartPoints(rawHistory ?? [], variant, {
+				kind: "raw",
+				condition: dRawCondition,
+			});
 		}
-		return historyToChartPoints(rawHistory ?? [], variant, {
-			kind: "raw",
-			condition: dRawCondition,
-		});
+		const days = PERIOD_TO_DAYS[historyPeriod] ?? 30;
+		const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+		return points.filter((p) => p.timestamp >= cutoff);
 	}, [
 		dTab,
 		rawHistory,
@@ -872,9 +883,22 @@ export default function CardDetail() {
 		dRawCondition,
 		dGradedCompany,
 		dGradedGrade,
+		historyPeriod,
 	]);
 
+	// True while the chart is showing the previous condition/tier's line waiting
+	// on a fetch for the new one (keepPreviousData hides the query's pending
+	// state, so surface it as a dimmed chart instead of a frozen one).
+	const chartStale =
+		dTab === "Graded" ? gradedHistoryStale : rawHistoryStale;
+
 	const currencySymbol = "$";
+
+	// TCGplayer link-out for the selected variant; undefined hides the row
+	// (e.g. Japanese cards, which TCGplayer doesn't list).
+	const tcgplayerUrl = card
+		? getTcgplayerProductUrl(card, variant || undefined)
+		: undefined;
 
 	// Scroll the detail view up so the estimate price stays visible above the
 	// configure sheet while options are changed.
@@ -1194,13 +1218,6 @@ export default function CardDetail() {
 									contentTop.current = e.nativeEvent.layout.y;
 								}}
 							>
-								<View
-									style={[
-										styles.grabber,
-										{ backgroundColor: colors.mutedForeground + "66" },
-									]}
-								/>
-
 								{/* Market value — the sheet's headline, resting on the counter */}
 								<Animated.View
 									entering={sectionEntering(0)}
@@ -1604,6 +1621,41 @@ export default function CardDetail() {
 									style={[styles.divider, { backgroundColor: colors.border }]}
 								/>
 
+								{/* Buy on TCGplayer — follows the selected variant */}
+								{tcgplayerUrl && (
+									<Animated.View entering={sectionEntering(4)}>
+										<Pressable
+											onPress={() => {
+												Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+												Linking.openURL(tcgplayerUrl);
+											}}
+											style={styles.linkOutRow}
+										>
+											<Ionicons
+												name="cart-outline"
+												size={18}
+												color={colors.foreground}
+											/>
+											<Text
+												style={[
+													styles.linkOutText,
+													{ color: colors.foreground },
+												]}
+											>
+												Buy on TCGplayer
+											</Text>
+											<Ionicons
+												name="open-outline"
+												size={16}
+												color={colors.mutedForeground}
+											/>
+										</Pressable>
+										<View
+											style={[styles.divider, { backgroundColor: colors.border }]}
+										/>
+									</Animated.View>
+								)}
+
 								{/* Price History Chart */}
 								<Animated.View entering={sectionEntering(4)}>
 									<ProGate style={styles.sheetSection}>
@@ -1640,7 +1692,7 @@ export default function CardDetail() {
 												/>
 											</View>
 										) : chartData.length > 1 ? (
-											<View>
+											<View style={chartStale ? { opacity: 0.4 } : undefined}>
 												<LineChart.Provider data={chartData}>
 													<View style={styles.chartHoverHeader}>
 														<LineChart.PriceText
@@ -1976,13 +2028,6 @@ const styles = StyleSheet.create({
 		shadowRadius: 18,
 		elevation: 12,
 	},
-	grabber: {
-		width: 38,
-		height: 5,
-		borderRadius: 3,
-		alignSelf: "center",
-		marginBottom: 6,
-	},
 	// A section's breathing room inside the sheet — replaces per-card margins.
 	sheetSection: {
 		paddingHorizontal: 22,
@@ -1991,6 +2036,19 @@ const styles = StyleSheet.create({
 	divider: {
 		height: StyleSheet.hairlineWidth,
 		marginHorizontal: 22,
+	},
+	// Marketplace link-out — a slim tappable row between sheet sections.
+	linkOutRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 10,
+		paddingHorizontal: 22,
+		paddingVertical: 16,
+	},
+	linkOutText: {
+		flex: 1,
+		fontSize: 15,
+		fontWeight: "600",
 	},
 
 	// Value header — the headline price + owned quantity, on the counter lip
