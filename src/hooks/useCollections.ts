@@ -15,7 +15,8 @@ import type { Collection, CollectionCard } from "@/types/collection";
 const STALE_TTL_MS = 24 * 60 * 60 * 1000;
 
 const COLLECTIONS_KEY = ["collections"] as const;
-const COLLECTION_SNAPSHOT_KEY = ["collectionSnapshot"] as const;
+// Must match useCollectionSnapshot.ts (v2: topCards carry set/number).
+const COLLECTION_SNAPSHOT_KEY = ["collectionSnapshot", 2] as const;
 
 interface CollectionRow {
   id: string;

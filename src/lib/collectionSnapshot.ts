@@ -101,6 +101,8 @@ export function buildCollectionSnapshot(
 				productType: card.productType,
 			};
 			if (card.cardImageUrl) entry.imageUrl = card.cardImageUrl;
+			if (card.cardNumber) entry.cardNumber = card.cardNumber;
+			if (card.setName) entry.setName = card.setName;
 			if (card.gradedCompany) entry.gradedCompany = card.gradedCompany;
 			if (card.gradedGrade) entry.gradedGrade = card.gradedGrade;
 			if (card.pricePaid !== undefined && card.pricePaid !== null) {

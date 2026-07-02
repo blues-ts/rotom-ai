@@ -14,6 +14,8 @@ type Suggestion = {
 	prompt: string;
 	// Personalized rows get an accent overline above the label ("YOUR TOP CARD").
 	overline?: string;
+	// Dimmer inline continuation of the label (set name · card number).
+	labelSuffix?: string;
 };
 
 // Shown until the user owns a card worth analyzing.
@@ -34,27 +36,35 @@ export default function ChatSuggestions({
 	const t = useRiverTheme();
 	const { data: snapshot } = useCollectionSnapshot();
 
-	// Personalize the analyze row with the user's most valuable card (top
-	// holding by line value, skipping sealed product) across all collections.
+	// Personalize the analyze row with the user's single most valuable card
+	// across all collections. snapshot.topCards is sorted by line value
+	// (value × qty), so re-rank by unit value and skip sealed product.
 	const suggestions = useMemo<Suggestion[]>(() => {
-		const topCard = snapshot?.topCards.find(
-			(c) => c.productType !== "sealed",
-		);
+		const topCard = snapshot?.topCards
+			.filter((c) => c.productType !== "sealed")
+			.reduce<(typeof snapshot.topCards)[number] | undefined>(
+				(best, c) => (!best || c.value > best.value ? c : best),
+				undefined,
+			);
 		const analyze: Suggestion = topCard
 			? {
 					icon: "chart.line.uptrend.xyaxis",
 					label: `Analyze ${topCard.name}`,
-					prompt: `Do a market analysis on ${topCard.name} from my collection`,
+					prompt: `Do a market analysis on ${topCard.name}${topCard.cardNumber ? ` ${topCard.cardNumber}` : ""}${topCard.setName ? ` from ${topCard.setName}` : ""} in my collection`,
 					overline: "Your top card",
+					labelSuffix:
+						[topCard.setName, topCard.cardNumber]
+							.filter(Boolean)
+							.join(" ") || undefined,
 				}
 			: FALLBACK_ANALYZE;
 		return [
+			analyze,
 			{
 				icon: "chart.bar",
 				label: "What's my collection worth?",
 				prompt: "What's my collection worth right now?",
 			},
-			analyze,
 			{
 				icon: "sparkles",
 				label: "What should I invest in?",
@@ -120,6 +130,12 @@ export default function ChatSuggestions({
 							numberOfLines={1}
 						>
 							{s.label}
+							{s.labelSuffix ? (
+								<Text style={{ color: t.text.secondary }}>
+									{" · "}
+									{s.labelSuffix}
+								</Text>
+							) : null}
 						</Text>
 					</View>
 					<SymbolView

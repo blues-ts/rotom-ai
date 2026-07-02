@@ -25,9 +25,14 @@ interface CollectionCardRow {
 	graded_grade: string | null;
 	quantity: number;
 	price_paid: number | null;
+	card_number: string | null;
+	set_name: string | null;
 }
 
-export const COLLECTION_SNAPSHOT_KEY = ["collectionSnapshot"] as const;
+// v2: topCards gained productType/cardNumber/setName — the bump drops stale
+// persisted snapshots that lack them (staleTime is Infinity, so a same-key
+// cache would never refetch on its own).
+export const COLLECTION_SNAPSHOT_KEY = ["collectionSnapshot", 2] as const;
 
 export function useCollectionSnapshot() {
 	const db = getDatabase();
@@ -69,6 +74,8 @@ export function useCollectionSnapshot() {
 					gradedGrade: row.graded_grade ?? undefined,
 					quantity: row.quantity,
 					pricePaid: row.price_paid ?? undefined,
+					cardNumber: row.card_number ?? undefined,
+					setName: row.set_name ?? undefined,
 				};
 				if (!cardsByCollection[card.collectionId]) {
 					cardsByCollection[card.collectionId] = [];
