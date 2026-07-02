@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { SymbolView } from "expo-symbols";
+import CardPressable from "@/components/CardPressable";
 import { radius, spacing, useRiverTheme } from "@/constants/theme";
 
 interface ChatInputProps {
@@ -70,19 +71,19 @@ export default function ChatInput({
 						/>
 					</Pressable>
 				)}
-				<Pressable
+				<CardPressable
 					onPress={handleSend}
 					disabled={!canSend}
 					accessibilityLabel="Send message"
 					accessibilityRole="button"
-					style={({ pressed }) => [
+					pressScale={0.95}
+					style={[
 						styles.sendButton,
 						{
 							backgroundColor: t.accent,
 							opacity: canSend ? 1 : 0.45,
-							transform: [{ scale: pressed && canSend ? 0.97 : 1 }],
 						},
-						canSend && t.buttonGlow,
+						canSend ? t.buttonGlow : null,
 					]}
 				>
 					<SymbolView
@@ -91,7 +92,7 @@ export default function ChatInput({
 						tintColor="#FFFFFF"
 						weight="semibold"
 					/>
-				</Pressable>
+				</CardPressable>
 			</View>
 		</View>
 	);

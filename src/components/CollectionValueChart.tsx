@@ -116,21 +116,26 @@ function CollectionValueChartInner() {
 		return lttb(sliced, MAX_CHART_POINTS);
 	}, [allHistory, period]);
 
-	const { current, delta, deltaPct } = useMemo(() => {
+	const { current, delta, deltaPct, hasBaseline } = useMemo(() => {
 		if (data.length === 0) {
-			return { current: 0, delta: 0, deltaPct: 0 };
+			return { current: 0, delta: 0, deltaPct: 0, hasBaseline: false };
 		}
 		const last = data[data.length - 1].value;
 		const first = data[0].value;
 		const d = last - first;
-		const pct = first > 0 ? (d / first) * 100 : 0;
-		return { current: last, delta: d, deltaPct: pct };
+		// Growth from a $0 baseline is undefined, not 0% — flag it so the
+		// label can omit the percentage instead of claiming "0.0%".
+		const hasBaseline = first > 0;
+		const pct = hasBaseline ? (d / first) * 100 : 0;
+		return { current: last, delta: d, deltaPct: pct, hasBaseline };
 	}, [data]);
 
 	const up = delta >= 0;
 	const deltaColor = up ? t.gain : t.loss;
 	const deltaSign = up ? "+" : "−";
-	const deltaText = `${deltaSign}${formatCurrency(Math.abs(delta))} (${Math.abs(deltaPct).toFixed(1)}%) ${PERIOD_LABELS[period]}`;
+	const deltaText = `${deltaSign}${formatCurrency(Math.abs(delta))}${
+		hasBaseline ? ` (${Math.abs(deltaPct).toFixed(1)}%)` : ""
+	} ${PERIOD_LABELS[period]}`;
 
 	return (
 		<ProGate ctaText="Unlock portfolio tracking" style={styles.container}>

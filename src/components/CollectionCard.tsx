@@ -7,9 +7,9 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import CardPressable from "@/components/CardPressable";
 
 // Fixed thumbnail size based on a 4-card layout so 1–3 card collections
-// don't stretch their thumbnails. Math: screen - sheet padding (16*2) -
-// card padding (16*2) - 3 gaps of 8 = screen - 88, divided by 4 cards.
-const THUMB_WIDTH = (Dimensions.get("window").width - 88) / 4;
+// don't stretch their thumbnails. Math: screen padding (20*2) - card
+// padding (16*2) - 3 gaps of 8 = screen - 96, divided by 4 cards.
+const THUMB_WIDTH = (Dimensions.get("window").width - 96) / 4;
 // Card art is always TCG ratio (63:88), never cropped.
 const THUMB_HEIGHT = THUMB_WIDTH * (88 / 63);
 
@@ -37,12 +37,12 @@ export default function CollectionCard({
 				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 				onPress?.();
 			}}
+			pressScale={0.98}
+			baseColor={t.glass.surfaceFill}
+			pressedColor={t.glass.pressedFill}
 			style={[
 				styles.container,
-				{
-					backgroundColor: t.glass.surfaceFill,
-					borderColor: t.glass.surfaceBorder,
-				},
+				{ borderColor: t.glass.surfaceBorder },
 				t.glass.shadow,
 			]}
 		>

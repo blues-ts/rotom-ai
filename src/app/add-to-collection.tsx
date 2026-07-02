@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import CardPressable from "@/components/CardPressable";
 import * as Haptics from "expo-haptics";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { SymbolView } from "expo-symbols";
@@ -197,19 +198,12 @@ export default function AddToCollection() {
           <Text style={[styles.emptyText, { color: t.text.secondary }]}>
             No collections yet — create one to add this card.
           </Text>
-          <Pressable
+          <CardPressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push("/create-collection");
             }}
-            style={({ pressed }) => [
-              styles.createButton,
-              {
-                backgroundColor: t.accent,
-                transform: [{ scale: pressed ? 0.97 : 1 }],
-              },
-              t.buttonGlow,
-            ]}
+            style={[styles.createButton, { backgroundColor: t.accent }, t.buttonGlow]}
           >
             <SymbolView
               name="plus"
@@ -218,14 +212,14 @@ export default function AddToCollection() {
               weight="semibold"
             />
             <Text style={styles.createButtonText}>Create Collection</Text>
-          </Pressable>
+          </CardPressable>
         </View>
       ) : (
         <View style={styles.list}>
           {collections.map((collection) => {
             const added = addedId === collection.id;
             return (
-              <Pressable
+              <CardPressable
                 key={collection.id}
                 onPress={() =>
                   isBatch
@@ -233,17 +227,16 @@ export default function AddToCollection() {
                     : handleSelect(collection.id)
                 }
                 disabled={!!addedId}
-                style={({ pressed }) => [
+                pressScale={0.98}
+                baseColor={added ? undefined : t.glass.elevatedFill}
+                pressedColor={added ? undefined : t.glass.pressedFill}
+                style={[
                   styles.collectionRow,
                   {
-                    backgroundColor: added
-                      ? t.accentIconFill
-                      : pressed
-                        ? t.glass.pressedFill
-                        : t.glass.elevatedFill,
                     borderColor: added ? t.accent : t.glass.elevatedBorder,
                     borderWidth: added ? 2 : 1,
                   },
+                  added ? { backgroundColor: t.accentIconFill } : null,
                 ]}
               >
                 <View style={styles.collectionInfo}>
@@ -267,7 +260,7 @@ export default function AddToCollection() {
                   tintColor={added ? t.accentOn : t.text.tertiary}
                   weight="semibold"
                 />
-              </Pressable>
+              </CardPressable>
             );
           })}
         </View>

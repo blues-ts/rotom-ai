@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { Dimensions, StyleSheet, Text, View } from "react-native";
+import { Dimensions, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, {
 	interpolate,
 	useAnimatedStyle,
@@ -172,7 +172,12 @@ export default function ConfigureCard() {
 				}}
 			/>
 
-			<View style={styles.content}>
+			{/* Scrolls when the option set outgrows the 0.6 detent (many variants
+			    or grade ladders); scrolling at the edge expands the sheet. */}
+			<ScrollView
+				contentContainerStyle={styles.content}
+				showsVerticalScrollIndicator={false}
+			>
 				{variantNames.length > 1 && (
 					<View style={styles.block}>
 						<ToggleLabel>Variant</ToggleLabel>
@@ -248,7 +253,7 @@ export default function ConfigureCard() {
 						/>
 					</View>
 				)}
-			</View>
+			</ScrollView>
 		</View>
 	);
 }

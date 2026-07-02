@@ -3,7 +3,7 @@ import { SymbolView } from "expo-symbols";
 import { router } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { typeScale, useRiverTheme } from "@/constants/theme";
+import { spacing, useRiverTheme } from "@/constants/theme";
 import { useAutoRefreshStalePrices, useCollections } from "@/hooks/useCollections";
 import { recordCollectionValueSnapshot } from "@/lib/collectionValueHistory";
 import CollectionCard from "@/components/CollectionCard";
@@ -39,7 +39,10 @@ export default function Collections() {
 			<ScrollView
 				contentContainerStyle={[
 					styles.content,
-					{ paddingTop: insets.top + 52 },
+					{
+						paddingTop: insets.top + 52,
+						paddingBottom: 40 + insets.bottom,
+					},
 				]}
 				showsVerticalScrollIndicator={false}
 				refreshControl={
@@ -85,48 +88,35 @@ export default function Collections() {
 					)
 				) : (
 					<>
-						{/* Portfolio chart is the hero on the stage — the collections
-						    rest on the glass counter below, like the card detail screen. */}
+						{/* Per mock 2a/3b: the chart card and each collection card are
+						    siblings resting directly on the deep-water gradient — no
+						    sheet or section wrapper in between. */}
 						<CollectionValueChart />
-						<View
-							style={[
-								styles.sheet,
-								{
-									backgroundColor: t.glass.surfaceFill,
-									borderColor: t.glass.surfaceBorder,
-									paddingBottom: 40 + insets.bottom,
-								},
-							]}
+						<Animated.View
+							style={styles.list}
+							layout={LinearTransition.duration(300)}
 						>
-							<Text style={[styles.sheetTitle, { color: t.text.secondary }]}>
-								Collections
-							</Text>
-							<Animated.View
-								style={styles.list}
-								layout={LinearTransition.duration(300)}
-							>
-								{collections.map((c) => (
-									<Animated.View
-										key={c.id}
-										entering={FadeIn.duration(300)}
-										exiting={FadeOut.duration(200)}
-										layout={LinearTransition.duration(300)}
-									>
-										<CollectionCard
-											name={c.name}
-											cardCount={c.cardCount}
-											totalValue={c.totalValue}
-											cardImages={c.cardImages}
-											onPress={() =>
-												router.push(
-													`/collection-detail?id=${c.id}&name=${encodeURIComponent(c.name)}&totalValue=${c.totalValue}&cardCount=${c.cardCount}`,
-												)
-											}
-										/>
-									</Animated.View>
-								))}
-							</Animated.View>
-						</View>
+							{collections.map((c) => (
+								<Animated.View
+									key={c.id}
+									entering={FadeIn.duration(300)}
+									exiting={FadeOut.duration(200)}
+									layout={LinearTransition.duration(300)}
+								>
+									<CollectionCard
+										name={c.name}
+										cardCount={c.cardCount}
+										totalValue={c.totalValue}
+										cardImages={c.cardImages}
+										onPress={() =>
+											router.push(
+												`/collection-detail?id=${c.id}&name=${encodeURIComponent(c.name)}&totalValue=${c.totalValue}&cardCount=${c.cardCount}`,
+											)
+										}
+									/>
+								</Animated.View>
+							))}
+						</Animated.View>
 					</>
 				)}
 			</ScrollView>
@@ -139,37 +129,15 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 	content: {
-		// Full-bleed so the sheet reaches the screen edges; children pad
-		// themselves. Grow to the viewport so the sheet stretches to the bottom.
+		// Grow to the viewport so the empty state can center itself.
 		flexGrow: 1,
 	},
-
-	// The counter — a glass surface rising beneath the chart hero, holding the
-	// collections (mirrors the card detail sheet).
-	sheet: {
-		borderTopLeftRadius: 28,
-		borderTopRightRadius: 28,
-		borderTopWidth: StyleSheet.hairlineWidth,
-		marginTop: 18,
-		paddingTop: 22,
-		paddingHorizontal: 16,
-		// Fill the remaining height below the chart when the list is short.
-		flexGrow: 1,
-		// Lift the lip off the stage so the chart reads as floating above it.
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: -8 },
-		shadowOpacity: 0.22,
-		shadowRadius: 18,
-		elevation: 12,
-	},
-	// Every section header is an overline.
-	sheetTitle: {
-		...typeScale.overline,
-		marginBottom: 12,
-		paddingHorizontal: 6,
-	},
+	// Collection cards rest directly on the gradient (mock 2a/3b) — the chart
+	// hero above pads itself, so the horizontal inset lives here.
 	list: {
-		gap: 12,
+		gap: 14,
+		marginTop: 18,
+		paddingHorizontal: spacing.screen,
 	},
 	statePad: {
 		flex: 1,

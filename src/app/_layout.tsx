@@ -1,4 +1,5 @@
 import AuthSync from "@/components/AuthSync";
+import { HeaderBackButton } from "@/components/HeaderBackButton";
 import { SheetDoneButton } from "@/components/SheetDoneButton";
 import { usePrefetchExpansions } from "@/hooks/usePrefetchExpansions";
 import { queryClient } from "@/config/queryClient";
@@ -159,6 +160,7 @@ function AppContent() {
 							headerStyle: { backgroundColor: "transparent" },
 							headerTintColor: t.accentOn,
 							headerShadowVisible: false,
+							headerLeft: () => <HeaderBackButton />,
 							headerRight: () => (
 								<Pressable
 									onPress={() => {
@@ -191,6 +193,7 @@ function AppContent() {
 						headerStyle: { backgroundColor: "transparent" },
 						headerTintColor: t.accentOn,
 						headerShadowVisible: false,
+						headerLeft: () => <HeaderBackButton />,
 					}}
 				/>
 				<Stack.Screen
@@ -282,6 +285,7 @@ function AppContent() {
 						headerStyle: { backgroundColor: colors.background },
 						headerTintColor: t.accentOn,
 						headerShadowVisible: false,
+						headerLeft: () => <HeaderBackButton />,
 					}}
 				/>
 			</Stack>

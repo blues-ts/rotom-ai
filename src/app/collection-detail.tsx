@@ -537,14 +537,23 @@ export default function CollectionDetail() {
 		<>
 			<Stack.Screen
 				options={{
-					// Static title from a route param + no inline headerStyle —
-					// matches set-detail's transparent header exactly so content
-					// layout is stable on mount (no pop).
-					headerTitle: selectMode
-						? selected.size > 0
-							? `${selected.size} Selected`
-							: "Select cards"
-						: (nameParam ?? collection?.name ?? ""),
+					// Custom title view: iOS 26 centers short native titles but leads
+					// long ones, so a stretched left-aligned Text keeps the name
+					// consistently beside the back button. Query name first so a
+					// rename shows immediately; the route param covers the first
+					// frames before the query resolves (stable mount, no pop).
+					headerTitle: () => (
+						<Text
+							numberOfLines={1}
+							style={[styles.headerTitle, { color: t.accentOn }]}
+						>
+							{selectMode
+								? selected.size > 0
+									? `${selected.size} Selected`
+									: "Select cards"
+								: (collection?.name ?? nameParam ?? "")}
+						</Text>
+					),
 					headerBackButtonDisplayMode: "minimal",
 					headerRight: () =>
 						selectMode ? (
@@ -793,6 +802,13 @@ export default function CollectionDetail() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
+	},
+	// Fills the title slot between the bar items so the text pins left
+	// instead of centering.
+	headerTitle: {
+		...typeScale.screenTitle,
+		width: "100%",
+		textAlign: "left",
 	},
 	headerRight: {
 		flexDirection: "row",

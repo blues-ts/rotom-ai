@@ -330,14 +330,11 @@ export default function ScanLibraryScreen() {
 					style={[styles.addAllWrap, { paddingBottom: insets.bottom + 12 }]}
 					pointerEvents="box-none"
 				>
-					<Pressable
+					<CardPressable
 						onPress={handleAddAll}
-						style={({ pressed }) => [
+						style={[
 							styles.addAllButton,
-							{
-								backgroundColor: t.accent,
-								transform: [{ scale: pressed ? 0.97 : 1 }],
-							},
+							{ backgroundColor: t.accent },
 							t.buttonGlow,
 						]}
 					>
@@ -350,7 +347,7 @@ export default function ScanLibraryScreen() {
 						<Text style={styles.addAllText}>
 							Add {count} to collection
 						</Text>
-					</Pressable>
+					</CardPressable>
 				</View>
 			)}
 		</View>
@@ -376,7 +373,8 @@ const styles = StyleSheet.create({
 		textAlign: "center",
 		fontSize: 12,
 		fontWeight: "500",
-		marginTop: -6,
+		// Clear the transparent header above so it doesn't sit in its shadow.
+		marginTop: 8,
 		marginBottom: 6,
 	},
 	addAllWrap: {

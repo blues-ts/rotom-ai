@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import CardPressable from "@/components/CardPressable";
 import * as Haptics from "expo-haptics";
 import { typeScale, useRiverTheme } from "@/constants/theme";
 
@@ -36,9 +37,13 @@ function Chip({
 }) {
 	const t = useRiverTheme();
 	return (
-		<Pressable
+		<CardPressable
 			hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-			style={({ pressed }) => [
+			// Selection chip: brightens on the shared press curve, no scale.
+			pressScale={1}
+			baseColor={active ? undefined : t.glass.elevatedFill}
+			pressedColor={active ? undefined : t.glass.pressedFill}
+			style={[
 				styles.togglePill,
 				// Fixed basis, no grow: chips keep the same width even when a row
 				// isn't full (e.g. a card with only two grade options).
@@ -46,9 +51,6 @@ function Chip({
 				active
 					? { backgroundColor: t.accent }
 					: {
-							backgroundColor: pressed
-								? t.glass.pressedFill
-								: t.glass.elevatedFill,
 							borderWidth: 1,
 							borderColor: t.glass.elevatedBorder,
 						},
@@ -66,7 +68,7 @@ function Chip({
 			>
 				{label}
 			</Text>
-		</Pressable>
+		</CardPressable>
 	);
 }
 

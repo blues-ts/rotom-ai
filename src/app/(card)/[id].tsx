@@ -792,6 +792,15 @@ export default function CardDetail() {
 	// Determine if graded tab is available
 	const hasGraded = gradedCompanies.length > 0;
 
+	// A variant switch can land on a variant with no graded pricing while the
+	// Graded tab is active — the sheet hides the tab bar then, so without this
+	// the hero would be stranded on "—" with no way back.
+	useEffect(() => {
+		if (!hasGraded && pricingTab === "Graded") {
+			setPricingTab("Raw");
+		}
+	}, [hasGraded, pricingTab, setPricingTab]);
+
 	// Get current prices
 	const rawPrice =
 		card && variant

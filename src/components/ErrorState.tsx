@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import * as Haptics from "expo-haptics";
+import CardPressable from "@/components/CardPressable";
 import { useRiverTheme } from "@/constants/theme";
 
 export default function ErrorState({
@@ -29,15 +30,13 @@ export default function ErrorState({
 				{message}
 			</Text>
 			{onRetry ? (
-				<Pressable
-					style={({ pressed }) => [
+				<CardPressable
+					pressScale={0.96}
+					baseColor={t.glass.elevatedFill}
+					pressedColor={t.glass.pressedFill}
+					style={[
 						styles.retryButton,
-						{
-							backgroundColor: pressed
-								? t.glass.pressedFill
-								: t.glass.elevatedFill,
-							borderColor: t.glass.elevatedBorder,
-						},
+						{ borderColor: t.glass.elevatedBorder },
 					]}
 					onPress={() => {
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -53,7 +52,7 @@ export default function ErrorState({
 					<Text style={[styles.retryText, { color: t.text.primary }]}>
 						Try Again
 					</Text>
-				</Pressable>
+				</CardPressable>
 			) : null}
 		</View>
 	);

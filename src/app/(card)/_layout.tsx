@@ -49,7 +49,8 @@ export default function CardLayout() {
 					name="configure"
 					options={{
 						presentation: "formSheet",
-						sheetAllowedDetents: [0.6],
+						sheetAllowedDetents: [0.6, 1.0],
+						sheetExpandsWhenScrolledToEdge: true,
 						sheetGrabberVisible: true,
 						// Bottom sheets get the larger 28pt top radius.
 						sheetCornerRadius: 28,

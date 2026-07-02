@@ -249,7 +249,15 @@ export function getConditionOptions(card: ScrydexCard, variant: string): string[
   for (const v of card.variants ?? []) {
     if (v.name !== variant) continue;
     for (const price of v.prices ?? []) {
-      if (price.type === "raw" && isUsableRow(price)) found.add(price.condition);
+      // priceValue check: a row can pass isUsableRow yet carry no numbers at
+      // all — offering it would select a condition selectPrice can't resolve.
+      if (
+        price.type === "raw" &&
+        isUsableRow(price) &&
+        priceValue(price) !== undefined
+      ) {
+        found.add(price.condition);
+      }
     }
   }
   return CONDITION_ORDER.filter((c) => found.has(c));
@@ -265,6 +273,9 @@ export function getGradedOptions(
     if (v.name !== variant) continue;
     for (const price of v.prices ?? []) {
       if (price.type !== "graded" || !isUsableRow(price)) continue;
+      // Skip rows with no numeric data — they'd offer a grade that
+      // selectPrice can't resolve, stranding the UI on "—".
+      if (priceValue(price) === undefined) continue;
       const company = price.company.toUpperCase();
       if (!byCompany.has(company)) byCompany.set(company, new Set());
       byCompany.get(company)!.add(price.grade);

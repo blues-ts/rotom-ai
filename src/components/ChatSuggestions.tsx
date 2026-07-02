@@ -1,8 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
+import CardPressable from "@/components/CardPressable";
 import { spacing, typeScale, useRiverTheme } from "@/constants/theme";
 
 type Suggestion = {
@@ -60,19 +61,19 @@ export default function ChatSuggestions({
 			style={styles.list}
 		>
 			{SUGGESTIONS.map((s) => (
-				<Pressable
+				<CardPressable
 					key={s.label}
 					onPress={() => handlePress(s.prompt)}
 					disabled={disabled}
 					accessibilityRole="button"
 					accessibilityLabel={s.label}
 					hitSlop={4}
-					style={({ pressed }) => [
+					pressScale={0.98}
+					baseColor={t.glass.surfaceFill}
+					pressedColor={t.glass.pressedFill}
+					style={[
 						styles.card,
 						{
-							backgroundColor: pressed
-								? t.glass.pressedFill
-								: t.glass.surfaceFill,
 							borderColor: t.glass.surfaceBorder,
 							opacity: disabled ? 0.5 : 1,
 						},
@@ -108,7 +109,7 @@ export default function ChatSuggestions({
 						tintColor={t.text.tertiary}
 						weight="semibold"
 					/>
-				</Pressable>
+				</CardPressable>
 			))}
 		</Animated.View>
 	);

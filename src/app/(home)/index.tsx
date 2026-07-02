@@ -1,5 +1,12 @@
-import { useEffect, useRef } from "react";
-import { Alert, InteractionManager, StyleSheet, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+	Alert,
+	InteractionManager,
+	Keyboard,
+	Pressable,
+	StyleSheet,
+	View,
+} from "react-native";
 
 import { router, Stack, useLocalSearchParams } from "expo-router";
 
@@ -10,7 +17,7 @@ import Animated, {
 	useAnimatedStyle,
 } from "react-native-reanimated";
 import {
-	KeyboardAvoidingView,
+	KeyboardEvents,
 	useReanimatedKeyboardAnimation,
 } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,13 +36,36 @@ export default function Home() {
 	const t = useRiverTheme();
 	const { bottom } = useSafeAreaInsets();
 	const chatListRef = useRef<ChatMessageListRef>(null);
-	const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
+	const { height: keyboardHeight, progress: keyboardProgress } =
+		useReanimatedKeyboardAnimation();
 
 	// Auto-send the question when arriving via "Chat about this card" on the
 	// card detail screen. Waits for any in-flight stream to finish (sendMessage
 	// no-ops while streaming), and clears the param only once sent so the same
 	// card can be asked about again later.
 	const { chatPrefill } = useLocalSearchParams<{ chatPrefill?: string }>();
+
+	// The suggestion cards fade with the keyboard's own animation progress —
+	// they stay mounted so the hero above never re-centers (no layout jump),
+	// but go untappable while hidden. Will-events flip the state early enough
+	// that pointerEvents is off before the fade lands.
+	const [keyboardShown, setKeyboardShown] = useState(false);
+	useEffect(() => {
+		const show = KeyboardEvents.addListener("keyboardWillShow", () =>
+			setKeyboardShown(true),
+		);
+		const hide = KeyboardEvents.addListener("keyboardWillHide", () =>
+			setKeyboardShown(false),
+		);
+		return () => {
+			show.remove();
+			hide.remove();
+		};
+	}, []);
+
+	const emptyFadeStyle = useAnimatedStyle(() => ({
+		opacity: 1 - keyboardProgress.value,
+	}));
 
 	// Warm the ~66 MB on-device scanner index once we're home — deferred until
 	// after the entry transition/animations settle so the heavy native load never
@@ -54,6 +84,15 @@ export default function Home() {
 			[bottom, 4],
 			"clamp",
 		),
+	}));
+
+	// Keyboard avoidance driven straight off the shared value instead of
+	// RNKC's <KeyboardAvoidingView> — its internal state could stay stuck
+	// padded when a keyboard hide landed mid-navigation, leaving the input
+	// floating mid-screen after navigating back. The shared value always
+	// settles to 0, so this self-heals by construction.
+	const keyboardPadStyle = useAnimatedStyle(() => ({
+		paddingBottom: Math.max(0, -keyboardHeight.value),
 	}));
 
 	const {
@@ -144,17 +183,42 @@ export default function Home() {
 				/>
 			</Stack.Toolbar>
 
-			{/* Chat Area */}
-			<KeyboardAvoidingView
-				style={styles.flex}
-				behavior="padding"
-				keyboardVerticalOffset={0}
-			>
-				{messages.length === 0 && !isStreaming ? (
-					<View style={styles.emptyWrap}>
+			{/* Empty-state hero + suggestions live OUTSIDE the keyboard-avoiding
+			    layout and fade out as one with the keyboard's progress — nothing
+			    re-lays-out, so nothing can stutter. (Compensating the KAV squeeze
+			    with a transform jittered: layout and transform updates land on
+			    different frames.) */}
+			{messages.length === 0 && !isStreaming && (
+				<>
+					<Animated.View
+						style={[
+							styles.emptyLayer,
+							{ paddingBottom: bottom + 56 },
+							emptyFadeStyle,
+						]}
+						pointerEvents={keyboardShown ? "none" : "box-none"}
+					>
 						<EmptyChat />
 						<ChatSuggestions onSelect={sendMessage} />
-					</View>
+					</Animated.View>
+					{/* While typing, anywhere above the input dismisses. */}
+					{keyboardShown && (
+						<Pressable
+							style={styles.dismissLayer}
+							onPress={Keyboard.dismiss}
+						/>
+					)}
+				</>
+			)}
+
+			{/* Chat Area — box-none so taps in the empty region reach the hero
+			    layer behind (its Pressable dismisses the keyboard). */}
+			<Animated.View
+				style={[styles.flex, keyboardPadStyle]}
+				pointerEvents="box-none"
+			>
+				{messages.length === 0 && !isStreaming ? (
+					<View style={styles.flex} pointerEvents="box-none" />
 				) : (
 					<View style={styles.flex}>
 						<ChatMessageList
@@ -174,7 +238,7 @@ export default function Home() {
 					onFocus={handleInputFocus}
 				/>
 				<Animated.View style={bottomSpacerStyle} />
-			</KeyboardAvoidingView>
+			</Animated.View>
 		</>
 	);
 }
@@ -184,9 +248,24 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 	// Center the empty-state hero + suggestion cards as a single group so the
-	// cards sit directly under the tagline rather than at the bottom of the screen.
-	emptyWrap: {
-		flex: 1,
+	// cards sit directly under the tagline rather than at the bottom of the
+	// screen. Absolute so the keyboard-avoiding layout never squeezes it —
+	// paddingBottom (added inline) mirrors the input block it sits above.
+	emptyLayer: {
+		position: "absolute",
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
 		justifyContent: "center",
+	},
+	// Sits behind the (box-none) chat area, so the input stays tappable while
+	// every other touch lands here.
+	dismissLayer: {
+		position: "absolute",
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
 	},
 });
