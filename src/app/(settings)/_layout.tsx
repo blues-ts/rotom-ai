@@ -1,9 +1,7 @@
-import { useTheme } from "@/context/ThemeContext";
-import { Redirect, Stack } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
+import { Redirect, Stack } from "expo-router";
 
 export default function SettingsLayout() {
-	const { colors } = useTheme();
 	const { isSignedIn, isLoaded } = useAuth();
 
 	if (!isLoaded) return null;
@@ -11,12 +9,5 @@ export default function SettingsLayout() {
 		return <Redirect href="/(auth)" />;
 	}
 
-	return (
-		<Stack
-			screenOptions={{
-				headerShown: false,
-				contentStyle: { backgroundColor: colors.background },
-			}}
-		/>
-	);
+	return <Stack screenOptions={{ headerShown: false }} />;
 }

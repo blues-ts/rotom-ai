@@ -10,7 +10,6 @@ import {
 } from "react-native";
 import Animated, {
 	FadeIn,
-	FadeInDown,
 	FadeOut,
 	runOnJS,
 	useAnimatedStyle,
@@ -19,6 +18,7 @@ import Animated, {
 	withSequence,
 	withTiming,
 } from "react-native-reanimated";
+import { cardWaterfall } from "@/lib/waterfall";
 import { SymbolView } from "expo-symbols";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, Stack } from "expo-router";
@@ -274,7 +274,7 @@ function SetsBrowser({
 				<Animated.View
 					entering={
 						firstAppearance
-							? FadeInDown.delay(Math.min(index * 22, 200)).duration(240)
+							? cardWaterfall(index)
 							: undefined
 					}
 				>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { PRIVACY_URL, TERMS_URL } from "@/constants/links";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { useToast } from "@/context/ToastContext";
-import { useTheme } from "@/context/ThemeContext";
+import { radius, spacing, typeScale, useRiverTheme } from "@/constants/theme";
 import { useApi } from "@/lib/axios";
 import {
 	isRevenueCatConfigured,
@@ -14,28 +14,145 @@ import {
 	seedCollectionValueHistory,
 } from "@/lib/collectionValueHistory";
 import { resetTapHoldHint } from "@/hooks/useTapHoldHint";
+import CardPressable from "@/components/CardPressable";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
+import { SymbolView, type SFSymbol } from "expo-symbols";
 import Purchases from "react-native-purchases";
 import RevenueCatUI from "react-native-purchases-ui";
 import {
 	Alert,
 	Linking,
-	Pressable,
 	ScrollView,
 	StyleSheet,
 	Text,
 	View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+function SettingsCard({ children }: { children: React.ReactNode }) {
+	const t = useRiverTheme();
+	return (
+		<View
+			style={[
+				styles.card,
+				{
+					backgroundColor: t.glass.surfaceFill,
+					borderColor: t.glass.surfaceBorder,
+				},
+				t.glass.shadow,
+			]}
+		>
+			{children}
+		</View>
+	);
+}
+
+function RowContent({
+	icon,
+	label,
+	labelColor,
+	value,
+	valueColor,
+	trailingIcon,
+}: {
+	icon?: SFSymbol;
+	label: string;
+	labelColor?: string;
+	value?: string;
+	valueColor?: string;
+	trailingIcon?: SFSymbol;
+}) {
+	const t = useRiverTheme();
+	return (
+		<>
+			{icon ? (
+				<View
+					style={[styles.iconChip, { backgroundColor: t.accentIconFill }]}
+				>
+					<SymbolView
+						name={icon}
+						size={18}
+						tintColor={t.accentOn}
+						weight="medium"
+					/>
+				</View>
+			) : null}
+			<Text
+				style={[styles.label, { color: labelColor ?? t.text.primary }]}
+				numberOfLines={1}
+			>
+				{label}
+			</Text>
+			{value ? (
+				<Text
+					style={[styles.value, { color: valueColor ?? t.text.secondary }]}
+					numberOfLines={1}
+				>
+					{value}
+				</Text>
+			) : null}
+			{trailingIcon ? (
+				<SymbolView
+					name={trailingIcon}
+					size={14}
+					tintColor={t.text.tertiary}
+					weight="semibold"
+				/>
+			) : null}
+		</>
+	);
+}
+
+function SettingsRow({
+	onPress,
+	last = false,
+	...content
+}: {
+	onPress?: () => void;
+	last?: boolean;
+} & Parameters<typeof RowContent>[0]) {
+	const t = useRiverTheme();
+	const borderStyle = last
+		? null
+		: {
+				borderBottomWidth: StyleSheet.hairlineWidth,
+				borderBottomColor: t.glass.surfaceBorder,
+			};
+
+	if (!onPress) {
+		return (
+			<View style={[styles.row, borderStyle]}>
+				<RowContent {...content} />
+			</View>
+		);
+	}
+	return (
+		<CardPressable
+			onPress={onPress}
+			accessibilityRole="button"
+			accessibilityLabel={content.label}
+			// Rows inside a shared card brighten without scaling (selection-
+			// control convention) — scaling one row inside the card reads wrong.
+			pressScale={1}
+			baseColor={t.isDark ? "rgba(210, 235, 255, 0)" : "rgba(255, 255, 255, 0)"}
+			pressedColor={t.glass.pressedFill}
+			style={[styles.row, borderStyle]}
+		>
+			<RowContent {...content} />
+		</CardPressable>
+	);
+}
 
 export default function Settings() {
 	const { signOut } = useAuth();
 	const { user } = useUser();
-	const { colors } = useTheme();
+	const t = useRiverTheme();
+	const insets = useSafeAreaInsets();
 	const { isPro, refresh } = useRevenueCat();
 	const api = useApi();
 	const queryClient = useQueryClient();
@@ -141,333 +258,197 @@ export default function Settings() {
 	};
 
 	return (
-		<SafeAreaView
-			style={[styles.container, { backgroundColor: colors.background }]}
-			edges={["bottom"]}
-		>
-			<ScrollView contentContainerStyle={styles.content}>
-				{/* Account Section */}
+		<View style={styles.container}>
+			{/* Deep-water gradient — the one background every screen shares. */}
+			<LinearGradient
+				colors={t.background.colors}
+				locations={t.background.locations}
+				pointerEvents="none"
+				style={StyleSheet.absoluteFill}
+			/>
+			<ScrollView
+				contentContainerStyle={[
+					styles.content,
+					{
+						paddingTop: insets.top + 52 + 8,
+						paddingBottom: 40 + insets.bottom,
+					},
+				]}
+				showsVerticalScrollIndicator={false}
+			>
+				{/* Account */}
 				<View style={styles.section}>
-					<Text
-						style={[
-							styles.sectionTitle,
-							{ color: colors.mutedForeground },
-						]}
-					>
+					<Text style={[styles.overline, { color: t.text.secondary }]}>
 						Account
 					</Text>
-					<View
-						style={[styles.card, { backgroundColor: colors.card }]}
-					>
-						<View
-							style={[
-								styles.row,
-								{ borderBottomColor: colors.border },
-							]}
-						>
-							<Text
-								style={[
-									styles.label,
-									{ color: colors.foreground },
-								]}
-							>
-								Email
-							</Text>
-							<Text
-								style={[
-									styles.value,
-									{ color: colors.mutedForeground },
-								]}
-							>
-								{user?.primaryEmailAddress?.emailAddress ?? "—"}
-							</Text>
-						</View>
-						<View style={styles.row}>
-							<Text
-								style={[
-									styles.label,
-									{ color: colors.foreground },
-								]}
-							>
-								Name
-							</Text>
-							<Text
-								style={[
-									styles.value,
-									{ color: colors.mutedForeground },
-								]}
-							>
-								{user?.fullName ?? "—"}
-							</Text>
-						</View>
-					</View>
+					<SettingsCard>
+						<SettingsRow
+							icon="envelope"
+							label="Email"
+							value={user?.primaryEmailAddress?.emailAddress ?? "—"}
+						/>
+						<SettingsRow
+							icon="person"
+							label="Name"
+							value={user?.fullName ?? "—"}
+							last
+						/>
+					</SettingsCard>
 				</View>
 
-				{/* Subscription Section */}
+				{/* Subscription */}
 				<View style={styles.section}>
-					<Text
-						style={[
-							styles.sectionTitle,
-							{ color: colors.mutedForeground },
-						]}
-					>
+					<Text style={[styles.overline, { color: t.text.secondary }]}>
 						Subscription
 					</Text>
-					<View style={[styles.card, { backgroundColor: colors.card }]}>
-						<Pressable
-							style={[
-								styles.row,
-								{ borderBottomColor: colors.border },
-							]}
+					<SettingsCard>
+						<SettingsRow
+							icon="crown"
+							label={isPro ? "Manage subscription" : "Upgrade to River AI Pro"}
+							value={isPro ? "Pro" : "Free"}
+							valueColor={isPro ? t.accentOn : t.text.secondary}
+							trailingIcon="chevron.right"
 							onPress={isPro ? handleManageSubscription : handleUpgrade}
-						>
-							<Text
-								style={[styles.label, { color: colors.foreground }]}
-							>
-								{isPro ? "Manage subscription" : "Upgrade to River AI Pro"}
-							</Text>
-							<Text
-								style={[
-									styles.value,
-									{ color: isPro ? colors.primary : colors.mutedForeground },
-								]}
-							>
-								{isPro ? "Pro" : "Free"}
-							</Text>
-						</Pressable>
-						<Pressable style={styles.row} onPress={handleRestore}>
-							<Text
-								style={[styles.label, { color: colors.foreground }]}
-							>
-								Restore purchases
-							</Text>
-						</Pressable>
-					</View>
+						/>
+						<SettingsRow
+							icon="arrow.clockwise"
+							label="Restore purchases"
+							trailingIcon="chevron.right"
+							onPress={handleRestore}
+							last
+						/>
+					</SettingsCard>
 				</View>
 
 				{/* Legal */}
 				<View style={styles.section}>
-					<Text
-						style={[
-							styles.sectionTitle,
-							{ color: colors.mutedForeground },
-						]}
-					>
+					<Text style={[styles.overline, { color: t.text.secondary }]}>
 						Legal
 					</Text>
-					<View style={[styles.card, { backgroundColor: colors.card }]}>
-						<Pressable
-							style={[
-								styles.row,
-								{ borderBottomColor: colors.border },
-							]}
+					<SettingsCard>
+						<SettingsRow
+							icon="doc.text"
+							label="Terms of Service"
+							trailingIcon="arrow.up.right"
 							onPress={() => Linking.openURL(TERMS_URL)}
-						>
-							<Text
-								style={[styles.label, { color: colors.foreground }]}
-							>
-								Terms of Service
-							</Text>
-						</Pressable>
-						<Pressable
-							style={styles.row}
+						/>
+						<SettingsRow
+							icon="hand.raised"
+							label="Privacy Policy"
+							trailingIcon="arrow.up.right"
 							onPress={() => Linking.openURL(PRIVACY_URL)}
-						>
-							<Text
-								style={[styles.label, { color: colors.foreground }]}
-							>
-								Privacy Policy
-							</Text>
-						</Pressable>
-					</View>
+							last
+						/>
+					</SettingsCard>
 				</View>
 
 				{/* Sign Out */}
-				<View style={styles.section}>
-					<Pressable
-						style={[
-							styles.signOutButton,
-							{ backgroundColor: colors.card },
-						]}
-						onPress={handleSignOut}
-					>
-						<Text
-							style={[
-								styles.signOutText,
-								{ color: colors.destructive },
-							]}
-						>
-							Sign Out
-						</Text>
-					</Pressable>
-				</View>
+				<CardPressable
+					onPress={handleSignOut}
+					accessibilityRole="button"
+					accessibilityLabel="Sign Out"
+					pressScale={0.98}
+					baseColor={t.glass.surfaceFill}
+					pressedColor={t.glass.pressedFill}
+					style={[
+						styles.actionButton,
+						{ borderColor: t.glass.surfaceBorder },
+						t.glass.shadow,
+					]}
+				>
+					<Text style={[styles.actionText, { color: t.loss }]}>Sign Out</Text>
+				</CardPressable>
 
 				{/* Delete Account */}
-				<View style={styles.section}>
-					<Pressable
-						style={[
-							styles.signOutButton,
-							{ backgroundColor: colors.destructive },
-						]}
-						onPress={handleDeleteAccount}
-					>
-						<Text style={[styles.signOutText, { color: "#fff" }]}>
-							Delete Account
-						</Text>
-					</Pressable>
-				</View>
+				<CardPressable
+					onPress={handleDeleteAccount}
+					accessibilityRole="button"
+					accessibilityLabel="Delete Account"
+					pressScale={0.98}
+					baseColor="rgba(248, 113, 113, 0.12)"
+					pressedColor="rgba(248, 113, 113, 0.2)"
+					style={[styles.actionButton, { borderColor: "rgba(248, 113, 113, 0.35)" }]}
+				>
+					<Text style={[styles.actionText, { color: t.loss }]}>
+						Delete Account
+					</Text>
+				</CardPressable>
 
 				{/* Dev Tools */}
 				{__DEV__ && (
 					<View style={styles.section}>
-						<Text
-							style={[
-								styles.sectionTitle,
-								{ color: colors.mutedForeground },
-							]}
-						>
+						<Text style={[styles.overline, { color: t.text.secondary }]}>
 							Dev Tools
 						</Text>
-						<Pressable
-							style={[
-								styles.signOutButton,
-								{ backgroundColor: colors.card },
-							]}
-							onPress={async () => {
-								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-								await SecureStore.deleteItemAsync("onboarding_complete");
-								await signOut();
-								router.replace("/(onboarding)/welcome");
-							}}
-						>
-							<Text
-								style={[
-									styles.label,
-									{ color: colors.foreground },
-								]}
-							>
-								Reset Onboarding
-							</Text>
-						</Pressable>
-						<Pressable
-							style={[
-								styles.signOutButton,
-								{ backgroundColor: colors.card },
-							]}
-							onPress={() => {
-								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-								seedCollectionValueHistory();
-								queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
-							}}
-						>
-							<Text
-								style={[
-									styles.label,
-									{ color: colors.foreground },
-								]}
-							>
-								Seed Test History
-							</Text>
-						</Pressable>
-						<Pressable
-							style={[
-								styles.signOutButton,
-								{ backgroundColor: colors.card },
-							]}
-							onPress={() => {
-								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-								clearCollectionValueHistory();
-								queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
-							}}
-						>
-							<Text
-								style={[
-									styles.label,
-									{ color: colors.foreground },
-								]}
-							>
-								Clear History
-							</Text>
-						</Pressable>
-						<Pressable
-							style={[
-								styles.signOutButton,
-								{ backgroundColor: colors.card },
-							]}
-							onPress={() => {
-								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-								toast.show("Test error toast — something failed.");
-							}}
-						>
-							<Text
-								style={[
-									styles.label,
-									{ color: colors.foreground },
-								]}
-							>
-								Show Error Toast
-							</Text>
-						</Pressable>
-						<Pressable
-							style={[
-								styles.signOutButton,
-								{ backgroundColor: colors.card },
-							]}
-							onPress={() => {
-								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-								toast.show("Test success toast — all good!", "success");
-							}}
-						>
-							<Text
-								style={[
-									styles.label,
-									{ color: colors.foreground },
-								]}
-							>
-								Show Success Toast
-							</Text>
-						</Pressable>
-						<Pressable
-							style={[
-								styles.signOutButton,
-								{ backgroundColor: colors.card },
-							]}
-							onPress={() => {
-								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-								setCrashTest(true);
-							}}
-						>
-							<Text
-								style={[
-									styles.label,
-									{ color: colors.destructive },
-								]}
-							>
-								Trigger Test Crash
-							</Text>
-						</Pressable>
-						<Pressable
-							style={[
-								styles.signOutButton,
-								{ backgroundColor: colors.card },
-							]}
-							onPress={async () => {
-								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-								await resetTapHoldHint();
-								toast.show(
-									"Tap & hold hint reset — open search or a set.",
-									"success",
-								);
-							}}
-						>
-							<Text style={[styles.label, { color: colors.foreground }]}>
-								Reset Tap & Hold Hint
-							</Text>
-						</Pressable>
+						<SettingsCard>
+							<SettingsRow
+								label="Reset Onboarding"
+								onPress={async () => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+									await SecureStore.deleteItemAsync("onboarding_complete");
+									await signOut();
+									router.replace("/(onboarding)/welcome");
+								}}
+							/>
+							<SettingsRow
+								label="Seed Test History"
+								onPress={() => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+									seedCollectionValueHistory();
+									queryClient.invalidateQueries({
+										queryKey: ["collectionValueHistory"],
+									});
+								}}
+							/>
+							<SettingsRow
+								label="Clear History"
+								onPress={() => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+									clearCollectionValueHistory();
+									queryClient.invalidateQueries({
+										queryKey: ["collectionValueHistory"],
+									});
+								}}
+							/>
+							<SettingsRow
+								label="Show Error Toast"
+								onPress={() => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+									toast.show("Test error toast — something failed.");
+								}}
+							/>
+							<SettingsRow
+								label="Show Success Toast"
+								onPress={() => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+									toast.show("Test success toast — all good!", "success");
+								}}
+							/>
+							<SettingsRow
+								label="Reset Tap & Hold Hint"
+								onPress={async () => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+									await resetTapHoldHint();
+									toast.show(
+										"Tap & hold hint reset — open search or a set.",
+										"success",
+									);
+								}}
+							/>
+							<SettingsRow
+								label="Trigger Test Crash"
+								labelColor={t.loss}
+								onPress={() => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+									setCrashTest(true);
+								}}
+								last
+							/>
+						</SettingsCard>
 					</View>
 				)}
 			</ScrollView>
-		</SafeAreaView>
+		</View>
 	);
 }
 
@@ -476,45 +457,54 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 	content: {
-		padding: 16,
+		paddingHorizontal: spacing.screen,
 		gap: 24,
 	},
 	section: {
 		gap: 8,
 	},
-	sectionTitle: {
-		fontSize: 13,
-		fontWeight: "600",
-		textTransform: "uppercase",
-		letterSpacing: 0.5,
+	overline: {
+		...typeScale.overline,
 		paddingHorizontal: 4,
 	},
 	card: {
-		borderRadius: 12,
+		borderRadius: radius.tile,
+		borderWidth: 1,
 		overflow: "hidden",
 	},
 	row: {
 		flexDirection: "row",
-		justifyContent: "space-between",
 		alignItems: "center",
-		paddingHorizontal: 16,
-		paddingVertical: 14,
-		borderBottomWidth: StyleSheet.hairlineWidth,
-		borderBottomColor: "transparent",
+		gap: 12,
+		paddingHorizontal: 14,
+		paddingVertical: 13,
+		minHeight: spacing.hitTarget,
+	},
+	iconChip: {
+		width: 34,
+		height: 34,
+		borderRadius: 10,
+		alignItems: "center",
+		justifyContent: "center",
 	},
 	label: {
-		fontSize: 16,
+		...typeScale.body,
+		flex: 1,
 	},
 	value: {
-		fontSize: 16,
+		fontSize: 15,
+		fontWeight: "500",
+		flexShrink: 1,
 	},
-	signOutButton: {
-		borderRadius: 12,
+	actionButton: {
+		borderRadius: radius.tile,
+		borderWidth: 1,
 		paddingVertical: 14,
 		alignItems: "center",
+		minHeight: spacing.hitTarget,
+		justifyContent: "center",
 	},
-	signOutText: {
-		fontSize: 16,
-		fontWeight: "500",
+	actionText: {
+		...typeScale.body,
 	},
 });

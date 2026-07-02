@@ -14,10 +14,10 @@ import {
 	View,
 } from "react-native";
 import Animated, {
-	FadeInDown,
 	LinearTransition,
 	ZoomOut,
 } from "react-native-reanimated";
+import { cardWaterfall } from "@/lib/waterfall";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ContextMenu, {
 	type ContextMenuOnPressNativeEvent,
@@ -283,7 +283,7 @@ export default function ScanLibraryScreen() {
 								key={card.id}
 								// Stagger in like set-detail; on removal the card shrinks out
 								// and the rest slide up to fill the gap (LinearTransition).
-								entering={FadeInDown.delay(Math.min(index * 22, 200)).duration(240)}
+								entering={cardWaterfall(index)}
 								exiting={ZoomOut.duration(180)}
 								layout={LinearTransition.duration(220)}
 								style={styles.tile}

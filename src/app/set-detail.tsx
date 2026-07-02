@@ -10,13 +10,13 @@ import {
 	View,
 } from "react-native";
 import Animated, {
-	FadeInDown,
 	useAnimatedStyle,
 	useSharedValue,
 	withRepeat,
 	withSequence,
 	withTiming,
 } from "react-native-reanimated";
+import { cardWaterfall } from "@/lib/waterfall";
 import { SymbolView } from "expo-symbols";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
@@ -433,7 +433,7 @@ export default function SetDetail() {
 				<Animated.View
 					entering={
 						firstAppearance
-							? FadeInDown.delay(Math.min(index * 22, 200)).duration(240)
+							? cardWaterfall(index)
 							: undefined
 					}
 				>

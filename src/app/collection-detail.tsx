@@ -11,7 +11,6 @@ import {
 	View,
 } from "react-native";
 import Animated, {
-	FadeInDown,
 	useAnimatedStyle,
 	useSharedValue,
 	withRepeat,
@@ -19,6 +18,7 @@ import Animated, {
 	withTiming,
 	ZoomOut,
 } from "react-native-reanimated";
+import { cardWaterfall } from "@/lib/waterfall";
 import { SymbolView } from "expo-symbols";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, Stack, useLocalSearchParams } from "expo-router";
@@ -358,7 +358,7 @@ export default function CollectionDetail() {
 				<Animated.View
 					entering={
 						firstAppearance
-							? FadeInDown.delay(Math.min(index * 22, 200)).duration(240)
+							? cardWaterfall(index)
 							: undefined
 					}
 					// Deleted cards (removed from the list on delete) shrink + fade out.
