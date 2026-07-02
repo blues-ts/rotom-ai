@@ -20,7 +20,7 @@ import {
 	getGradedOptions,
 	getVariantNames,
 } from "@/lib/scrydex";
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 import { useCardConfig } from "@/context/CardConfigContext";
 import {
 	LabeledPillToggle,
@@ -104,7 +104,7 @@ function SlidingPanels({
 }
 
 export default function ConfigureCard() {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const { isPro } = useRevenueCat();
 	const api = useApi();
 	const {
@@ -165,10 +165,9 @@ export default function ConfigureCard() {
 	};
 
 	return (
-		<View style={[styles.container, { backgroundColor: colors.card }]}>
+		<View style={styles.container}>
 			<Stack.Screen
 				options={{
-					headerStyle: { backgroundColor: colors.card },
 					headerRight: () => <SheetDoneButton />,
 				}}
 			/>
@@ -176,7 +175,7 @@ export default function ConfigureCard() {
 			<View style={styles.content}>
 				{variantNames.length > 1 && (
 					<View style={styles.block}>
-						<ToggleLabel colors={colors}>Variant</ToggleLabel>
+						<ToggleLabel>Variant</ToggleLabel>
 						<LabeledPillToggle
 							options={variantNames.map((v) => ({
 								label: formatVariantLabel(v),
@@ -184,19 +183,17 @@ export default function ConfigureCard() {
 							}))}
 							selected={variant}
 							onSelect={setVariant}
-							colors={colors}
 						/>
 					</View>
 				)}
 
 				{hasGraded && (
 					<View style={styles.block}>
-						<ToggleLabel colors={colors}>Pricing</ToggleLabel>
+						<ToggleLabel>Pricing</ToggleLabel>
 						<TabBar
 							tabs={["Raw", "Graded"]}
 							selected={pricingTab}
 							onSelect={setPricingTab}
-							colors={colors}
 						/>
 					</View>
 				)}
@@ -206,27 +203,25 @@ export default function ConfigureCard() {
 						activeTab={pricingTab}
 						rawPanel={
 							<View>
-								<ToggleLabel colors={colors}>Condition</ToggleLabel>
+								<ToggleLabel>Condition</ToggleLabel>
 								<LabeledPillToggle
 									options={conditionOptions}
 									selected={rawCondition}
 									onSelect={setRawCondition}
-									colors={colors}
 								/>
 							</View>
 						}
 						gradedPanel={
 							<View>
-								<ToggleLabel colors={colors}>Grading Company</ToggleLabel>
+								<ToggleLabel>Grading Company</ToggleLabel>
 								<PillToggle
 									options={gradedCompanies}
 									selected={gradedCompany ?? ""}
 									onSelect={selectGradedCompany}
-									colors={colors}
 								/>
 								{gradedGrades.length > 0 && (
 									<>
-										<ToggleLabel colors={colors} style={{ marginTop: 12 }}>
+										<ToggleLabel style={{ marginTop: 12 }}>
 											Grade
 										</ToggleLabel>
 										<LabeledPillToggle
@@ -236,7 +231,7 @@ export default function ConfigureCard() {
 											}))}
 											selected={gradedGrade}
 											onSelect={setGradedGrade}
-											colors={colors}
+											columns={5}
 										/>
 									</>
 								)}
@@ -245,12 +240,11 @@ export default function ConfigureCard() {
 					/>
 				) : (
 					<View style={styles.block}>
-						<ToggleLabel colors={colors}>Condition</ToggleLabel>
+						<ToggleLabel>Condition</ToggleLabel>
 						<LabeledPillToggle
 							options={conditionOptions}
 							selected={rawCondition}
 							onSelect={setRawCondition}
-							colors={colors}
 						/>
 					</View>
 				)}

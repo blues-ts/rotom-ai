@@ -8,10 +8,10 @@ import {
 	ViewStyle,
 } from "react-native";
 import { BlurView } from "expo-blur";
-import { Ionicons } from "@expo/vector-icons";
+import { SymbolView } from "expo-symbols";
 import * as Haptics from "expo-haptics";
 
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 
@@ -29,7 +29,7 @@ export function ProGate({
 	ctaText = "Unlock with River AI Pro",
 }: ProGateProps) {
 	const { isPro } = useRevenueCat();
-	const { colors, theme } = useTheme();
+	const t = useRiverTheme();
 
 	const handleUnlock = useCallback(() => {
 		void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -45,7 +45,7 @@ export function ProGate({
 			<View pointerEvents="none">{children}</View>
 			<BlurView
 				intensity={blurIntensity}
-				tint={theme === "dark" ? "dark" : "light"}
+				tint={t.isDark ? "dark" : "light"}
 				style={StyleSheet.absoluteFill}
 			/>
 			<Pressable
@@ -55,23 +55,17 @@ export function ProGate({
 				<View
 					style={[
 						styles.cta,
-						{
-							backgroundColor: colors.primary,
-							borderColor: colors.primary,
-						},
+						{ backgroundColor: t.accent },
+						t.buttonGlow,
 					]}
 				>
-					<Ionicons
-						name="lock-closed"
+					<SymbolView
+						name="lock"
 						size={14}
-						color={colors.primaryForeground}
+						tintColor="#FFFFFF"
+						weight="medium"
 					/>
-					<Text
-						style={[
-							styles.ctaText,
-							{ color: colors.primaryForeground },
-						]}
-					>
+					<Text style={[styles.ctaText, { color: "#FFFFFF" }]}>
 						{ctaText}
 					</Text>
 				</View>
@@ -95,7 +89,6 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 14,
 		paddingVertical: 10,
 		borderRadius: 999,
-		borderWidth: 1,
 	},
 	ctaText: {
 		fontSize: 13,

@@ -1,8 +1,9 @@
 import { useEffect } from "react";
-import { Ionicons } from "@expo/vector-icons";
+import { SymbolView } from "expo-symbols";
 import { router } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useTheme } from "@/context/ThemeContext";
+import { LinearGradient } from "expo-linear-gradient";
+import { typeScale, useRiverTheme } from "@/constants/theme";
 import { useAutoRefreshStalePrices, useCollections } from "@/hooks/useCollections";
 import { recordCollectionValueSnapshot } from "@/lib/collectionValueHistory";
 import CollectionCard from "@/components/CollectionCard";
@@ -11,10 +12,10 @@ import CollectionValueChart from "@/components/CollectionValueChart";
 import RefreshingPill from "@/components/RefreshingPill";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function Collections() {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
 	const { collections, isLoading, isError, refetch } = useCollections();
 	const refreshPrices = useAutoRefreshStalePrices();
@@ -26,12 +27,14 @@ export default function Collections() {
 	}, [queryClient]);
 
 	return (
-		<SafeAreaView
-			style={[styles.container, { backgroundColor: colors.background }]}
-			// No bottom edge: the sheet surface runs to the phone's bottom edge
-			// (home-indicator clearance is handled by the sheet's paddingBottom).
-			edges={[]}
-		>
+		<View style={styles.container}>
+			{/* Deep-water gradient — the one background every screen shares. */}
+			<LinearGradient
+				colors={t.background.colors}
+				locations={t.background.locations}
+				pointerEvents="none"
+				style={StyleSheet.absoluteFill}
+			/>
 			<RefreshingPill visible={refreshPrices.isPending} topOffset={52 + 8} />
 			<ScrollView
 				contentContainerStyle={[
@@ -45,10 +48,10 @@ export default function Collections() {
 						// spinner from lingering behind it; pulling still refreshes.
 						refreshing={false}
 						onRefresh={() => refreshPrices.mutate(undefined)}
-						tintColor={colors.mutedForeground}
+						tintColor={t.text.secondary}
 						progressViewOffset={insets.top + 52}
 						title="Pull to refresh prices"
-						titleColor={colors.mutedForeground}
+						titleColor={t.text.secondary}
 					/>
 				}
 			>
@@ -63,24 +66,17 @@ export default function Collections() {
 				) : collections.length === 0 ? (
 					isLoading ? null : (
 					<View style={styles.emptyState}>
-						<Ionicons
-							name="folder-open-outline"
-							size={48}
-							color={colors.mutedForeground}
+						<SymbolView
+							name="folder"
+							size={44}
+							tintColor={t.text.tertiary}
+							weight="regular"
 						/>
-						<Text
-							style={[
-								styles.emptyTitle,
-								{ color: colors.foreground },
-							]}
-						>
+						<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
 							No Collections Yet
 						</Text>
 						<Text
-							style={[
-								styles.emptySubtitle,
-								{ color: colors.mutedForeground },
-							]}
+							style={[styles.emptySubtitle, { color: t.text.secondary }]}
 						>
 							Create a collection to organize and track your
 							cards
@@ -89,58 +85,52 @@ export default function Collections() {
 					)
 				) : (
 					<>
-					{/* Portfolio chart is the hero on the stage — the collections
-					    rest on the counter below, like the card detail screen. */}
-					<CollectionValueChart />
-					<View
-						style={[
-							styles.sheet,
-							{
-								backgroundColor: colors.card,
-								borderColor: colors.border,
-								paddingBottom: 40 + insets.bottom,
-							},
-						]}
-					>
-						<Text
+						{/* Portfolio chart is the hero on the stage — the collections
+						    rest on the glass counter below, like the card detail screen. */}
+						<CollectionValueChart />
+						<View
 							style={[
-								styles.sheetTitle,
-								{ color: colors.mutedForeground },
+								styles.sheet,
+								{
+									backgroundColor: t.glass.surfaceFill,
+									borderColor: t.glass.surfaceBorder,
+									paddingBottom: 40 + insets.bottom,
+								},
 							]}
 						>
-							Collections
-						</Text>
-						<Animated.View style={styles.list} layout={LinearTransition.duration(300)}>
-							{collections.map((c) => (
-								<Animated.View
-									key={c.id}
-									entering={FadeIn.duration(300)}
-									exiting={FadeOut.duration(200)}
-									layout={LinearTransition.duration(300)}
-								>
-								<CollectionCard
-									name={c.name}
-									cardCount={c.cardCount}
-									totalValue={c.totalValue}
-									cardImages={c.cardImages}
-									// `elevated`: one step lighter than the sheet's `card`
-									// surface, like iOS grouped-list cells — flat `border` gray
-									// and pure black both felt unnatural here.
-									backgroundColor={colors.elevated}
-									onPress={() =>
-										router.push(
-											`/collection-detail?id=${c.id}&name=${encodeURIComponent(c.name)}&totalValue=${c.totalValue}&cardCount=${c.cardCount}`,
-										)
-									}
-								/>
+							<Text style={[styles.sheetTitle, { color: t.text.secondary }]}>
+								Collections
+							</Text>
+							<Animated.View
+								style={styles.list}
+								layout={LinearTransition.duration(300)}
+							>
+								{collections.map((c) => (
+									<Animated.View
+										key={c.id}
+										entering={FadeIn.duration(300)}
+										exiting={FadeOut.duration(200)}
+										layout={LinearTransition.duration(300)}
+									>
+										<CollectionCard
+											name={c.name}
+											cardCount={c.cardCount}
+											totalValue={c.totalValue}
+											cardImages={c.cardImages}
+											onPress={() =>
+												router.push(
+													`/collection-detail?id=${c.id}&name=${encodeURIComponent(c.name)}&totalValue=${c.totalValue}&cardCount=${c.cardCount}`,
+												)
+											}
+										/>
+									</Animated.View>
+								))}
 							</Animated.View>
-							))}
-						</Animated.View>
-					</View>
+						</View>
 					</>
 				)}
 			</ScrollView>
-		</SafeAreaView>
+		</View>
 	);
 }
 
@@ -154,8 +144,8 @@ const styles = StyleSheet.create({
 		flexGrow: 1,
 	},
 
-	// The counter — one solid surface rising beneath the chart hero, holding
-	// the collections (mirrors the card detail sheet).
+	// The counter — a glass surface rising beneath the chart hero, holding the
+	// collections (mirrors the card detail sheet).
 	sheet: {
 		borderTopLeftRadius: 28,
 		borderTopRightRadius: 28,
@@ -172,10 +162,9 @@ const styles = StyleSheet.create({
 		shadowRadius: 18,
 		elevation: 12,
 	},
+	// Every section header is an overline.
 	sheetTitle: {
-		fontSize: 13,
-		fontWeight: "600",
-		letterSpacing: 0.2,
+		...typeScale.overline,
 		marginBottom: 12,
 		paddingHorizontal: 6,
 	},
@@ -184,7 +173,6 @@ const styles = StyleSheet.create({
 	},
 	statePad: {
 		flex: 1,
-		paddingHorizontal: 16,
 	},
 	emptyState: {
 		flex: 1,

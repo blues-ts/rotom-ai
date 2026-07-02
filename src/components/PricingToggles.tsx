@@ -1,26 +1,72 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
-import type { ThemeColors } from "@/constants/colors";
+import { typeScale, useRiverTheme } from "@/constants/theme";
 
 /**
  * Pill-style selection controls shared by the card-detail configure sheet (and
- * available to any future screen). Extracted from the old inline "Pricing
- * Options" card so the toggles live in one place.
+ * available to any future screen). Self-theming via useRiverTheme(); selected
+ * state is always the accent fill (never accent as decoration).
  */
 
 export function ToggleLabel({
 	children,
-	colors,
 	style,
 }: {
 	children: React.ReactNode;
-	colors: ThemeColors;
 	style?: any;
 }) {
+	const t = useRiverTheme();
 	return (
-		<Text style={[styles.toggleLabel, { color: colors.mutedForeground }, style]}>
+		<Text style={[styles.toggleLabel, { color: t.text.secondary }, style]}>
 			{children}
 		</Text>
+	);
+}
+
+function Chip({
+	label,
+	active,
+	onPress,
+	columns,
+}: {
+	label: string;
+	active: boolean;
+	onPress: () => void;
+	columns?: number;
+}) {
+	const t = useRiverTheme();
+	return (
+		<Pressable
+			hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+			style={({ pressed }) => [
+				styles.togglePill,
+				// Fixed basis, no grow: chips keep the same width even when a row
+				// isn't full (e.g. a card with only two grade options).
+				columns ? { flexBasis: `${100 / columns - 2}%` } : null,
+				active
+					? { backgroundColor: t.accent }
+					: {
+							backgroundColor: pressed
+								? t.glass.pressedFill
+								: t.glass.elevatedFill,
+							borderWidth: 1,
+							borderColor: t.glass.elevatedBorder,
+						},
+			]}
+			onPress={() => {
+				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+				onPress();
+			}}
+		>
+			<Text
+				style={[
+					styles.toggleText,
+					{ color: active ? "#FFFFFF" : t.text.primary },
+				]}
+			>
+				{label}
+			</Text>
+		</Pressable>
 	);
 }
 
@@ -28,46 +74,25 @@ export function PillToggle({
 	options,
 	selected,
 	onSelect,
-	colors,
+	columns,
 }: {
 	options: string[];
 	selected: string;
 	onSelect: (val: string) => void;
-	colors: ThemeColors;
+	/** Lay chips out as an N-column grid instead of a natural wrap. */
+	columns?: number;
 }) {
 	return (
 		<View style={styles.toggleRow}>
-			{options.map((opt) => {
-				const active = opt === selected;
-				return (
-					<Pressable
-						key={opt}
-						hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-						style={[
-							styles.togglePill,
-							{ backgroundColor: active ? colors.primary : colors.border },
-						]}
-						onPress={() => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-							onSelect(opt);
-						}}
-					>
-						<Text
-							style={[
-								styles.toggleText,
-								{
-									color: active
-										? colors.primaryForeground
-										: colors.foreground,
-									opacity: active ? 1 : 0.75,
-								},
-							]}
-						>
-							{opt}
-						</Text>
-					</Pressable>
-				);
-			})}
+			{options.map((opt) => (
+				<Chip
+					key={opt}
+					label={opt}
+					active={opt === selected}
+					onPress={() => onSelect(opt)}
+					columns={columns}
+				/>
+			))}
 		</View>
 	);
 }
@@ -76,46 +101,25 @@ export function LabeledPillToggle({
 	options,
 	selected,
 	onSelect,
-	colors,
+	columns,
 }: {
 	options: { label: string; value: string }[];
 	selected: string | null;
 	onSelect: (val: string) => void;
-	colors: ThemeColors;
+	/** Lay chips out as an N-column grid instead of a natural wrap. */
+	columns?: number;
 }) {
 	return (
-		<View style={[styles.toggleRow, { flexWrap: "wrap" }]}>
-			{options.map((opt) => {
-				const active = opt.value === selected;
-				return (
-					<Pressable
-						key={opt.value}
-						hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-						style={[
-							styles.togglePill,
-							{ backgroundColor: active ? colors.primary : colors.border },
-						]}
-						onPress={() => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-							onSelect(opt.value);
-						}}
-					>
-						<Text
-							style={[
-								styles.toggleText,
-								{
-									color: active
-										? colors.primaryForeground
-										: colors.foreground,
-									opacity: active ? 1 : 0.75,
-								},
-							]}
-						>
-							{opt.label}
-						</Text>
-					</Pressable>
-				);
-			})}
+		<View style={styles.toggleRow}>
+			{options.map((opt) => (
+				<Chip
+					key={opt.value}
+					label={opt.label}
+					active={opt.value === selected}
+					onPress={() => onSelect(opt.value)}
+					columns={columns}
+				/>
+			))}
 		</View>
 	);
 }
@@ -124,15 +128,22 @@ export function TabBar({
 	tabs,
 	selected,
 	onSelect,
-	colors,
 }: {
 	tabs: string[];
 	selected: string;
 	onSelect: (val: string) => void;
-	colors: ThemeColors;
 }) {
+	const t = useRiverTheme();
 	return (
-		<View style={[styles.segmentedControl, { backgroundColor: colors.border }]}>
+		<View
+			style={[
+				styles.segmentedControl,
+				{
+					backgroundColor: t.glass.surfaceFill,
+					borderColor: t.glass.surfaceBorder,
+				},
+			]}
+		>
 			{tabs.map((tab) => {
 				const active = tab === selected;
 				return (
@@ -140,14 +151,7 @@ export function TabBar({
 						key={tab}
 						style={[
 							styles.segment,
-							active && {
-								backgroundColor: colors.primary,
-								shadowColor: "#000",
-								shadowOpacity: 0.2,
-								shadowRadius: 3,
-								shadowOffset: { width: 0, height: 1 },
-								elevation: 2,
-							},
+							active && { backgroundColor: t.accent },
 						]}
 						onPress={() => {
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -158,9 +162,7 @@ export function TabBar({
 							style={[
 								styles.segmentText,
 								{
-									color: active
-										? colors.primaryForeground
-										: colors.foreground,
+									color: active ? "#FFFFFF" : t.text.secondary,
 									fontWeight: active ? "700" : "600",
 								},
 							]}
@@ -175,12 +177,10 @@ export function TabBar({
 }
 
 const styles = StyleSheet.create({
+	// Every section header is an overline.
 	toggleLabel: {
-		fontSize: 11,
-		fontWeight: "600",
-		letterSpacing: 0.5,
-		textTransform: "uppercase",
-		marginBottom: 8,
+		...typeScale.overline,
+		marginBottom: 10,
 	},
 	toggleRow: {
 		flexDirection: "row",
@@ -190,25 +190,29 @@ const styles = StyleSheet.create({
 	togglePill: {
 		paddingHorizontal: 14,
 		paddingVertical: 10,
-		borderRadius: 10,
+		borderRadius: 12,
 		minHeight: 36,
 		justifyContent: "center",
+		alignItems: "center",
 	},
 	toggleText: {
 		fontSize: 13,
 		fontWeight: "600",
 	},
+	// Segmented control: glass container radius 14 / padding 4; the selected
+	// segment is an accent fill at radius 10.
 	segmentedControl: {
 		flexDirection: "row",
-		borderRadius: 10,
-		padding: 3,
+		borderRadius: 14,
+		borderWidth: 1,
+		padding: 4,
 	},
 	segment: {
 		flex: 1,
 		alignItems: "center",
 		justifyContent: "center",
 		paddingVertical: 8,
-		borderRadius: 8,
+		borderRadius: 10,
 		minHeight: 34,
 	},
 	segmentText: {

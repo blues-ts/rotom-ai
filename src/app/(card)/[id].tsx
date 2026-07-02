@@ -35,7 +35,8 @@ import Animated, {
 	withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { SymbolView } from "expo-symbols";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -61,20 +62,21 @@ import {
 	selectPrice,
 } from "@/lib/scrydex";
 import { formatCurrency } from "@/lib/format";
-import { useTheme } from "@/context/ThemeContext";
+import { chart, typeScale, useRiverTheme } from "@/constants/theme";
 import { useCollections } from "@/hooks/useCollections";
 import { useCardConfig } from "@/context/CardConfigContext";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
-import { Image } from "expo-image";
 import { ProGate } from "@/components/ProGate";
 import CardImage from "@/components/CardImage";
 import ErrorState from "@/components/ErrorState";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const SCREEN_HEIGHT = Dimensions.get("window").height;
+// Centered hero card — full-bleed like the original layout (90% of the screen),
+// TCG ratio (63:88), never cropped.
 const IMAGE_WIDTH = SCREEN_WIDTH * 0.9;
-const IMAGE_HEIGHT = IMAGE_WIDTH * 1.4;
+const IMAGE_HEIGHT = IMAGE_WIDTH * (88 / 63);
 // Chart width: screen - section horizontal margin (20*2) - section padding (16*2)
 const CHART_WIDTH = SCREEN_WIDTH - 72;
 
@@ -211,10 +213,10 @@ function TickerPrice({ value, style }: { value: number; style: any }) {
 	const fontSize =
 		rowWidth > 0
 			? Math.min(
-					44,
+					38,
 					Math.max(22, Math.floor(rowWidth / (targetText.length * 0.62))),
 				)
-			: 44;
+			: 38;
 
 	useEffect(() => {
 		animated.value = withTiming(value, {
@@ -261,14 +263,16 @@ const PERIODS = ["7d", "30d", "90d", "1y"] as const;
 function PeriodToggle({
 	selected,
 	onSelect,
-	colors,
+	t,
 }: {
 	selected: string;
 	onSelect: (val: string) => void;
-	colors: any;
+	t: any;
 }) {
+	// Selected pill gets the accent fill; the rest are text-only (accent fill
+	// means selected, never decoration).
 	return (
-		<View style={[styles.periodRow, { backgroundColor: colors.muted }]}>
+		<View style={styles.periodRow}>
 			{PERIODS.map((p) => {
 				const active = p === selected;
 				return (
@@ -277,7 +281,7 @@ function PeriodToggle({
 						hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }}
 						style={[
 							styles.periodPill,
-							active && { backgroundColor: colors.primary },
+							active && { backgroundColor: t.accent },
 						]}
 						onPress={() => {
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -287,10 +291,7 @@ function PeriodToggle({
 						<Text
 							style={[
 								styles.periodText,
-								{
-									color: active ? colors.primaryForeground : colors.foreground,
-									opacity: active ? 1 : 0.75,
-								},
+								{ color: active ? "#FFFFFF" : t.text.secondary },
 							]}
 						>
 							{p.toUpperCase()}
@@ -308,14 +309,14 @@ function AnimatedCollapsible({
 	title,
 	expanded,
 	onToggle,
-	colors,
+	t,
 	outerStyle,
 	children,
 }: {
 	title: string;
 	expanded: boolean;
 	onToggle: () => void;
-	colors: any;
+	t: any;
 	outerStyle?: any;
 	children: React.ReactNode;
 }) {
@@ -361,8 +362,8 @@ function AnimatedCollapsible({
 			style={[
 				styles.section,
 				{
-					backgroundColor: colors.card + "D9",
-					borderColor: colors.border,
+					backgroundColor: t.glass.surfaceFill,
+					borderColor: t.glass.surfaceBorder,
 				},
 				outerStyle,
 			]}
@@ -377,17 +378,18 @@ function AnimatedCollapsible({
 				<Text
 					style={[
 						styles.sectionTitle,
-						{ color: colors.foreground, marginBottom: 0 },
+						{ color: t.text.primary, marginBottom: 0 },
 					]}
 				>
 					{title}
 				</Text>
 				<Animated.View style={chevronStyle}>
-					<Ionicons
-						name="chevron-down"
-						size={18}
-						color={colors.mutedForeground}
-					/>
+					<SymbolView
+	name="chevron.down"
+	size={18}
+	tintColor={t.text.secondary}
+	weight="medium"
+/>
 				</Animated.View>
 			</Pressable>
 
@@ -406,16 +408,16 @@ function AnimatedCollapsible({
 // --- Loading Skeleton ---
 
 function LoadingSkeleton({
-	colors,
+	t,
 	isFromCollection,
 }: {
-	colors: any;
+	t: any;
 	isFromCollection?: boolean;
 }) {
 	// `border` (not `muted`) so blocks stay visible against the sheet's `card`
 	// background — muted is nearly identical to card in dark mode. Matches the
 	// set-detail loader, which pulses opacity on `border`.
-	const skeletonColor = colors.border;
+	const skeletonColor = t.glass.surfaceBorder;
 
 	// Single pulse clock for all blocks below: fade between 0.3 and 0.7 in unison
 	// so the whole column breathes together rather than per-block flicker.
@@ -437,7 +439,7 @@ function LoadingSkeleton({
 			<View
 				style={[
 					styles.sheet,
-					{ backgroundColor: colors.card, borderColor: colors.border },
+					{ backgroundColor: t.glass.surfaceFill, borderColor: t.glass.surfaceBorder },
 				]}
 			>
 				{/* Estimate Block — same container + line heights as the real frosted
@@ -472,7 +474,7 @@ function LoadingSkeleton({
 					</View>
 				</View>
 
-				<View style={[styles.divider, { backgroundColor: colors.border }]} />
+				<View style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]} />
 
 				{/* Identity placeholder */}
 				<View style={styles.metaStrip}>
@@ -496,7 +498,7 @@ function LoadingSkeleton({
 					</View>
 				</View>
 
-				<View style={[styles.divider, { backgroundColor: colors.border }]} />
+				<View style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]} />
 
 				{/* Pricing Options placeholder */}
 				<View style={styles.sheetSection}>
@@ -513,7 +515,7 @@ function LoadingSkeleton({
 								styles.configRow,
 								i === 0 && {
 									borderBottomWidth: StyleSheet.hairlineWidth,
-									borderBottomColor: colors.foreground + "1A",
+									borderBottomColor: t.glass.surfaceBorder,
 								},
 							]}
 						>
@@ -535,7 +537,7 @@ function LoadingSkeleton({
 					/>
 				</View>
 
-				<View style={[styles.divider, { backgroundColor: colors.border }]} />
+				<View style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]} />
 
 				{/* Price History placeholder */}
 				<View style={styles.sheetSection}>
@@ -577,13 +579,13 @@ function ConfigRow({
 	label,
 	value,
 	onPress,
-	colors,
+	t,
 	isLast,
 }: {
 	label: string;
 	value: string;
 	onPress: () => void;
-	colors: any;
+	t: any;
 	isLast?: boolean;
 }) {
 	return (
@@ -593,25 +595,26 @@ function ConfigRow({
 				styles.configRow,
 				!isLast && {
 					borderBottomWidth: StyleSheet.hairlineWidth,
-					borderBottomColor: colors.foreground + "1A",
+					borderBottomColor: t.glass.surfaceBorder,
 				},
 			]}
 		>
-			<Text style={[styles.configRowLabel, { color: colors.foreground }]}>
+			<Text style={[styles.configRowLabel, { color: t.text.primary }]}>
 				{label}
 			</Text>
 			<View style={styles.configRowRight}>
 				<Text
-					style={[styles.configRowValue, { color: colors.foreground }]}
+					style={[styles.configRowValue, { color: t.text.primary }]}
 					numberOfLines={1}
 				>
 					{value}
 				</Text>
-				<Ionicons
-					name="chevron-forward"
-					size={16}
-					color={colors.mutedForeground}
-				/>
+				<SymbolView
+	name="chevron.right"
+	size={16}
+	tintColor={t.text.secondary}
+	weight="medium"
+/>
 			</View>
 		</Pressable>
 	);
@@ -620,7 +623,7 @@ function ConfigRow({
 // --- Main ---
 
 export default function CardDetail() {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
 	const { isPro } = useRevenueCat();
 	const {
@@ -820,11 +823,6 @@ export default function CardDetail() {
 	const cardImageSmall =
 		(card ? getCardImage(card, variant || undefined, "small") : undefined) ??
 		initImage;
-	// Blurred background — prefer the thumbnail we navigated with (already cached,
-	// shows instantly, and stays fixed so it never reloads on data load or variant
-	// change). Fall back to the fetched card image when no thumbnail was passed
-	// (e.g. some chat links) so the backdrop still loads instead of staying blank.
-	const bgImage = initImage ?? cardImageSmall;
 	const cardNumber = card ? getCardNumber(card) : undefined;
 	// Japanese cards display their English translation when available
 	const displayName = card ? getCardDisplayName(card) : (name ?? "Card");
@@ -1138,29 +1136,26 @@ export default function CardDetail() {
 									}
 								}}
 							>
-								<Ionicons name="add" size={26} color={colors.foreground} />
+								<SymbolView
+									name="plus"
+									size={22}
+									tintColor={t.accentOn}
+									weight="medium"
+								/>
 							</Pressable>
 						),
 				}}
 			/>
 
-			<View style={[styles.container, { backgroundColor: colors.background }]}>
-				{/* Blurred backdrop — small image, kept OUTSIDE the crossfade so it
-				    never re-fades (it's identical in both states). */}
-				{bgImage && (
-					<Image
-						source={{ uri: bgImage }}
-						style={StyleSheet.absoluteFill}
-						contentFit="cover"
-						blurRadius={30}
-						cachePolicy="memory-disk"
-					/>
-				)}
-				<View
-					style={[
-						StyleSheet.absoluteFill,
-						{ backgroundColor: `${colors.background}B3` },
-					]}
+			<View style={styles.container}>
+				{/* Deep-water gradient — the one background every screen shares
+				    (replaces the old blurred-art backdrop: never stack a second
+				    gradient or image behind content). */}
+				<LinearGradient
+					colors={t.background.colors}
+					locations={t.background.locations}
+					pointerEvents="none"
+					style={StyleSheet.absoluteFill}
 				/>
 
 				{isLoading || card ? (
@@ -1181,10 +1176,10 @@ export default function CardDetail() {
 								style={{
 									width: IMAGE_WIDTH,
 									height: IMAGE_HEIGHT,
-									borderRadius: 14,
+									borderRadius: 12,
 								}}
 								backgroundColor="transparent"
-								shimmerColor={colors.border}
+								shimmerColor={t.glass.surfaceBorder}
 								fallback={
 									<View
 										style={{
@@ -1194,15 +1189,16 @@ export default function CardDetail() {
 											gap: 6,
 										}}
 									>
-										<Ionicons
-											name="image-outline"
-											size={28}
-											color={colors.mutedForeground}
-										/>
+										<SymbolView
+	name="photo"
+	size={28}
+	tintColor={t.text.secondary}
+	weight="medium"
+/>
 										{displayName && (
 											<Text
 												style={{
-													color: colors.foreground,
+													color: t.text.primary,
 													fontSize: 12,
 													fontWeight: "600",
 													textAlign: "center",
@@ -1216,7 +1212,7 @@ export default function CardDetail() {
 										{cardNumber && (
 											<Text
 												style={{
-													color: colors.mutedForeground,
+													color: t.text.secondary,
 													fontSize: 11,
 												}}
 											>
@@ -1238,8 +1234,8 @@ export default function CardDetail() {
 								style={[
 									styles.sheet,
 									{
-										backgroundColor: colors.card,
-										borderColor: colors.border,
+										backgroundColor: t.glass.surfaceFill,
+										borderColor: t.glass.surfaceBorder,
 										// Extend the counter past the scroll view's bottom safe-area
 										// inset so it reaches the physical screen edge; pad the
 										// content back up so the last row clears the home indicator.
@@ -1265,16 +1261,16 @@ export default function CardDetail() {
 												<Text
 													style={[
 														styles.estimateLabel,
-														{ color: colors.foreground, opacity: 0.75 },
+														{ color: t.text.secondary },
 													]}
 												>
-													MARKET VALUE
+													Market value
 												</Text>
 												{heroPrice === undefined ? (
 													<Text
 														style={[
 															styles.heroPrice,
-															{ color: colors.foreground },
+															{ color: t.text.primary },
 														]}
 													>
 														—
@@ -1284,7 +1280,7 @@ export default function CardDetail() {
 														value={heroPrice}
 														style={[
 															styles.heroPrice,
-															{ color: colors.foreground },
+															{ color: t.text.primary },
 														]}
 													/>
 												)}
@@ -1298,8 +1294,8 @@ export default function CardDetail() {
 														styles.quantityBadge,
 														styles.quantityBadgeHeader,
 														{
-															backgroundColor: colors.muted,
-															borderColor: colors.border,
+															backgroundColor: t.glass.elevatedFill,
+															borderColor: t.glass.surfaceBorder,
 														},
 													]}
 												>
@@ -1330,24 +1326,26 @@ export default function CardDetail() {
 														}}
 														style={[
 															styles.qtyButton,
-															{ backgroundColor: colors.card },
+															{ backgroundColor: t.glass.surfaceFill },
 														]}
 													>
-														<Ionicons
-															name="remove"
-															size={16}
-															color={colors.foreground}
-														/>
+														<SymbolView
+	name="minus"
+	size={16}
+	tintColor={t.text.primary}
+	weight="medium"
+/>
 													</Pressable>
-													<Ionicons
-														name="layers-outline"
-														size={16}
-														color={colors.primary}
-													/>
+													<SymbolView
+	name="square.stack"
+	size={16}
+	tintColor={t.accent}
+	weight="medium"
+/>
 													<Text
 														style={[
 															styles.quantityText,
-															{ color: colors.foreground },
+															{ color: t.text.primary },
 														]}
 													>
 														{quantity}
@@ -1373,14 +1371,15 @@ export default function CardDetail() {
 														}}
 														style={[
 															styles.qtyButton,
-															{ backgroundColor: colors.card },
+															{ backgroundColor: t.glass.surfaceFill },
 														]}
 													>
-														<Ionicons
-															name="add"
-															size={16}
-															color={colors.foreground}
-														/>
+														<SymbolView
+	name="plus"
+	size={16}
+	tintColor={t.text.primary}
+	weight="medium"
+/>
 													</Pressable>
 												</View>
 											)}
@@ -1394,8 +1393,8 @@ export default function CardDetail() {
 														style={[
 															styles.selectionChip,
 															{
-																backgroundColor: colors.primary + "33",
-																borderColor: colors.primary + "55",
+																backgroundColor: t.glass.elevatedFill,
+																borderColor: t.glass.elevatedBorder,
 															},
 														]}
 													>
@@ -1403,7 +1402,7 @@ export default function CardDetail() {
 															style={[
 																styles.chipDot,
 																{
-																	backgroundColor: colors.primary,
+																	backgroundColor: t.accent,
 																},
 															]}
 														/>
@@ -1411,7 +1410,7 @@ export default function CardDetail() {
 															style={[
 																styles.selectionChipText,
 																{
-																	color: colors.foreground,
+																	color: t.text.primary,
 																},
 															]}
 														>
@@ -1423,8 +1422,8 @@ export default function CardDetail() {
 															style={[
 																styles.selectionChip,
 																{
-																	backgroundColor: colors.primary + "33",
-																	borderColor: colors.primary + "55",
+																	backgroundColor: t.glass.elevatedFill,
+																	borderColor: t.glass.elevatedBorder,
 																},
 															]}
 														>
@@ -1432,7 +1431,7 @@ export default function CardDetail() {
 																style={[
 																	styles.chipDot,
 																	{
-																		backgroundColor: colors.primary,
+																		backgroundColor: t.accent,
 																	},
 																]}
 															/>
@@ -1440,7 +1439,7 @@ export default function CardDetail() {
 																style={[
 																	styles.selectionChipText,
 																	{
-																		color: colors.foreground,
+																		color: t.text.primary,
 																	},
 																]}
 															>
@@ -1455,8 +1454,8 @@ export default function CardDetail() {
 														style={[
 															styles.selectionChip,
 															{
-																backgroundColor: colors.primary + "33",
-																borderColor: colors.primary + "55",
+																backgroundColor: t.glass.elevatedFill,
+																borderColor: t.glass.elevatedBorder,
 															},
 														]}
 													>
@@ -1464,7 +1463,7 @@ export default function CardDetail() {
 															style={[
 																styles.chipDot,
 																{
-																	backgroundColor: colors.primary,
+																	backgroundColor: t.accent,
 																},
 															]}
 														/>
@@ -1472,7 +1471,7 @@ export default function CardDetail() {
 															style={[
 																styles.selectionChipText,
 																{
-																	color: colors.foreground,
+																	color: t.text.primary,
 																},
 															]}
 														>
@@ -1483,8 +1482,8 @@ export default function CardDetail() {
 														style={[
 															styles.selectionChip,
 															{
-																backgroundColor: colors.primary + "33",
-																borderColor: colors.primary + "55",
+																backgroundColor: t.glass.elevatedFill,
+																borderColor: t.glass.elevatedBorder,
 															},
 														]}
 													>
@@ -1492,7 +1491,7 @@ export default function CardDetail() {
 															style={[
 																styles.chipDot,
 																{
-																	backgroundColor: colors.primary,
+																	backgroundColor: t.accent,
 																},
 															]}
 														/>
@@ -1500,7 +1499,7 @@ export default function CardDetail() {
 															style={[
 																styles.selectionChipText,
 																{
-																	color: colors.foreground,
+																	color: t.text.primary,
 																},
 															]}
 														>
@@ -1514,7 +1513,7 @@ export default function CardDetail() {
 								</Animated.View>
 
 								<View
-									style={[styles.divider, { backgroundColor: colors.border }]}
+									style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]}
 								/>
 
 								{/* Identity — card name, set, rarity */}
@@ -1524,13 +1523,13 @@ export default function CardDetail() {
 								>
 									<View style={{ flex: 1 }}>
 										<Text
-											style={[styles.cardName, { color: colors.foreground }]}
+											style={[styles.cardName, { color: t.text.primary }]}
 										>
 											{displayName}
 											{cardNumber ? (
 												<Text
 													style={{
-														color: colors.foreground,
+														color: t.text.primary,
 														opacity: 0.65,
 														fontWeight: "500",
 													}}
@@ -1543,7 +1542,7 @@ export default function CardDetail() {
 										<Text
 											style={[
 												styles.setName,
-												{ color: colors.foreground, opacity: 0.7 },
+												{ color: t.text.primary, opacity: 0.7 },
 											]}
 										>
 											{setDisplayName}
@@ -1553,24 +1552,24 @@ export default function CardDetail() {
 										{!!getCardDisplayRarity(card) && (
 											<InfoPill
 												label={getCardDisplayRarity(card)!}
-												color={colors.foreground}
-												bgColor={colors.primary + "33"}
-												borderColor={colors.primary + "55"}
+												color={t.text.primary}
+												bgColor={t.glass.elevatedFill}
+												borderColor={t.glass.elevatedBorder}
 											/>
 										)}
 										{!!variant && (
 											<InfoPill
 												label={formatVariantLabel(variant)}
-												color={colors.foreground}
-												bgColor={colors.primary + "33"}
-												borderColor={colors.primary + "55"}
+												color={t.text.primary}
+												bgColor={t.glass.elevatedFill}
+												borderColor={t.glass.elevatedBorder}
 											/>
 										)}
 									</View>
 								</Animated.View>
 
 								<View
-									style={[styles.divider, { backgroundColor: colors.border }]}
+									style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]}
 								/>
 
 								{/* Pricing Options — tap a row to configure in the sheet */}
@@ -1579,7 +1578,7 @@ export default function CardDetail() {
 									style={styles.sheetSection}
 								>
 									<Text
-										style={[styles.sectionTitle, { color: colors.foreground }]}
+										style={[styles.sectionTitle, { color: t.text.primary }]}
 									>
 										Pricing Options
 									</Text>
@@ -1588,7 +1587,7 @@ export default function CardDetail() {
 											label="Variant"
 											value={formatVariantLabel(variant)}
 											onPress={openConfig}
-											colors={colors}
+											t={t}
 										/>
 									)}
 									<ConfigRow
@@ -1601,14 +1600,14 @@ export default function CardDetail() {
 												: formatConditionLabel(rawCondition)
 										}
 										onPress={openConfig}
-										colors={colors}
+										t={t}
 										isLast
 									/>
 
 									<Text
 										style={[
 											styles.pricePaidLabel,
-											{ color: colors.mutedForeground },
+											{ color: t.text.secondary },
 										]}
 									>
 										Price Paid
@@ -1617,15 +1616,15 @@ export default function CardDetail() {
 										style={[
 											styles.pricePaidRow,
 											{
-												backgroundColor: colors.input,
-												borderColor: colors.border,
+												backgroundColor: t.glass.elevatedFill,
+												borderColor: t.glass.surfaceBorder,
 											},
 										]}
 									>
 										<Text
 											style={[
 												styles.pricePaidSymbol,
-												{ color: colors.mutedForeground },
+												{ color: t.text.secondary },
 											]}
 										>
 											{currencySymbol}
@@ -1633,7 +1632,7 @@ export default function CardDetail() {
 										<TextInput
 											style={[
 												styles.pricePaidInput,
-												{ color: colors.foreground },
+												{ color: t.text.primary },
 											]}
 											value={pricePaid}
 											onChangeText={(v) => {
@@ -1643,7 +1642,7 @@ export default function CardDetail() {
 												setPricePaid(cleaned);
 											}}
 											placeholder="0.00"
-											placeholderTextColor={colors.mutedForeground}
+											placeholderTextColor={t.text.secondary}
 											keyboardType="decimal-pad"
 											returnKeyType="done"
 										/>
@@ -1651,7 +1650,7 @@ export default function CardDetail() {
 								</Animated.View>
 
 								<View
-									style={[styles.divider, { backgroundColor: colors.border }]}
+									style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]}
 								/>
 
 								{/* Chat about this card — jumps to River with the card seeded */}
@@ -1660,27 +1659,29 @@ export default function CardDetail() {
 										onPress={openChatAboutCard}
 										style={styles.linkOutRow}
 									>
-										<Ionicons
-											name="chatbubble-ellipses-outline"
-											size={18}
-											color={colors.foreground}
-										/>
+										<SymbolView
+	name="bubble.left.and.bubble.right"
+	size={18}
+	tintColor={t.text.primary}
+	weight="medium"
+/>
 										<Text
 											style={[
 												styles.linkOutText,
-												{ color: colors.foreground },
+												{ color: t.text.primary },
 											]}
 										>
 											Chat about this card
 										</Text>
-										<Ionicons
-											name="chevron-forward"
-											size={16}
-											color={colors.mutedForeground}
-										/>
+										<SymbolView
+	name="chevron.right"
+	size={16}
+	tintColor={t.text.secondary}
+	weight="medium"
+/>
 									</Pressable>
 									<View
-										style={[styles.divider, { backgroundColor: colors.border }]}
+										style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]}
 									/>
 								</Animated.View>
 
@@ -1694,27 +1695,29 @@ export default function CardDetail() {
 											}}
 											style={styles.linkOutRow}
 										>
-											<Ionicons
-												name="cart-outline"
-												size={18}
-												color={colors.foreground}
-											/>
+											<SymbolView
+	name="cart"
+	size={18}
+	tintColor={t.text.primary}
+	weight="medium"
+/>
 											<Text
 												style={[
 													styles.linkOutText,
-													{ color: colors.foreground },
+													{ color: t.text.primary },
 												]}
 											>
 												Buy on TCGplayer
 											</Text>
-											<Ionicons
-												name="open-outline"
-												size={16}
-												color={colors.mutedForeground}
-											/>
+											<SymbolView
+	name="arrow.up.right"
+	size={16}
+	tintColor={t.text.secondary}
+	weight="medium"
+/>
 										</Pressable>
 										<View
-											style={[styles.divider, { backgroundColor: colors.border }]}
+											style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]}
 										/>
 									</Animated.View>
 								)}
@@ -1727,7 +1730,7 @@ export default function CardDetail() {
 												style={[
 													styles.sectionTitle,
 													{
-														color: colors.foreground,
+														color: t.text.primary,
 														marginBottom: 0,
 														flexShrink: 1,
 													},
@@ -1738,7 +1741,7 @@ export default function CardDetail() {
 											<PeriodToggle
 												selected={historyPeriod}
 												onSelect={setHistoryPeriod}
-												colors={colors}
+												t={t}
 											/>
 										</View>
 
@@ -1751,7 +1754,7 @@ export default function CardDetail() {
 												<Skeleton
 													width="100%"
 													height={180}
-													color={colors.border}
+													color={t.glass.surfaceBorder}
 												/>
 											</View>
 										) : chartData.length > 1 ? (
@@ -1775,14 +1778,14 @@ export default function CardDetail() {
 															}}
 															style={[
 																styles.chartHoverPrice,
-																{ color: colors.foreground },
+																{ color: t.text.primary },
 															]}
 														/>
 														<LineChart.DatetimeText
 															style={[
 																styles.chartHoverDate,
 																{
-																	color: colors.foreground,
+																	color: t.text.primary,
 																	opacity: 0.7,
 																},
 															]}
@@ -1795,18 +1798,21 @@ export default function CardDetail() {
 															width={CHART_WIDTH}
 															yGutter={20}
 														>
-															<LineChart.Path color={colors.primary} width={2}>
-																<LineChart.Gradient />
+															<LineChart.Path
+																color={chart.line}
+																width={chart.strokeWidth}
+															>
+																<LineChart.Gradient color={chart.line} />
 																<LineChart.Dot
 																	at={chartData.length - 1}
-																	color={colors.primary}
-																	size={5}
+																	color={chart.line}
+																	size={chart.endDotRadius}
 																	hasPulse
 																	pulseBehaviour="while-inactive"
 																/>
 															</LineChart.Path>
 															<LineChart.CursorCrosshair
-																color={colors.foreground}
+																color={t.text.primary}
 															/>
 														</LineChart>
 													</View>
@@ -1815,7 +1821,7 @@ export default function CardDetail() {
 													style={[
 														styles.scrubHint,
 														{
-															color: colors.foreground,
+															color: t.text.primary,
 															opacity: 0.55,
 														},
 													]}
@@ -1827,7 +1833,7 @@ export default function CardDetail() {
 											<View style={styles.chartPlaceholder}>
 												<Text
 													style={{
-														color: colors.mutedForeground,
+														color: t.text.secondary,
 														fontSize: 13,
 													}}
 												>
@@ -1844,7 +1850,7 @@ export default function CardDetail() {
 										<View
 											style={[
 												styles.divider,
-												{ backgroundColor: colors.border },
+												{ backgroundColor: t.glass.surfaceBorder },
 											]}
 										/>
 										{isPro ? (
@@ -1852,7 +1858,7 @@ export default function CardDetail() {
 												title="Recent Sales"
 												expanded={salesExpanded}
 												onToggle={() => setSalesExpanded((v) => !v)}
-												colors={colors}
+												t={t}
 												outerStyle={styles.collapsibleInSheet}
 											>
 												{salesList.slice(0, 20).map((item, i) => (
@@ -1871,7 +1877,7 @@ export default function CardDetail() {
 															styles.historyRow,
 															i < Math.min(salesList.length, 20) - 1 && {
 																borderBottomWidth: 1,
-																borderBottomColor: colors.foreground + "14",
+																borderBottomColor: t.glass.surfaceBorder,
 															},
 														]}
 													>
@@ -1880,7 +1886,7 @@ export default function CardDetail() {
 																style={[
 																	styles.historyDate,
 																	{
-																		color: colors.foreground,
+																		color: t.text.primary,
 																	},
 																]}
 															>
@@ -1892,7 +1898,7 @@ export default function CardDetail() {
 																style={[
 																	styles.historyMeta,
 																	{
-																		color: colors.foreground,
+																		color: t.text.primary,
 																		opacity: 0.6,
 																	},
 																]}
@@ -1906,7 +1912,7 @@ export default function CardDetail() {
 																style={[
 																	styles.historyPrice,
 																	{
-																		color: colors.foreground,
+																		color: t.text.primary,
 																	},
 																]}
 															>
@@ -1917,7 +1923,7 @@ export default function CardDetail() {
 																	style={[
 																		styles.historyMeta,
 																		{
-																			color: colors.foreground,
+																			color: t.text.primary,
 																			opacity: 0.6,
 																		},
 																	]}
@@ -1935,16 +1941,17 @@ export default function CardDetail() {
 													<Text
 														style={[
 															styles.sectionTitle,
-															{ color: colors.foreground, marginBottom: 0 },
+															{ color: t.text.primary, marginBottom: 0 },
 														]}
 													>
 														Recent Sales
 													</Text>
-													<Ionicons
-														name="chevron-down"
-														size={18}
-														color={colors.mutedForeground}
-													/>
+													<SymbolView
+	name="chevron.down"
+	size={18}
+	tintColor={t.text.secondary}
+	weight="medium"
+/>
 												</View>
 												{salesList.slice(0, 3).map((item, i) => (
 													<View
@@ -1953,7 +1960,7 @@ export default function CardDetail() {
 															styles.historyRow,
 															i < Math.min(salesList.length, 3) - 1 && {
 																borderBottomWidth: 1,
-																borderBottomColor: colors.foreground + "14",
+																borderBottomColor: t.glass.surfaceBorder,
 															},
 														]}
 													>
@@ -1961,7 +1968,7 @@ export default function CardDetail() {
 															<Text
 																style={[
 																	styles.historyDate,
-																	{ color: colors.foreground },
+																	{ color: t.text.primary },
 																]}
 															>
 																{new Date(
@@ -1971,7 +1978,7 @@ export default function CardDetail() {
 															<Text
 																style={[
 																	styles.historyMeta,
-																	{ color: colors.foreground, opacity: 0.6 },
+																	{ color: t.text.primary, opacity: 0.6 },
 																]}
 																numberOfLines={1}
 															>
@@ -1981,7 +1988,7 @@ export default function CardDetail() {
 														<Text
 															style={[
 																styles.historyPrice,
-																{ color: colors.foreground },
+																{ color: t.text.primary },
 															]}
 														>
 															{formatPrice(item.price)}
@@ -1997,28 +2004,29 @@ export default function CardDetail() {
 								{configMatches && quantity <= 1 && (
 									<Animated.View entering={sectionEntering(6)}>
 										<View
-											style={[styles.divider, { backgroundColor: colors.border }]}
+											style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]}
 										/>
 										<Pressable
 											onPress={confirmRemove}
 											style={[
 												styles.removeButton,
 												{
-													borderColor: colors.destructive ?? "#ef4444",
+													borderColor: t.loss,
 													marginHorizontal: 22,
 													marginTop: 18,
 												},
 											]}
 										>
-											<Ionicons
-												name="trash-outline"
-												size={18}
-												color={colors.destructive ?? "#ef4444"}
-											/>
+											<SymbolView
+	name="trash"
+	size={18}
+	tintColor={t.loss}
+	weight="medium"
+/>
 											<Text
 												style={[
 													styles.removeButtonText,
-													{ color: colors.destructive ?? "#ef4444" },
+													{ color: t.loss },
 												]}
 											>
 												Remove from Collection
@@ -2033,7 +2041,7 @@ export default function CardDetail() {
 								exiting={FadeOut.duration(220)}
 							>
 								<LoadingSkeleton
-									colors={colors}
+									t={t}
 									isFromCollection={isFromCollection}
 								/>
 							</Animated.View>
@@ -2047,7 +2055,7 @@ export default function CardDetail() {
 								onRetry={() => refetch()}
 							/>
 						) : (
-							<Text style={{ color: colors.mutedForeground }}>
+							<Text style={{ color: t.text.secondary }}>
 								Card not found
 							</Text>
 						)}
@@ -2130,14 +2138,17 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 
-	// Image
+	// Image — floats on the water with a deep drop shadow (no clipping wrapper,
+	// which would cut the shadow off).
 	imageContainer: {
 		alignItems: "center",
 		marginBottom: 20,
-		borderRadius: 23,
-		overflow: "hidden",
 		alignSelf: "center",
 		width: IMAGE_WIDTH,
+		shadowColor: "#000A19",
+		shadowOpacity: 0.55,
+		shadowRadius: 40,
+		shadowOffset: { width: 0, height: 18 },
 	},
 	// Quantity badge
 	quantityBadge: {
@@ -2185,15 +2196,13 @@ const styles = StyleSheet.create({
 	},
 
 	estimateLabel: {
-		fontSize: 12,
-		fontWeight: "700",
-		letterSpacing: 2,
+		...typeScale.overline,
 		marginBottom: 8,
 	},
 	heroPrice: {
-		fontSize: 44,
+		fontSize: 38,
 		fontWeight: "800",
-		letterSpacing: -1.5,
+		letterSpacing: -1,
 		marginTop: 2,
 	},
 	tickerInput: {
@@ -2348,14 +2357,12 @@ const styles = StyleSheet.create({
 	// Period toggle
 	periodRow: {
 		flexDirection: "row",
-		borderRadius: 8,
-		padding: 2,
-		gap: 2,
+		gap: 4,
 	},
 	periodPill: {
 		paddingHorizontal: 10,
 		paddingVertical: 6,
-		borderRadius: 6,
+		borderRadius: 999,
 		minWidth: 36,
 		alignItems: "center",
 	},

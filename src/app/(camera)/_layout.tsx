@@ -1,12 +1,12 @@
 import { Pressable } from "react-native";
-import { useTheme } from "@/context/ThemeContext";
+import { palette, useRiverTheme } from "@/constants/theme";
 import { useAuth } from "@clerk/clerk-expo";
 import { Redirect, router, Stack } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { SymbolView } from "expo-symbols";
 import * as Haptics from "expo-haptics";
 
 export default function CameraLayout() {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const { isSignedIn, isLoaded } = useAuth();
 
 	if (!isLoaded) return null;
@@ -21,9 +21,9 @@ export default function CameraLayout() {
 				headerShadowVisible: false,
 				headerTransparent: true,
 				headerStyle: { backgroundColor: "transparent" },
-				headerTintColor: colors.foreground,
+				headerTintColor: t.accentOn,
 				headerTitle: "",
-				contentStyle: { backgroundColor: colors.background },
+				contentStyle: { backgroundColor: "transparent" },
 				headerLeft: () => (
 					<Pressable
 						onPress={() => {
@@ -31,7 +31,13 @@ export default function CameraLayout() {
 							router.back();
 						}}
 					>
-						<Ionicons name="close" size={24} color="#fff" />
+						{/* Soft accent regardless of mode — the scanner is always dark. */}
+						<SymbolView
+							name="xmark"
+							size={20}
+							tintColor={palette.accentSoft}
+							weight="medium"
+						/>
 					</Pressable>
 				),
 			}}
@@ -42,14 +48,15 @@ export default function CameraLayout() {
 					presentation: "formSheet",
 					sheetAllowedDetents: [0.6, 1.0],
 					sheetGrabberVisible: true,
-					sheetCornerRadius: 20,
+					// Bottom sheets get the larger 28pt top radius.
+					sheetCornerRadius: 28,
 					headerShown: true,
 					headerTransparent: false,
-					headerStyle: { backgroundColor: colors.card },
-					headerTintColor: colors.foreground,
+					headerStyle: { backgroundColor: t.glass.sheetFill },
+					headerTintColor: t.text.primary,
 					headerShadowVisible: false,
 					headerLeft: () => null,
-					contentStyle: { backgroundColor: colors.card },
+					contentStyle: { backgroundColor: t.glass.sheetFill },
 				}}
 			/>
 		</Stack>

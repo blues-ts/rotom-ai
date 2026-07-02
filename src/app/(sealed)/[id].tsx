@@ -17,11 +17,11 @@ import Animated, {
 	withSequence,
 	withTiming,
 } from "react-native-reanimated";
-import { Ionicons } from "@expo/vector-icons";
+import { SymbolView } from "expo-symbols";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
-import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApi } from "@/lib/axios";
 import { useCollections } from "@/hooks/useCollections";
@@ -36,7 +36,7 @@ import {
 	toNumber,
 } from "@/lib/scrydex";
 import { formatCurrency } from "@/lib/format";
-import { useTheme } from "@/context/ThemeContext";
+import { typeScale, useRiverTheme } from "@/constants/theme";
 import { ProGate } from "@/components/ProGate";
 import CardImage from "@/components/CardImage";
 import ErrorState from "@/components/ErrorState";
@@ -98,7 +98,7 @@ function Skeleton({
 }
 
 export default function SealedDetail() {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
 	const { isPro } = useRevenueCat();
 	const {
@@ -205,7 +205,6 @@ export default function SealedDetail() {
 	const productImageSmall =
 		(product ? getCardImage(product, variant || undefined, "small") : undefined) ??
 		initImage;
-	const bgImage = initImage ?? productImageSmall;
 
 	// Frame height tracks the artwork's natural ratio, clamped to sane bounds.
 	// We ease the height into place once the image reports its dimensions so the
@@ -339,32 +338,27 @@ export default function SealedDetail() {
 								hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
 								onPress={handleAdd}
 							>
-								<Ionicons name="add" size={26} color={colors.foreground} />
+								<SymbolView
+									name="plus"
+									size={22}
+									tintColor={t.accentOn}
+									weight="medium"
+								/>
 							</Pressable>
 						),
 				}}
 			/>
 
 			{isLoading || product ? (
-				<View
-					style={[styles.container, { backgroundColor: colors.background }]}
-				>
-					{/* Blurred backdrop — the cached thumbnail paints it immediately,
-					    even while the product data is still loading. */}
-					{bgImage && (
-						<Image
-							source={{ uri: bgImage }}
-							style={StyleSheet.absoluteFill}
-							contentFit="cover"
-							blurRadius={30}
-							cachePolicy="memory-disk"
-						/>
-					)}
-					<View
-						style={[
-							StyleSheet.absoluteFill,
-							{ backgroundColor: `${colors.background}B3` },
-						]}
+				<View style={styles.container}>
+					{/* Deep-water gradient — the one background every screen shares
+					    (replaces the old blurred-art backdrop: never stack a second
+					    gradient or image behind content). */}
+					<LinearGradient
+						colors={t.background.colors}
+						locations={t.background.locations}
+						pointerEvents="none"
+						style={StyleSheet.absoluteFill}
 					/>
 					<ScrollView
 						style={styles.container}
@@ -383,7 +377,7 @@ export default function SealedDetail() {
 									placeholder={productImageSmall}
 									style={styles.imageInset}
 									backgroundColor="transparent"
-									shimmerColor={colors.border}
+									shimmerColor={t.glass.surfaceBorder}
 									onImageLoad={({ width, height }) => {
 										if (width > 0) {
 											const aspect = Math.min(
@@ -397,14 +391,15 @@ export default function SealedDetail() {
 									}}
 									fallback={
 										<View style={styles.imageFallback}>
-											<Ionicons
-												name="cube-outline"
-												size={28}
-												color={colors.mutedForeground}
-											/>
+											<SymbolView
+	name="shippingbox"
+	size={28}
+	tintColor={t.text.secondary}
+	weight="medium"
+/>
 											<Text
 												style={{
-													color: colors.foreground,
+													color: t.text.primary,
 													fontSize: 12,
 													fontWeight: "600",
 													textAlign: "center",
@@ -424,15 +419,15 @@ export default function SealedDetail() {
 							<View
 								style={[
 									styles.sheet,
-									{ backgroundColor: colors.card, borderColor: colors.border },
+									{ backgroundColor: t.glass.surfaceFill, borderColor: t.glass.surfaceBorder },
 								]}
 							>
 								<View style={styles.valueGate}>
-									<Skeleton width={120} height={12} color={colors.muted} />
+									<Skeleton width={120} height={12} color={t.glass.elevatedFill} />
 									<Skeleton
 										width={180}
 										height={44}
-										color={colors.muted}
+										color={t.glass.elevatedFill}
 										style={{ marginTop: 8 }}
 									/>
 								</View>
@@ -442,8 +437,8 @@ export default function SealedDetail() {
 							style={[
 								styles.sheet,
 								{
-									backgroundColor: colors.card,
-									borderColor: colors.border,
+									backgroundColor: t.glass.surfaceFill,
+									borderColor: t.glass.surfaceBorder,
 									// Extend the counter past the scroll view's bottom safe-area
 									// inset so it reaches the physical screen edge; pad the
 									// content back up so the last row clears the home indicator.
@@ -460,10 +455,10 @@ export default function SealedDetail() {
 											<Text
 												style={[
 													styles.estimateLabel,
-													{ color: colors.foreground, opacity: 0.75 },
+													{ color: t.text.secondary },
 												]}
 											>
-												MARKET PRICE · UNOPENED
+												Market price · Unopened
 											</Text>
 											<Text
 												// Long values ($100k+) shrink to fit on one line
@@ -473,7 +468,7 @@ export default function SealedDetail() {
 												minimumFontScale={0.5}
 												style={[
 													styles.heroPrice,
-													{ color: colors.foreground },
+													{ color: t.text.primary },
 												]}
 											>
 												{marketPrice !== undefined
@@ -489,8 +484,8 @@ export default function SealedDetail() {
 													styles.quantityBadge,
 													styles.quantityBadgeHeader,
 													{
-														backgroundColor: colors.muted,
-														borderColor: colors.border,
+														backgroundColor: t.glass.elevatedFill,
+														borderColor: t.glass.surfaceBorder,
 													},
 												]}
 											>
@@ -519,24 +514,26 @@ export default function SealedDetail() {
 													}}
 													style={[
 														styles.qtyButton,
-														{ backgroundColor: colors.card },
+														{ backgroundColor: t.glass.surfaceFill },
 													]}
 												>
-													<Ionicons
-														name="remove"
-														size={16}
-														color={colors.foreground}
-													/>
+													<SymbolView
+	name="minus"
+	size={16}
+	tintColor={t.text.primary}
+	weight="medium"
+/>
 												</Pressable>
-												<Ionicons
-													name="layers-outline"
-													size={16}
-													color={colors.primary}
-												/>
+												<SymbolView
+	name="square.stack"
+	size={16}
+	tintColor={t.accent}
+	weight="medium"
+/>
 												<Text
 													style={[
 														styles.quantityText,
-														{ color: colors.foreground },
+														{ color: t.text.primary },
 													]}
 												>
 													{quantity}
@@ -560,14 +557,15 @@ export default function SealedDetail() {
 													}}
 													style={[
 														styles.qtyButton,
-														{ backgroundColor: colors.card },
+														{ backgroundColor: t.glass.surfaceFill },
 													]}
 												>
-													<Ionicons
-														name="add"
-														size={16}
-														color={colors.foreground}
-													/>
+													<SymbolView
+	name="plus"
+	size={16}
+	tintColor={t.text.primary}
+	weight="medium"
+/>
 												</Pressable>
 											</View>
 										)}
@@ -577,7 +575,7 @@ export default function SealedDetail() {
 									<View style={styles.trendRow}>
 										{trendChips.map(({ label, pct }) => {
 											const up = pct >= 0;
-											const trendColor = up ? "#22c55e" : "#ef4444";
+											const trendColor = up ? t.gain : t.loss;
 											return (
 												<View
 													key={label}
@@ -589,15 +587,16 @@ export default function SealedDetail() {
 														},
 													]}
 												>
-													<Ionicons
-														name={up ? "trending-up" : "trending-down"}
-														size={13}
-														color={trendColor}
-													/>
+													<SymbolView
+	name={up ? "arrow.up.right" : "arrow.down.right"}
+	size={13}
+	tintColor={trendColor}
+	weight="semibold"
+/>
 													<Text
 														style={[
 															styles.trendText,
-															{ color: colors.foreground },
+															{ color: t.text.primary },
 														]}
 													>
 														{label}{" "}
@@ -617,7 +616,7 @@ export default function SealedDetail() {
 						</Animated.View>
 
 						<View
-							style={[styles.divider, { backgroundColor: colors.border }]}
+							style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]}
 						/>
 
 						{/* Identity — product name, set, type */}
@@ -627,7 +626,7 @@ export default function SealedDetail() {
 						>
 							<View style={{ flex: 1 }}>
 								<Text
-									style={[styles.productName, { color: colors.foreground }]}
+									style={[styles.productName, { color: t.text.primary }]}
 								>
 									{product.name}
 								</Text>
@@ -635,7 +634,7 @@ export default function SealedDetail() {
 									<Text
 										style={[
 											styles.setName,
-											{ color: colors.foreground, opacity: 0.7 },
+											{ color: t.text.primary, opacity: 0.7 },
 										]}
 									>
 										{getExpansionDisplayName(product.expansion)}
@@ -650,12 +649,12 @@ export default function SealedDetail() {
 									style={[
 										styles.pill,
 										{
-											backgroundColor: colors.primary + "33",
-											borderColor: colors.primary + "55",
+											backgroundColor: t.glass.elevatedFill,
+											borderColor: t.glass.elevatedBorder,
 										},
 									]}
 								>
-									<Text style={[styles.pillText, { color: colors.foreground }]}>
+									<Text style={[styles.pillText, { color: t.text.primary }]}>
 										{product.type}
 									</Text>
 								</View>
@@ -668,7 +667,7 @@ export default function SealedDetail() {
 								<View
 									style={[
 										styles.divider,
-										{ backgroundColor: colors.border },
+										{ backgroundColor: t.glass.surfaceBorder },
 									]}
 								/>
 								<Animated.View
@@ -678,7 +677,7 @@ export default function SealedDetail() {
 								<Text
 									style={[
 										styles.toggleLabel,
-										{ color: colors.mutedForeground },
+										{ color: t.text.secondary },
 									]}
 								>
 									Variant
@@ -694,8 +693,8 @@ export default function SealedDetail() {
 													styles.togglePill,
 													{
 														backgroundColor: active
-															? colors.primary
-															: colors.muted,
+															? t.accent
+															: t.glass.elevatedFill,
 													},
 												]}
 												onPress={() => {
@@ -710,8 +709,8 @@ export default function SealedDetail() {
 														styles.toggleText,
 														{
 															color: active
-																? colors.primaryForeground
-																: colors.foreground,
+																? "#FFFFFF"
+																: t.text.primary,
 															opacity: active ? 1 : 0.75,
 														},
 													]}
@@ -727,7 +726,7 @@ export default function SealedDetail() {
 						)}
 
 						<View
-							style={[styles.divider, { backgroundColor: colors.border }]}
+							style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]}
 						/>
 
 						{/* Price Paid */}
@@ -736,7 +735,7 @@ export default function SealedDetail() {
 							style={styles.sheetSection}
 						>
 							<Text
-								style={[styles.toggleLabel, { color: colors.mutedForeground }]}
+								style={[styles.toggleLabel, { color: t.text.secondary }]}
 							>
 								Price Paid
 							</Text>
@@ -744,21 +743,21 @@ export default function SealedDetail() {
 								style={[
 									styles.pricePaidRow,
 									{
-										backgroundColor: colors.input,
-										borderColor: colors.border,
+										backgroundColor: t.glass.elevatedFill,
+										borderColor: t.glass.surfaceBorder,
 									},
 								]}
 							>
 								<Text
 									style={[
 										styles.pricePaidSymbol,
-										{ color: colors.mutedForeground },
+										{ color: t.text.secondary },
 									]}
 								>
 									$
 								</Text>
 								<TextInput
-									style={[styles.pricePaidInput, { color: colors.foreground }]}
+									style={[styles.pricePaidInput, { color: t.text.primary }]}
 									value={pricePaid}
 									onChangeText={(v) => {
 										const cleaned = v
@@ -767,7 +766,7 @@ export default function SealedDetail() {
 										setPricePaid(cleaned);
 									}}
 									placeholder="0.00"
-									placeholderTextColor={colors.mutedForeground}
+									placeholderTextColor={t.text.secondary}
 									keyboardType="decimal-pad"
 									returnKeyType="done"
 								/>
@@ -775,7 +774,7 @@ export default function SealedDetail() {
 						</Animated.View>
 
 						<View
-							style={[styles.divider, { backgroundColor: colors.border }]}
+							style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]}
 						/>
 
 						{/* Chat about this product — jumps to River with it seeded */}
@@ -784,21 +783,23 @@ export default function SealedDetail() {
 								onPress={openChatAboutProduct}
 								style={styles.linkOutRow}
 							>
-								<Ionicons
-									name="chatbubble-ellipses-outline"
-									size={18}
-									color={colors.foreground}
-								/>
+								<SymbolView
+	name="bubble.left.and.bubble.right"
+	size={18}
+	tintColor={t.text.primary}
+	weight="medium"
+/>
 								<Text
-									style={[styles.linkOutText, { color: colors.foreground }]}
+									style={[styles.linkOutText, { color: t.text.primary }]}
 								>
 									Chat about this product
 								</Text>
-								<Ionicons
-									name="chevron-forward"
-									size={16}
-									color={colors.mutedForeground}
-								/>
+								<SymbolView
+	name="chevron.right"
+	size={16}
+	tintColor={t.text.secondary}
+	weight="medium"
+/>
 							</Pressable>
 						</Animated.View>
 
@@ -808,7 +809,7 @@ export default function SealedDetail() {
 								<View
 									style={[
 										styles.divider,
-										{ backgroundColor: colors.border },
+										{ backgroundColor: t.glass.surfaceBorder },
 									]}
 								/>
 								<Animated.View
@@ -816,14 +817,14 @@ export default function SealedDetail() {
 									style={styles.sheetSection}
 								>
 								<Text
-									style={[styles.sectionTitle, { color: colors.foreground }]}
+									style={[styles.sectionTitle, { color: t.text.primary }]}
 								>
 									{"What's Inside"}
 								</Text>
 								<Text
 									style={[
 										styles.description,
-										{ color: colors.foreground, opacity: 0.85 },
+										{ color: t.text.primary, opacity: 0.85 },
 									]}
 								>
 									{product.description}
@@ -836,28 +837,29 @@ export default function SealedDetail() {
 						{configMatches && quantity <= 1 && (
 							<Animated.View entering={sectionEntering(6)}>
 								<View
-									style={[styles.divider, { backgroundColor: colors.border }]}
+									style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]}
 								/>
 								<Pressable
 									onPress={confirmRemove}
 									style={[
 										styles.removeButton,
 										{
-											borderColor: colors.destructive ?? "#ef4444",
+											borderColor: t.loss,
 											marginHorizontal: 22,
 											marginTop: 18,
 										},
 									]}
 								>
-									<Ionicons
-										name="trash-outline"
-										size={18}
-										color={colors.destructive ?? "#ef4444"}
-									/>
+									<SymbolView
+	name="trash"
+	size={18}
+	tintColor={t.loss}
+	weight="medium"
+/>
 									<Text
 										style={[
 											styles.removeButtonText,
-											{ color: colors.destructive ?? "#ef4444" },
+											{ color: t.loss },
 										]}
 									>
 										Remove from Collection
@@ -870,20 +872,20 @@ export default function SealedDetail() {
 					</ScrollView>
 				</View>
 			) : (
-				<View
-					style={[
-						styles.container,
-						styles.centered,
-						{ backgroundColor: colors.background },
-					]}
-				>
+				<View style={[styles.container, styles.centered]}>
+					<LinearGradient
+						colors={t.background.colors}
+						locations={t.background.locations}
+						pointerEvents="none"
+						style={StyleSheet.absoluteFill}
+					/>
 					{isError ? (
 						<ErrorState
 							title="Couldn't load product"
 							onRetry={() => refetch()}
 						/>
 					) : (
-						<Text style={{ color: colors.mutedForeground }}>
+						<Text style={{ color: t.text.secondary }}>
 							Product not found
 						</Text>
 					)}
@@ -982,15 +984,13 @@ const styles = StyleSheet.create({
 		gap: 6,
 	},
 	estimateLabel: {
-		fontSize: 12,
-		fontWeight: "700",
-		letterSpacing: 2,
+		...typeScale.overline,
 		marginBottom: 8,
 	},
 	heroPrice: {
-		fontSize: 44,
+		fontSize: 38,
 		fontWeight: "800",
-		letterSpacing: -1.5,
+		letterSpacing: -1,
 		marginTop: 2,
 	},
 	trendRow: {
@@ -1045,11 +1045,8 @@ const styles = StyleSheet.create({
 		marginBottom: 12,
 	},
 	toggleLabel: {
-		fontSize: 11,
-		fontWeight: "600",
-		letterSpacing: 0.5,
-		textTransform: "uppercase",
-		marginBottom: 8,
+		...typeScale.overline,
+		marginBottom: 10,
 	},
 	toggleRow: {
 		flexDirection: "row",

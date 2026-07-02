@@ -1,12 +1,12 @@
 import { Pressable } from "react-native";
 import { Redirect, router, Stack } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "@/context/ThemeContext";
+import { SymbolView } from "expo-symbols";
+import { useRiverTheme } from "@/constants/theme";
 import { useAuth } from "@clerk/clerk-expo";
 
 export default function SealedLayout() {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const { isSignedIn, isLoaded } = useAuth();
 
 	if (!isLoaded) return null;
@@ -21,7 +21,8 @@ export default function SealedLayout() {
 				headerShadowVisible: false,
 				headerTransparent: true,
 				headerStyle: { backgroundColor: "transparent" },
-				headerTintColor: colors.foreground,
+				// Native chrome tinted with the accent per the design system.
+				headerTintColor: t.accentOn,
 				contentStyle: { backgroundColor: "transparent" },
 				headerLeft: () => (
 					<Pressable
@@ -30,7 +31,12 @@ export default function SealedLayout() {
 							router.back();
 						}}
 					>
-						<Ionicons name="close" size={24} color={colors.foreground} />
+						<SymbolView
+							name="xmark"
+							size={20}
+							tintColor={t.accentOn}
+							weight="medium"
+						/>
 					</Pressable>
 				),
 				headerRight: () => null,

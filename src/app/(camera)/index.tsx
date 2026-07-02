@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { SymbolView } from "expo-symbols";
 import * as Haptics from "expo-haptics";
 import { router, Stack, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -45,6 +45,7 @@ import {
 	type CameraRef,
 } from "react-native-vision-camera";
 
+import { palette } from "@/constants/theme";
 import * as CardVision from "../../../modules/card-vision";
 import { useScanSession } from "@/context/ScanSessionContext";
 import { playCaptureFeedback } from "@/lib/captureSound";
@@ -61,14 +62,14 @@ const { width, height } = Dimensions.get("window");
 
 // Card geometry (2.5" x 3.5")
 const CARD_ASPECT_RATIO = 2.5 / 3.5;
-const CARD_CORNER_RADIUS = 14;
-const CARD_MAX_WIDTH = 325;
+const CARD_CORNER_RADIUS = 24;
+const CARD_MAX_WIDTH = 286;
 const CARD_WIDTH_RATIO = 0.78;
 const CARD_CENTER_Y_RATIO = 0.42;
-const SCRIM_OPACITY = 0.25;
+const SCRIM_OPACITY = 0.28;
 
 // Palette — signals layered over the live feed.
-const RIVER = "#208AEF"; // searching / scan
+const RIVER = palette.accent; // searching / scan (design-system accent)
 
 // Blue glow framing the screen. Drawn as concentric rounded-rect strokes from
 // the edge inward — one continuous frame so the corners stay seamless — with
@@ -90,7 +91,7 @@ const RING_RECTS = Array.from({ length: RING_STEPS }, (_, i) => {
 	};
 });
 const AMBER = "#FFAE04"; // hold steady
-const REST = "rgba(255,255,255,0.9)";
+const REST = "rgba(255,255,255,0.92)";
 
 // On-device scan tuning.
 const SCAN_INDEX_BASE = process.env.EXPO_PUBLIC_API_URL
@@ -568,7 +569,12 @@ export default function CameraScreen() {
 		return (
 			<View style={styles.container}>
 				<View style={styles.permissionContainer}>
-					<Ionicons name="camera-outline" size={48} color="#999" />
+					<SymbolView
+						name="camera"
+						size={44}
+						tintColor="rgba(255,255,255,0.5)"
+						weight="regular"
+					/>
 					<Text style={styles.permissionText}>
 						Turn on the camera to scan your cards.
 					</Text>
@@ -605,14 +611,20 @@ export default function CameraScreen() {
 					headerRight: () => (
 						<View style={styles.headerActions}>
 							<Pressable style={styles.headerButton} onPress={handleTogglePause}>
-								<Ionicons
+								<SymbolView
 									name={scanningPaused ? "play" : "pause"}
-									size={23}
-									color={scanningPaused ? RIVER : "#fff"}
+									size={21}
+									tintColor={scanningPaused ? "#FFFFFF" : palette.accentSoft}
+									weight="medium"
 								/>
 							</Pressable>
 							<Pressable style={styles.headerButton} onPress={goToLibrary}>
-								<Ionicons name="albums" size={23} color="#fff" />
+								<SymbolView
+									name="square.stack"
+									size={21}
+									tintColor={palette.accentSoft}
+									weight="medium"
+								/>
 								{count > 0 && (
 									<View style={styles.headerBadge}>
 										<Text style={styles.headerBadgeText}>
@@ -677,6 +689,14 @@ export default function CameraScreen() {
 				/>
 			</Svg>
 
+			{/* Caption below the viewfinder. */}
+			<Text
+				style={[styles.reticleCaption, { top: cardY + cardHeight + 14 }]}
+				pointerEvents="none"
+			>
+				Align the card inside the frame
+			</Text>
+
 			{/* Blue glow framing the screen — concentric strokes keep corners seamless. */}
 			<Svg
 				style={StyleSheet.absoluteFill}
@@ -713,19 +733,40 @@ export default function CameraScreen() {
 							onPress={handleOpenTips}
 							modifiers={[buttonStyle("glass"), controlSize("large")]}
 						>
-							<UIImage systemName="info.circle" size={20} color="#fff" />
+							<UIImage
+								systemName="info.circle"
+								size={20}
+								color={palette.accentSoft}
+							/>
 						</Button>
 						<Spacer />
-						<UIText
+						{/* Status pill — 8px status dot + label in a glass capsule
+						    (accent while scanning, dimmed while paused). */}
+						<HStack
+							spacing={7}
 							modifiers={[
-								font({ size: 15, weight: "semibold" }),
-								foregroundStyle("#fff"),
 								padding({ horizontal: 16, vertical: 9 }),
 								glassEffect({ shape: "capsule" }),
 							]}
 						>
-							{scanningPaused ? "Scanner paused" : "Scanning..."}
-						</UIText>
+							<UIImage
+								systemName="circle.fill"
+								size={8}
+								color={
+									scanningPaused
+										? "rgba(255,255,255,0.45)"
+										: palette.accent
+								}
+							/>
+							<UIText
+								modifiers={[
+									font({ size: 15, weight: "semibold" }),
+									foregroundStyle("#fff"),
+								]}
+							>
+								{scanningPaused ? "Scanner paused" : "Scanning..."}
+							</UIText>
+						</HStack>
 						<Spacer />
 						<Button
 							onPress={handleToggleTorch}
@@ -736,7 +777,7 @@ export default function CameraScreen() {
 									torchEnabled ? "flashlight.on.fill" : "flashlight.off.fill"
 								}
 								size={20}
-								color={torchEnabled ? AMBER : "#fff"}
+								color={torchEnabled ? AMBER : palette.accentSoft}
 							/>
 						</Button>
 					</HStack>
@@ -792,15 +833,28 @@ const styles = StyleSheet.create({
 		textAlign: "center",
 	},
 	permissionButton: {
-		backgroundColor: "#fff",
+		backgroundColor: palette.accent,
 		paddingHorizontal: 24,
 		paddingVertical: 12,
-		borderRadius: 10,
+		borderRadius: 999,
+		shadowColor: "#3B9DF2",
+		shadowOpacity: 0.4,
+		shadowRadius: 12,
+		shadowOffset: { width: 0, height: 4 },
 	},
 	permissionButtonText: {
-		color: "#000",
+		color: "#fff",
 		fontSize: 16,
-		fontWeight: "600",
+		fontWeight: "700",
+	},
+	reticleCaption: {
+		position: "absolute",
+		left: 0,
+		right: 0,
+		textAlign: "center",
+		fontSize: 13,
+		fontWeight: "500",
+		color: "rgba(255,255,255,0.65)",
 	},
 	flyCard: {
 		position: "absolute",

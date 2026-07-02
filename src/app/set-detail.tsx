@@ -17,13 +17,14 @@ import Animated, {
 	withSequence,
 	withTiming,
 } from "react-native-reanimated";
-import { Ionicons } from "@expo/vector-icons";
+import { SymbolView } from "expo-symbols";
+import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTheme } from "@/context/ThemeContext";
+import { spacing, useRiverTheme } from "@/constants/theme";
 import { useApi } from "@/lib/axios";
 import {
 	HAS_BOTTOM_SEARCH_BAR,
@@ -54,10 +55,11 @@ type SetItem = ScrydexCard | ScrydexSealedProduct;
 
 const COLUMNS = 3;
 const GAP = 8;
-const PADDING = 12;
+const PADDING = spacing.screen;
 const screenWidth = Dimensions.get("window").width;
 const imageWidth = (screenWidth - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
-const imageHeight = imageWidth * 1.4;
+// Card art is always TCG ratio (63:88), never cropped.
+const imageHeight = imageWidth * (88 / 63);
 
 const SKELETON_DATA = Array.from({ length: 15 }, (_, i) => ({
 	id: `skeleton-${i}`,
@@ -149,7 +151,7 @@ export default function SetDetail() {
 		logo?: string;
 	}>();
 	const isSealedMode = mode === "sealed";
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const { isPro } = useRevenueCat();
 	const insets = useSafeAreaInsets();
 	const api = useApi();
@@ -358,12 +360,21 @@ export default function SetDetail() {
 	// Rendered inside the FlatList so native header insets (translucent header
 	// + attached search bar) position it correctly instead of hiding it.
 	const summaryHeader = (
-		<View style={styles.summaryRow}>
+		<View
+			style={[
+				styles.summaryRow,
+				{
+					backgroundColor: t.glass.surfaceFill,
+					borderColor: t.glass.surfaceBorder,
+				},
+				t.glass.shadow,
+			]}
+		>
 			<View style={styles.summarySide}>
-				<Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>
+				<Text style={[styles.summaryLabel, { color: t.text.secondary }]}>
 					Released
 				</Text>
-				<Text style={[styles.summaryValue, { color: colors.foreground }]}>
+				<Text style={[styles.summaryValue, { color: t.text.primary }]}>
 					{releaseYear}
 				</Text>
 			</View>
@@ -377,10 +388,10 @@ export default function SetDetail() {
 				/>
 			)}
 			<View style={[styles.summarySide, styles.summaryRight]}>
-				<Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>
+				<Text style={[styles.summaryLabel, { color: t.text.secondary }]}>
 					{isSealedMode ? "Products" : "Cards"}
 				</Text>
-				<Text style={[styles.summaryValue, { color: colors.foreground }]}>
+				<Text style={[styles.summaryValue, { color: t.text.primary }]}>
 					{countValue}
 				</Text>
 			</View>
@@ -460,16 +471,17 @@ export default function SetDetail() {
 								style={[
 									styles.cardImage,
 									styles.placeholder,
-									{ backgroundColor: colors.card },
+									{ backgroundColor: t.glass.elevatedFill },
 								]}
 							>
-								<Ionicons
-									name={isSealedMode ? "cube-outline" : "image-outline"}
+								<SymbolView
+									name={isSealedMode ? "shippingbox" : "photo"}
 									size={24}
-									color={colors.mutedForeground}
+									tintColor={t.text.tertiary}
+									weight="regular"
 								/>
 								<Text
-									style={[styles.placeholderName, { color: colors.foreground }]}
+									style={[styles.placeholderName, { color: t.text.primary }]}
 									numberOfLines={2}
 								>
 									{displayName}
@@ -478,7 +490,7 @@ export default function SetDetail() {
 									<Text
 										style={[
 											styles.placeholderNumber,
-											{ color: colors.mutedForeground },
+											{ color: t.text.secondary },
 										]}
 									>
 										#{cardNumber}
@@ -492,14 +504,14 @@ export default function SetDetail() {
 								style={[
 									styles.cardImage,
 									styles.sealedTile,
-									{ backgroundColor: colors.card },
+									{ backgroundColor: t.glass.elevatedFill },
 								]}
 							>
 								<CardImage
 									uri={image}
 									style={styles.sealedImage}
 									backgroundColor="transparent"
-									shimmerColor={colors.border}
+									shimmerColor={t.glass.elevatedFill}
 									onError={() => {
 										setFailedImages((prev) => new Set(prev).add(item.id));
 									}}
@@ -509,13 +521,27 @@ export default function SetDetail() {
 							<CardImage
 								uri={image}
 								style={styles.cardImage}
-								backgroundColor={colors.card}
-								shimmerColor={colors.border}
+								backgroundColor={t.glass.elevatedFill}
+								shimmerColor={t.glass.elevatedFill}
 								onError={() => {
 									setFailedImages((prev) => new Set(prev).add(item.id));
 								}}
 							/>
 						)}
+						{/* Footer: name left, collector number right. */}
+						<View style={styles.cellFooter}>
+							<Text
+								style={[styles.cellName, { color: t.text.primary }]}
+								numberOfLines={1}
+							>
+								{displayName}
+							</Text>
+							{!!cardNumber && (
+								<Text style={[styles.cellNumber, { color: t.text.primary }]}>
+									{cardNumber}
+								</Text>
+							)}
+						</View>
 					</CardContextMenu>
 					{index === 0 && showHint && (
 						<TapHoldHintOverlay
@@ -528,7 +554,7 @@ export default function SetDetail() {
 			);
 		},
 		[
-			colors,
+			t,
 			name,
 			failedImages,
 			isValueSort,
@@ -553,7 +579,12 @@ export default function SetDetail() {
 								router.back();
 							}}
 						>
-							<Ionicons name="close" size={24} color={colors.foreground} />
+							<SymbolView
+								name="xmark"
+								size={20}
+								tintColor={t.accentOn}
+								weight="medium"
+							/>
 						</Pressable>
 					),
 				}}
@@ -567,9 +598,9 @@ export default function SetDetail() {
 				hideWhenScrolling={HAS_BOTTOM_SEARCH_BAR ? undefined : false}
 			/>
 
-			<Stack.Toolbar placement="bottom" tintColor={colors.foreground}>
+			<Stack.Toolbar placement="bottom" tintColor={t.accentOn}>
 				<Stack.Toolbar.SearchBarSlot />
-				<Stack.Toolbar.Menu icon="arrow.up.arrow.down">
+				<Stack.Toolbar.Menu icon="arrow.up.arrow.down" tintColor={t.accentOn}>
 					{/* Sealed products have no collector numbers */}
 					{(isSealedMode
 						? (["nameAsc", "valueDesc", "valueAsc"] as SortOption[])
@@ -600,7 +631,14 @@ export default function SetDetail() {
 				</Stack.Toolbar.Menu>
 			</Stack.Toolbar>
 
-			<View style={[styles.container, { backgroundColor: colors.background }]}>
+			<View style={styles.container}>
+				{/* Deep-water gradient — the one background every screen shares. */}
+				<LinearGradient
+					colors={t.background.colors}
+					locations={t.background.locations}
+					pointerEvents="none"
+					style={StyleSheet.absoluteFill}
+				/>
 				{isError ? (
 					<ErrorState title="Couldn't load set" onRetry={() => refetch()} />
 				) : showSkeleton ? (
@@ -608,7 +646,7 @@ export default function SetDetail() {
 						data={SKELETON_DATA}
 						keyExtractor={(item) => item.id}
 						numColumns={COLUMNS}
-						renderItem={() => <SkeletonCard color={colors.border} />}
+						renderItem={() => <SkeletonCard color={t.glass.elevatedFill} />}
 						ListHeaderComponent={summaryHeader}
 						contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}
 						columnWrapperStyle={styles.row}
@@ -616,12 +654,13 @@ export default function SetDetail() {
 					/>
 				) : cards.length === 0 ? (
 					<View style={styles.emptyState}>
-						<Ionicons
-							name="search-outline"
-							size={48}
-							color={colors.mutedForeground}
+						<SymbolView
+							name="magnifyingglass"
+							size={44}
+							tintColor={t.text.tertiary}
+							weight="regular"
 						/>
-						<Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+						<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
 							No matching cards
 						</Text>
 					</View>
@@ -655,32 +694,37 @@ const styles = StyleSheet.create({
 	container: {
 		flex: 1,
 	},
+	// Set info bar — glass card: RELEASED / logo / CARDS.
 	summaryRow: {
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-		// Inside the grid's contentContainer, which already pads 12
-		paddingHorizontal: 4,
-		paddingTop: 4,
-		paddingBottom: 12,
+		borderRadius: 20,
+		borderWidth: 1,
+		paddingHorizontal: 14,
+		paddingVertical: 12,
+		marginBottom: 12,
 	},
 	summarySide: {
 		flex: 1,
 	},
 	summaryLogo: {
 		flex: 1.2,
-		height: 52,
+		height: 62,
 	},
 	summaryRight: {
 		alignItems: "flex-end",
 	},
 	summaryLabel: {
-		fontSize: 13,
-		marginBottom: 2,
+		fontSize: 10,
+		fontWeight: "700",
+		letterSpacing: 1,
+		textTransform: "uppercase",
+		marginBottom: 3,
 	},
 	summaryValue: {
-		fontSize: 22,
-		fontWeight: "700",
+		fontSize: 20,
+		fontWeight: "800",
 	},
 	grid: {
 		padding: PADDING,
@@ -694,7 +738,26 @@ const styles = StyleSheet.create({
 	cardImage: {
 		width: imageWidth,
 		height: imageHeight,
-		borderRadius: 8,
+		borderRadius: 9,
+	},
+	cellFooter: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: 4,
+		marginTop: 5,
+		paddingHorizontal: 2,
+	},
+	cellName: {
+		flex: 1,
+		fontSize: 11,
+		fontWeight: "600",
+	},
+	cellNumber: {
+		fontSize: 11,
+		fontWeight: "600",
+		opacity: 0.5,
+		fontVariant: ["tabular-nums"],
 	},
 	placeholder: {
 		alignItems: "center",

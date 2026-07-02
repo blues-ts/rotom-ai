@@ -1,11 +1,11 @@
 import { View } from "react-native";
 import { Redirect, Stack } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 
 export default function HomeLayout() {
 	const { isSignedIn, isLoaded } = useAuth();
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 
 	if (!isLoaded) {
 		return null;
@@ -24,7 +24,7 @@ export default function HomeLayout() {
 				headerTitle: "",
 				// Anything the system tints in this header (pre-26 iOS defaults
 				// to blue) follows the theme instead.
-				headerTintColor: colors.foreground,
+				headerTintColor: t.accentOn,
 				headerStyle: {
 					backgroundColor: "transparent",
 				},

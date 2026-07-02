@@ -19,12 +19,13 @@ import Animated, {
 	withSequence,
 	withTiming,
 } from "react-native-reanimated";
-import { Ionicons } from "@expo/vector-icons";
+import { SymbolView } from "expo-symbols";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, Stack } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTheme } from "@/context/ThemeContext";
+import { spacing, useRiverTheme } from "@/constants/theme";
 import { HAS_BOTTOM_SEARCH_BAR } from "@/lib/platform";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
@@ -211,7 +212,7 @@ function SetsBrowser({
 	mode: SearchMode;
 	language: SetsLanguage;
 }) {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
 	const api = useApi();
 	const prefetchSetImages = usePrefetchSetImages();
@@ -298,7 +299,16 @@ function SetsBrowser({
 							});
 						}}
 					>
-						<View style={styles.setTile}>
+						<View
+							style={[
+								styles.setTile,
+								{
+									backgroundColor: t.glass.surfaceFill,
+									borderColor: t.glass.surfaceBorder,
+								},
+								t.glass.shadow,
+							]}
+						>
 							<View style={styles.setLogoBox}>
 								{item.logo ? (
 									<Image
@@ -309,15 +319,16 @@ function SetsBrowser({
 										cachePolicy="memory-disk"
 									/>
 								) : (
-									<Ionicons
-										name="albums-outline"
-										size={28}
-										color={colors.mutedForeground}
+									<SymbolView
+										name="square.stack"
+										size={26}
+										tintColor={t.text.tertiary}
+										weight="regular"
 									/>
 								)}
 							</View>
 							<Text
-								style={[styles.setName, { color: colors.foreground }]}
+								style={[styles.setName, { color: t.text.primary }]}
 								numberOfLines={1}
 							>
 								{getExpansionDisplayName(item)}
@@ -327,7 +338,7 @@ function SetsBrowser({
 				</Animated.View>
 			);
 		},
-		[colors, mode],
+		[t, mode],
 	);
 
 	if (isError) {
@@ -340,7 +351,7 @@ function SetsBrowser({
 				data={Array.from({ length: 12 }, (_, i) => ({ id: `s-${i}` }))}
 				keyExtractor={(item) => item.id}
 				numColumns={2}
-				renderItem={() => <SkeletonSetTile color={colors.border} />}
+				renderItem={() => <SkeletonSetTile color={t.glass.elevatedFill} />}
 				contentContainerStyle={[styles.grid, { paddingTop: insets.top + (HAS_BOTTOM_SEARCH_BAR ? 56 : LEGACY_TOP_GRID) }]}
 				columnWrapperStyle={styles.row}
 				scrollEnabled={false}
@@ -353,7 +364,7 @@ function SetsBrowser({
 			<Text
 				style={[
 					styles.empty,
-					{ color: colors.mutedForeground, marginTop: insets.top + (HAS_BOTTOM_SEARCH_BAR ? 20 : LEGACY_TOP_TEXT) },
+					{ color: t.text.secondary, marginTop: insets.top + (HAS_BOTTOM_SEARCH_BAR ? 20 : LEGACY_TOP_TEXT) },
 				]}
 			>
 				No sets found
@@ -384,7 +395,7 @@ function SetsBrowser({
 }
 
 export default function Search() {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const { isPro } = useRevenueCat();
 	const insets = useSafeAreaInsets();
 	const api = useApi();
@@ -557,16 +568,17 @@ export default function Search() {
 								style={[
 									styles.cardImage,
 									styles.placeholder,
-									{ backgroundColor: colors.card },
+									{ backgroundColor: t.glass.elevatedFill },
 								]}
 							>
-								<Ionicons
-									name="image-outline"
+								<SymbolView
+									name="photo"
 									size={24}
-									color={colors.mutedForeground}
+									tintColor={t.text.tertiary}
+									weight="regular"
 								/>
 								<Text
-									style={[styles.placeholderName, { color: colors.foreground }]}
+									style={[styles.placeholderName, { color: t.text.primary }]}
 									numberOfLines={2}
 								>
 									{item.name}
@@ -575,7 +587,7 @@ export default function Search() {
 									<Text
 										style={[
 											styles.placeholderNumber,
-											{ color: colors.mutedForeground },
+											{ color: t.text.secondary },
 										]}
 									>
 										#{item.cardNumber}
@@ -589,14 +601,14 @@ export default function Search() {
 								style={[
 									styles.cardImage,
 									styles.sealedTile,
-									{ backgroundColor: colors.card },
+									{ backgroundColor: t.glass.elevatedFill },
 								]}
 							>
 								<CardImage
 									uri={item.image}
 									style={styles.sealedImage}
 									backgroundColor="transparent"
-									shimmerColor={colors.border}
+									shimmerColor={t.glass.elevatedFill}
 									onError={() => {
 										setFailedImages((prev) => new Set(prev).add(item.id));
 									}}
@@ -606,8 +618,8 @@ export default function Search() {
 							<CardImage
 								uri={item.image}
 								style={styles.cardImage}
-								backgroundColor={colors.card}
-								shimmerColor={colors.border}
+								backgroundColor={t.glass.elevatedFill}
+								shimmerColor={t.glass.elevatedFill}
 								onError={() => {
 									setFailedImages((prev) => new Set(prev).add(item.id));
 								}}
@@ -625,9 +637,7 @@ export default function Search() {
 			);
 		},
 		[
-			colors.card,
-			colors.foreground,
-			colors.mutedForeground,
+			t,
 			failedImages,
 			prefetchDetail,
 			showTapHint,
@@ -658,9 +668,12 @@ export default function Search() {
 				hideWhenScrolling={HAS_BOTTOM_SEARCH_BAR ? undefined : false}
 			/>
 
-			<Stack.Toolbar placement="right" tintColor={colors.foreground}>
+			{/* Per-button tint: Toolbar-level tintColor is dropped for header
+			    placements on iOS in this expo-router version. */}
+			<Stack.Toolbar placement="right">
 				<Stack.Toolbar.Button
 					icon="camera"
+					tintColor={t.accentOn}
 					onPress={() => {
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 						if (!isPro) {
@@ -672,9 +685,12 @@ export default function Search() {
 				/>
 			</Stack.Toolbar>
 
-			<Stack.Toolbar placement="bottom" tintColor={colors.foreground}>
+			<Stack.Toolbar placement="bottom" tintColor={t.accentOn}>
 				<Stack.Toolbar.SearchBarSlot />
-				<Stack.Toolbar.Menu icon="line.3.horizontal.decrease.circle">
+				<Stack.Toolbar.Menu
+					icon="line.3.horizontal.decrease.circle"
+					tintColor={t.accentOn}
+				>
 					<Stack.Toolbar.MenuAction
 						isOn={mode === "cards"}
 						onPress={() => {
@@ -719,7 +735,14 @@ export default function Search() {
 				</Stack.Toolbar.Menu>
 			</Stack.Toolbar>
 
-			<View style={[styles.container, { backgroundColor: colors.background }]}>
+			<View style={styles.container}>
+				{/* Deep-water gradient — the one background every screen shares. */}
+				<LinearGradient
+					colors={t.background.colors}
+					locations={t.background.locations}
+					pointerEvents="none"
+					style={StyleSheet.absoluteFill}
+				/>
 				{/* Sets browser is the default content until the user types */}
 				{showHint && (
 					<Animated.View entering={FadeIn.duration(200)} style={{ flex: 1 }}>
@@ -731,7 +754,7 @@ export default function Search() {
 						data={SKELETON_DATA}
 						keyExtractor={(item) => item.id}
 						numColumns={COLUMNS}
-						renderItem={() => <SkeletonCard color={colors.border} />}
+						renderItem={() => <SkeletonCard color={t.glass.elevatedFill} />}
 						contentContainerStyle={[
 							styles.grid,
 							{
@@ -753,7 +776,7 @@ export default function Search() {
 					<Text
 						style={[
 							styles.empty,
-							{ color: colors.mutedForeground, marginTop: insets.top + (HAS_BOTTOM_SEARCH_BAR ? 20 : LEGACY_TOP_TEXT) },
+							{ color: t.text.secondary, marginTop: insets.top + (HAS_BOTTOM_SEARCH_BAR ? 20 : LEGACY_TOP_TEXT) },
 						]}
 					>
 						{mode === "sealed" ? "No products found" : "No cards found"}
@@ -791,11 +814,11 @@ export default function Search() {
 										exiting={FadeOut.duration(300)}
 										style={styles.footer}
 									>
-										<LoadingSpinner color={colors.mutedForeground} />
+										<LoadingSpinner color={t.text.secondary} />
 									</Animated.View>
 								) : !hasNextPage && cards.length > 0 ? (
 									<Text
-										style={[styles.endText, { color: colors.mutedForeground }]}
+										style={[styles.endText, { color: t.text.secondary }]}
 									>
 										No more results
 									</Text>
@@ -889,14 +912,16 @@ const styles = StyleSheet.create({
 		marginBottom: 10,
 		fontSize: 14,
 	},
+	// Glass set tile at ~4:3 (per mock 2e): logo centered, name beneath —
+	// square left dead bands around the wide, short set logos.
 	setTile: {
 		width: setTileWidth,
-		borderRadius: 12,
-		// Transparent: the logo sits directly on the screen background. No surface
-		// or border — an outline on every cell turns a gallery of logos into a wall
-		// of buttons.
+		height: 116,
+		borderRadius: 16,
+		borderWidth: 1,
 		padding: 12,
 		alignItems: "center",
+		justifyContent: "center",
 	},
 	setLogoBox: {
 		height: 56,
@@ -917,9 +942,11 @@ const styles = StyleSheet.create({
 	// Skeleton mirroring the set tile layout: logo box + name line
 	setTileSkeleton: {
 		width: setTileWidth,
-		borderRadius: 12,
+		height: 116,
+		borderRadius: 16,
 		padding: 12,
 		alignItems: "center",
+		justifyContent: "center",
 	},
 	setLogoSkeleton: {
 		height: 56,

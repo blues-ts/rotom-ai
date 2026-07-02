@@ -1,13 +1,13 @@
 import { Pressable } from "react-native";
 import { Redirect, router, Stack } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "@/context/ThemeContext";
+import { SymbolView } from "expo-symbols";
+import { useRiverTheme } from "@/constants/theme";
 import { CardConfigProvider } from "@/context/CardConfigContext";
 import { useAuth } from "@clerk/clerk-expo";
 
 export default function CardLayout() {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const { isSignedIn, isLoaded } = useAuth();
 
 	if (!isLoaded) return null;
@@ -23,7 +23,8 @@ export default function CardLayout() {
 					headerShadowVisible: false,
 					headerTransparent: true,
 					headerStyle: { backgroundColor: "transparent" },
-					headerTintColor: colors.foreground,
+					// Native chrome tinted with the accent per the design system.
+					headerTintColor: t.accentOn,
 					contentStyle: { backgroundColor: "transparent" },
 					headerLeft: () => (
 						<Pressable
@@ -32,7 +33,12 @@ export default function CardLayout() {
 								router.back();
 							}}
 						>
-							<Ionicons name="close" size={24} color={colors.foreground} />
+							<SymbolView
+								name="xmark"
+								size={20}
+								tintColor={t.accentOn}
+								weight="medium"
+							/>
 						</Pressable>
 					),
 					headerRight: () => null,
@@ -45,14 +51,15 @@ export default function CardLayout() {
 						presentation: "formSheet",
 						sheetAllowedDetents: [0.6],
 						sheetGrabberVisible: true,
-						sheetCornerRadius: 20,
+						// Bottom sheets get the larger 28pt top radius.
+						sheetCornerRadius: 28,
 						headerShown: true,
 						headerTransparent: false,
 						headerTitle: "Configure",
-						headerStyle: { backgroundColor: colors.card },
-						headerTintColor: colors.foreground,
+						headerStyle: { backgroundColor: t.glass.sheetFill },
+						headerTintColor: t.text.primary,
 						headerLeft: () => null,
-						contentStyle: { backgroundColor: colors.card },
+						contentStyle: { backgroundColor: t.glass.sheetFill },
 					}}
 				/>
 			</Stack>

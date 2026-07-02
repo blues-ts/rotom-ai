@@ -30,7 +30,8 @@ import {
 import { StatusBar } from "expo-status-bar";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { SymbolView } from "expo-symbols";
+import { useRiverTheme } from "@/constants/theme";
 import * as Haptics from "expo-haptics";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -98,6 +99,7 @@ const errorStyles = StyleSheet.create({
 
 function AppContent() {
 	const { theme, colors } = useTheme();
+	const t = useRiverTheme();
 	const { isPro } = useRevenueCat();
 
 	// Warm the expansions list + set logos in the background at launch.
@@ -115,7 +117,9 @@ function AppContent() {
 					card: colors.background,
 					text: colors.foreground,
 					border: colors.border,
-					primary: colors.primary,
+					// Native chrome (back chevrons, untinted bar items) falls back
+					// to the theme primary — keep it on the design-system accent.
+					primary: t.accentOn,
 				},
 			}}
 		>
@@ -153,7 +157,7 @@ function AppContent() {
 							headerBackButtonDisplayMode: "minimal",
 							headerTransparent: true,
 							headerStyle: { backgroundColor: "transparent" },
-							headerTintColor: colors.foreground,
+							headerTintColor: t.accentOn,
 							headerShadowVisible: false,
 							headerRight: () => (
 								<Pressable
@@ -166,7 +170,12 @@ function AppContent() {
 										router.push("/create-collection");
 									}}
 								>
-									<Ionicons name="add" size={26} color={colors.foreground} />
+									<SymbolView
+										name="plus"
+										size={22}
+										tintColor={t.accentOn}
+										weight="medium"
+									/>
 								</Pressable>
 							),
 					}}
@@ -180,7 +189,7 @@ function AppContent() {
 						headerBackButtonDisplayMode: "minimal",
 						headerTransparent: true,
 						headerStyle: { backgroundColor: "transparent" },
-						headerTintColor: colors.foreground,
+						headerTintColor: t.accentOn,
 						headerShadowVisible: false,
 					}}
 				/>
@@ -193,7 +202,7 @@ function AppContent() {
 						headerBackButtonDisplayMode: "minimal",
 						headerTransparent: true,
 						headerStyle: { backgroundColor: "transparent" },
-						headerTintColor: colors.foreground,
+						headerTintColor: t.accentOn,
 						headerShadowVisible: false,
 					}}
 				/>
@@ -203,15 +212,16 @@ function AppContent() {
 						presentation: "formSheet",
 						sheetAllowedDetents: [0.35],
 						sheetGrabberVisible: true,
-						sheetCornerRadius: 20,
+						// Bottom sheets get the larger 28pt top radius.
+						sheetCornerRadius: 28,
 						headerShown: true,
 						headerTransparent: false,
 						headerTitle: "New Collection",
-						headerStyle: { backgroundColor: colors.card },
-						headerTintColor: colors.foreground,
+						headerStyle: { backgroundColor: t.glass.sheetFill },
+						headerTintColor: t.text.primary,
 						headerShadowVisible: false,
 						headerLeft: () => null,
-						contentStyle: { backgroundColor: colors.card },
+						contentStyle: { backgroundColor: t.glass.sheetFill },
 					}}
 				/>
 				<Stack.Screen
@@ -220,17 +230,18 @@ function AppContent() {
 						presentation: "formSheet",
 						sheetAllowedDetents: [0.55, 1.0],
 						sheetGrabberVisible: true,
-						sheetCornerRadius: 20,
+						// Bottom sheets get the larger 28pt top radius.
+						sheetCornerRadius: 28,
 						sheetExpandsWhenScrolledToEdge: true,
 						headerShown: true,
 						headerTransparent: false,
 						headerTitle: "Add to Collection",
-						headerStyle: { backgroundColor: colors.card },
-						headerTintColor: colors.foreground,
+						headerStyle: { backgroundColor: t.glass.sheetFill },
+						headerTintColor: t.text.primary,
 						headerShadowVisible: false,
 						headerLeft: () => null,
 						headerRight: () => <SheetDoneButton />,
-						contentStyle: { backgroundColor: colors.card },
+						contentStyle: { backgroundColor: t.glass.sheetFill },
 					}}
 				/>
 				<Stack.Screen
@@ -269,7 +280,7 @@ function AppContent() {
 						headerTitle: "Settings",
 						headerBackButtonDisplayMode: "minimal",
 						headerStyle: { backgroundColor: colors.background },
-						headerTintColor: colors.foreground,
+						headerTintColor: t.accentOn,
 						headerShadowVisible: false,
 					}}
 				/>

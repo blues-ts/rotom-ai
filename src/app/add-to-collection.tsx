@@ -2,9 +2,9 @@ import { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { SymbolView } from "expo-symbols";
 
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 import {
 	useCollections,
 	useRefreshCollectionPrices,
@@ -23,7 +23,7 @@ import {
 import { useScanSession } from "@/context/ScanSessionContext";
 
 export default function AddToCollection() {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
   const api = useApi();
 
   const { cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade, pricePaid, cardIds, cardImages } =
@@ -184,10 +184,7 @@ export default function AddToCollection() {
   );
 
   return (
-    <ScrollView
-      style={{ backgroundColor: colors.card }}
-      contentContainerStyle={styles.container}
-    >
+    <ScrollView contentContainerStyle={styles.container}>
       <Stack.Screen
         options={{
           headerTitle: isBatch
@@ -197,7 +194,7 @@ export default function AddToCollection() {
       />
       {collections.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+          <Text style={[styles.emptyText, { color: t.text.secondary }]}>
             No collections yet — create one to add this card.
           </Text>
           <Pressable
@@ -205,17 +202,22 @@ export default function AddToCollection() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push("/create-collection");
             }}
-            style={[styles.createButton, { backgroundColor: colors.primary }]}
+            style={({ pressed }) => [
+              styles.createButton,
+              {
+                backgroundColor: t.accent,
+                transform: [{ scale: pressed ? 0.97 : 1 }],
+              },
+              t.buttonGlow,
+            ]}
           >
-            <Ionicons name="add" size={18} color={colors.primaryForeground} />
-            <Text
-              style={[
-                styles.createButtonText,
-                { color: colors.primaryForeground },
-              ]}
-            >
-              Create Collection
-            </Text>
+            <SymbolView
+              name="plus"
+              size={16}
+              tintColor="#FFFFFF"
+              weight="semibold"
+            />
+            <Text style={styles.createButtonText}>Create Collection</Text>
           </Pressable>
         </View>
       ) : (
@@ -235,34 +237,35 @@ export default function AddToCollection() {
                   styles.collectionRow,
                   {
                     backgroundColor: added
-                      ? colors.primary + "1A"
+                      ? t.accentIconFill
                       : pressed
-                        ? colors.muted
-                        : "transparent",
-                    borderColor: added ? colors.primary : colors.border,
+                        ? t.glass.pressedFill
+                        : t.glass.elevatedFill,
+                    borderColor: added ? t.accent : t.glass.elevatedBorder,
                     borderWidth: added ? 2 : 1,
                   },
                 ]}
               >
                 <View style={styles.collectionInfo}>
                   <Text
-                    style={[styles.collectionName, { color: colors.foreground }]}
+                    style={[styles.collectionName, { color: t.text.primary }]}
                     numberOfLines={1}
                   >
                     {collection.name}
                   </Text>
                   <Text
-                    style={[styles.collectionCount, { color: colors.mutedForeground }]}
+                    style={[styles.collectionCount, { color: t.text.secondary }]}
                   >
                     {added
                       ? "Added"
                       : `${collection.cardCount} ${collection.cardCount === 1 ? "card" : "cards"}`}
                   </Text>
                 </View>
-                <Ionicons
-                  name={added ? "checkmark-circle" : "chevron-forward"}
-                  size={added ? 22 : 18}
-                  color={added ? colors.primary : colors.mutedForeground}
+                <SymbolView
+                  name={added ? "checkmark.circle.fill" : "chevron.right"}
+                  size={added ? 20 : 14}
+                  tintColor={added ? t.accentOn : t.text.tertiary}
+                  weight="semibold"
                 />
               </Pressable>
             );
@@ -293,14 +296,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 6,
     marginTop: 16,
-    paddingVertical: 12,
+    paddingVertical: 13,
     paddingHorizontal: 20,
-    borderRadius: 10,
+    borderRadius: 999,
     alignSelf: "stretch",
   },
   createButtonText: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   list: {
     gap: 8,
@@ -309,8 +313,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
     borderWidth: 1,
     marginBottom: 8,
   },

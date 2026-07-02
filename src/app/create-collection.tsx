@@ -3,12 +3,12 @@ import { StyleSheet, Text, TextInput, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { router, Stack } from "expo-router";
 
-import { useTheme } from "@/context/ThemeContext";
+import { radius, typeScale, useRiverTheme } from "@/constants/theme";
 import { useCollections } from "@/hooks/useCollections";
 import { SheetDoneButton } from "@/components/SheetDoneButton";
 
 export default function CreateCollection() {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const { createCollection } = useCollections();
 	const [name, setName] = useState("");
 	const canCreate = name.trim().length > 0;
@@ -33,7 +33,8 @@ export default function CreateCollection() {
 	}, [name, createCollection]);
 
 	return (
-		<View style={[styles.content, { backgroundColor: colors.card }]}>
+		// The sheet fill comes from the route's contentStyle (root layout).
+		<View style={styles.content}>
 			<Stack.Screen
 				options={{
 					headerRight: () => (
@@ -41,20 +42,20 @@ export default function CreateCollection() {
 					),
 				}}
 			/>
-			<Text style={[styles.label, { color: colors.mutedForeground }]}>
-				COLLECTION NAME
+			<Text style={[styles.label, { color: t.text.secondary }]}>
+				Collection name
 			</Text>
 			<TextInput
 				style={[
 					styles.input,
 					{
-						backgroundColor: colors.input,
-						color: colors.foreground,
-						borderColor: colors.border,
+						backgroundColor: t.glass.elevatedFill,
+						color: t.text.primary,
+						borderColor: t.glass.elevatedBorder,
 					},
 				]}
 				placeholder="My collection"
-				placeholderTextColor={colors.mutedForeground}
+				placeholderTextColor={t.text.secondary}
 				value={name}
 				onChangeText={setName}
 				onSubmitEditing={handleCreate}
@@ -72,18 +73,18 @@ const styles = StyleSheet.create({
 		padding: 20,
 		paddingTop: 24,
 	},
+	// Every section header is an overline.
 	label: {
-		fontSize: 11,
-		fontWeight: "600",
-		letterSpacing: 0.5,
-		marginBottom: 8,
+		...typeScale.overline,
+		marginBottom: 10,
 	},
+	// Elevated glass input pill.
 	input: {
 		fontSize: 16,
-		borderRadius: 10,
+		borderRadius: radius.pill,
 		borderWidth: 1,
-		paddingHorizontal: 14,
-		paddingVertical: 12,
+		paddingHorizontal: 18,
+		paddingVertical: 13,
 		marginBottom: 16,
 	},
 });

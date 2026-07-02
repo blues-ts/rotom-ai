@@ -1,37 +1,40 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { SymbolView, type SFSymbol } from "expo-symbols";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
-import { useTheme } from "@/context/ThemeContext";
+import { spacing, typeScale, useRiverTheme } from "@/constants/theme";
 
 type Suggestion = {
-	icon: keyof typeof Ionicons.glyphMap;
+	icon: SFSymbol;
 	label: string;
 	prompt: string;
+	// Personalized rows get an accent overline above the label ("YOUR TOP CARD").
+	overline?: string;
 };
 
 // Example prompts shown on the empty chat screen. `label` is the short card text;
 // `prompt` is what actually gets sent (kept conversational for better answers).
 const SUGGESTIONS: Suggestion[] = [
 	{
-		icon: "stats-chart-outline",
-		label: "Collection value",
+		icon: "chart.bar",
+		label: "What's my collection worth?",
 		prompt: "What's my collection worth right now?",
 	},
 	{
-		icon: "trending-up-outline",
+		icon: "chart.line.uptrend.xyaxis",
 		label: "Analyze Bubble Mew",
 		prompt: "Do a market analysis on Bubble Mew from Paldean Fates",
+		overline: "Your top card",
 	},
 	{
-		icon: "sparkles-outline",
-		label: "What to invest in",
+		icon: "sparkles",
+		label: "What should I invest in?",
 		prompt: "Which Pokémon cards are good investments right now?",
 	},
 	{
-		icon: "ribbon-outline",
-		label: "How to grade cards",
+		icon: "rosette",
+		label: "How does grading work?",
 		prompt: "How does card grading work and is it worth it?",
 	},
 ];
@@ -43,7 +46,7 @@ export default function ChatSuggestions({
 	onSelect: (prompt: string) => void;
 	disabled?: boolean;
 }) {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 
 	const handlePress = (prompt: string) => {
 		if (disabled) return;
@@ -54,7 +57,7 @@ export default function ChatSuggestions({
 	return (
 		<Animated.View
 			entering={FadeInDown.duration(500).delay(120)}
-			style={styles.grid}
+			style={styles.list}
 		>
 			{SUGGESTIONS.map((s) => (
 				<Pressable
@@ -67,63 +70,81 @@ export default function ChatSuggestions({
 					style={({ pressed }) => [
 						styles.card,
 						{
-							backgroundColor: colors.card,
-							borderColor: colors.border,
-							opacity: disabled ? 0.5 : pressed ? 0.85 : 1,
-							transform: [{ scale: pressed ? 0.97 : 1 }],
+							backgroundColor: pressed
+								? t.glass.pressedFill
+								: t.glass.surfaceFill,
+							borderColor: t.glass.surfaceBorder,
+							opacity: disabled ? 0.5 : 1,
 						},
+						t.glass.shadow,
 					]}
 				>
 					<View
-						style={[styles.iconChip, { backgroundColor: `${colors.primary}1F` }]}
+						style={[styles.iconChip, { backgroundColor: t.accentIconFill }]}
 					>
-						<Ionicons name={s.icon} size={15} color={colors.primary} />
+						<SymbolView
+							name={s.icon}
+							size={18}
+							tintColor={t.accentOn}
+							weight="medium"
+						/>
 					</View>
-					<Text
-						style={[styles.cardText, { color: colors.foreground }]}
-						numberOfLines={2}
-					>
-						{s.label}
-					</Text>
+					<View style={styles.labelBlock}>
+						{s.overline ? (
+							<Text style={[styles.overline, { color: t.accentOn }]}>
+								{s.overline}
+							</Text>
+						) : null}
+						<Text
+							style={[styles.label, { color: t.text.primary }]}
+							numberOfLines={1}
+						>
+							{s.label}
+						</Text>
+					</View>
+					<SymbolView
+						name="chevron.right"
+						size={14}
+						tintColor={t.text.tertiary}
+						weight="semibold"
+					/>
 				</Pressable>
 			))}
 		</Animated.View>
 	);
 }
 
-const GAP = 6;
-
 const styles = StyleSheet.create({
-	grid: {
-		// Stacked + centered: each pill hugs its content instead of stretching
-		// edge to edge.
-		gap: GAP,
-		alignItems: "center",
-		paddingHorizontal: 16,
-		marginTop: 14,
+	list: {
+		alignSelf: "stretch",
+		paddingHorizontal: spacing.screen,
+		gap: 12,
+		marginTop: 30,
 	},
 	card: {
-		// Shared fixed width so every pill is the same size (centered by the grid),
-		// rather than each hugging its own label width.
-		width: 230,
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 8,
-		borderRadius: 12,
-		borderWidth: StyleSheet.hairlineWidth,
-		paddingVertical: 8,
+		gap: 12,
+		borderRadius: 18,
+		borderWidth: 1,
+		paddingVertical: 13,
 		paddingHorizontal: 14,
 	},
 	iconChip: {
-		width: 28,
-		height: 28,
-		borderRadius: 8,
+		width: 34,
+		height: 34,
+		borderRadius: 10,
 		alignItems: "center",
 		justifyContent: "center",
 	},
-	cardText: {
-		fontSize: 13,
-		fontWeight: "600",
-		lineHeight: 16,
+	labelBlock: {
+		flex: 1,
+		gap: 2,
+	},
+	overline: {
+		...typeScale.overline,
+	},
+	label: {
+		...typeScale.body,
 	},
 });

@@ -6,7 +6,7 @@ import Animated, {
 	withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 
 const HIDDEN_Y = -60;
 // A cached/no-op refresh resolves almost instantly, so the pill would flash and
@@ -22,7 +22,7 @@ export default function RefreshingPill({
 	label?: string;
 	topOffset?: number;
 }) {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const { top } = useSafeAreaInsets();
 	const translateY = useSharedValue(HIDDEN_Y);
 	const opacity = useSharedValue(0);
@@ -74,14 +74,19 @@ export default function RefreshingPill({
 			pointerEvents="none"
 			style={[styles.container, { top: top + topOffset }, style]}
 		>
+			{/* Floats over scrolling content, so it uses the near-opaque sheet
+			    fill rather than the 8% glass (which would be illegible here). */}
 			<View
 				style={[
 					styles.pill,
-					{ backgroundColor: colors.card, borderColor: colors.border },
+					{
+						backgroundColor: t.glass.sheetFill,
+						borderColor: t.glass.elevatedBorder,
+					},
 				]}
 			>
-				<ActivityIndicator size="small" color={colors.foreground} />
-				<Text style={[styles.text, { color: colors.foreground }]}>
+				<ActivityIndicator size="small" color={t.text.secondary} />
+				<Text style={[styles.text, { color: t.text.primary }]}>
 					{label}
 				</Text>
 			</View>

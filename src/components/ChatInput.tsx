@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
-import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "@/context/ThemeContext";
+import { SymbolView } from "expo-symbols";
+import { radius, spacing, useRiverTheme } from "@/constants/theme";
 
 interface ChatInputProps {
 	onSend: (text: string) => void;
@@ -15,7 +15,7 @@ export default function ChatInput({
 	disabled,
 	onFocus,
 }: ChatInputProps) {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const [text, setText] = useState("");
 	const canSend = useMemo(
 		() => text.trim().length > 0 && !disabled,
@@ -30,20 +30,21 @@ export default function ChatInput({
 	};
 
 	return (
-		<View style={[styles.container, { borderTopColor: colors.border }]}>
+		<View style={styles.container}>
 			<View
 				style={[
 					styles.inputRow,
 					{
-						backgroundColor: colors.input,
-						borderColor: colors.border,
+						backgroundColor: t.glass.elevatedFill,
+						borderColor: t.glass.elevatedBorder,
 					},
+					t.glass.shadow,
 				]}
 			>
 				<TextInput
-					style={[styles.input, { color: colors.foreground }]}
-					placeholder="Ask River"
-					placeholderTextColor={colors.mutedForeground}
+					style={[styles.input, { color: t.text.primary }]}
+					placeholder="Ask River anything…"
+					placeholderTextColor={t.text.secondary}
 					value={text}
 					onChangeText={setText}
 					onFocus={onFocus}
@@ -61,10 +62,11 @@ export default function ChatInput({
 						hitSlop={8}
 						style={styles.clearButton}
 					>
-						<Ionicons
-							name="close-circle"
+						<SymbolView
+							name="xmark.circle"
 							size={18}
-							color={colors.mutedForeground}
+							tintColor={t.text.secondary}
+							weight="medium"
 						/>
 					</Pressable>
 				)}
@@ -73,23 +75,21 @@ export default function ChatInput({
 					disabled={!canSend}
 					accessibilityLabel="Send message"
 					accessibilityRole="button"
-					style={[
+					style={({ pressed }) => [
 						styles.sendButton,
 						{
-							backgroundColor: canSend
-								? colors.primary
-								: colors.muted,
+							backgroundColor: t.accent,
+							opacity: canSend ? 1 : 0.45,
+							transform: [{ scale: pressed && canSend ? 0.97 : 1 }],
 						},
+						canSend && t.buttonGlow,
 					]}
 				>
-					<Ionicons
-						name="arrow-up"
-						size={20}
-						color={
-							canSend
-								? colors.primaryForeground
-								: colors.mutedForeground
-						}
+					<SymbolView
+						name="arrow.up"
+						size={18}
+						tintColor="#FFFFFF"
+						weight="semibold"
 					/>
 				</Pressable>
 			</View>
@@ -99,27 +99,22 @@ export default function ChatInput({
 
 const styles = StyleSheet.create({
 	container: {
-		paddingHorizontal: 12,
+		paddingHorizontal: spacing.screen,
 		paddingTop: 6,
 	},
 	inputRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		borderRadius: 22,
+		borderRadius: radius.pill,
 		borderWidth: 1,
-		paddingLeft: 16,
-		paddingRight: 6,
-		paddingVertical: 6,
-		// shadowColor: "#000",
-		// shadowOffset: { width: 0, height: 2 },
-		// shadowOpacity: 0.2,
-		// shadowRadius: 8,
-		// elevation: 4,
+		paddingLeft: 18,
+		paddingRight: 5,
+		paddingVertical: 5,
 	},
 	input: {
 		flex: 1,
-		fontSize: 16,
-		minHeight: 34,
+		fontSize: 17,
+		minHeight: 40,
 		maxHeight: 100,
 		marginRight: 8,
 	},
@@ -127,9 +122,9 @@ const styles = StyleSheet.create({
 		marginRight: 10,
 	},
 	sendButton: {
-		width: 32,
-		height: 32,
-		borderRadius: 16,
+		width: 40,
+		height: 40,
+		borderRadius: 20,
 		alignItems: "center",
 		justifyContent: "center",
 	},

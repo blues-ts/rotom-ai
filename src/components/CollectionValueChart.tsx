@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { LineChart } from "react-native-wagmi-charts";
 import * as Haptics from "expo-haptics";
-import { useTheme } from "@/context/ThemeContext";
+import { chart, radius, typeScale, useRiverTheme } from "@/constants/theme";
 import { formatCurrency } from "@/lib/format";
 import { ProGate } from "@/components/ProGate";
 import {
@@ -39,7 +39,9 @@ const PERIOD_DAYS: Record<ValueHistoryPeriod, number | null> = {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
-const CHART_WIDTH = SCREEN_WIDTH - 40; // hero horizontal padding (20 × 2)
+// Hero on the stage — no card chrome; just the hero's horizontal padding (20 × 2).
+const CHART_WIDTH = SCREEN_WIDTH - 40;
+const CHART_HEIGHT = 170;
 // One point per ~2px is visually identical to the full series but keeps the
 // SVG path and cursor work bounded however long the snapshot history grows.
 const MAX_CHART_POINTS = Math.round(CHART_WIDTH / 2);
@@ -101,7 +103,7 @@ function lttb(data: ValueHistoryPoint[], threshold: number): ValueHistoryPoint[]
  * image). Loads the full history once; period taps slice in memory.
  */
 function CollectionValueChartInner() {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const [period, setPeriod] = useState<ValueHistoryPeriod>("30d");
 	const { data: allHistory, isLoading } = useCollectionValueHistory();
 
@@ -126,17 +128,17 @@ function CollectionValueChartInner() {
 	}, [data]);
 
 	const up = delta >= 0;
-	const deltaColor = up ? colors.chart2 : colors.destructive;
+	const deltaColor = up ? t.gain : t.loss;
 	const deltaSign = up ? "+" : "−";
 	const deltaText = `${deltaSign}${formatCurrency(Math.abs(delta))} (${Math.abs(deltaPct).toFixed(1)}%) ${PERIOD_LABELS[period]}`;
 
 	return (
 		<ProGate ctaText="Unlock portfolio tracking" style={styles.container}>
-			<Text style={[styles.title, { color: colors.mutedForeground }]}>
+			<Text style={[styles.title, { color: t.text.secondary }]}>
 				Portfolio Value
 			</Text>
 
-			<Text style={[styles.totalValue, { color: colors.foreground }]}>
+			<Text style={[styles.totalValue, { color: t.text.primary }]}>
 				{formatCurrency(current)}
 			</Text>
 
@@ -148,21 +150,17 @@ function CollectionValueChartInner() {
 
 			{isLoading ? (
 				<View style={styles.chartPlaceholder}>
-					<ActivityIndicator size="small" color={colors.mutedForeground} />
+					<ActivityIndicator size="small" color={t.text.secondary} />
 				</View>
 			) : data.length === 0 ? (
 				<View style={styles.chartPlaceholder}>
-					<Text
-						style={[styles.emptyText, { color: colors.mutedForeground }]}
-					>
+					<Text style={[styles.emptyText, { color: t.text.secondary }]}>
 						Start adding cards to see your portfolio over time.
 					</Text>
 				</View>
 			) : data.length === 1 ? (
 				<View style={styles.chartPlaceholder}>
-					<Text
-						style={[styles.emptyText, { color: colors.mutedForeground }]}
-					>
+					<Text style={[styles.emptyText, { color: t.text.secondary }]}>
 						Come back tomorrow to see a trend
 					</Text>
 				</View>
@@ -182,7 +180,7 @@ function CollectionValueChartInner() {
 								}}
 								style={[
 									styles.chartHoverPrice,
-									{ color: colors.foreground },
+									{ color: t.text.primary },
 								]}
 							/>
 							<LineChart.DatetimeText
@@ -195,35 +193,39 @@ function CollectionValueChartInner() {
 								}}
 								style={[
 									styles.chartHoverDate,
-									{ color: colors.foreground, opacity: 0.7 },
+									{ color: t.text.primary, opacity: 0.7 },
 								]}
 							/>
 						</View>
 						<View style={styles.chartContainer}>
-							<LineChart height={180} width={CHART_WIDTH} yGutter={20}>
-								<LineChart.Path color={colors.primary} width={2}>
-									<LineChart.Gradient />
+							<LineChart
+								height={CHART_HEIGHT}
+								width={CHART_WIDTH}
+								yGutter={12}
+							>
+								<LineChart.Path
+									color={chart.line}
+									width={chart.strokeWidth}
+								>
+									<LineChart.Gradient color={chart.line} />
 									<LineChart.Dot
 										at={data.length - 1}
-										color={colors.primary}
-										size={5}
+										color={chart.line}
+										size={chart.endDotRadius}
 										hasPulse
 										pulseBehaviour="while-inactive"
 									/>
 								</LineChart.Path>
-								<LineChart.CursorCrosshair color={colors.foreground} />
+								<LineChart.CursorCrosshair color={t.text.primary} />
 							</LineChart>
 						</View>
 					</LineChart.Provider>
 				</View>
 			)}
 
-			<View
-				style={[
-					styles.periodRow,
-					{ backgroundColor: colors.muted },
-				]}
-			>
+			{/* Range pills — selected gets the accent fill, the rest are text-only
+			    (accent fill means selected, never decoration). */}
+			<View style={styles.periodRow}>
 				{PERIODS.map((p) => {
 					const active = p === period;
 					return (
@@ -232,7 +234,7 @@ function CollectionValueChartInner() {
 							hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }}
 							style={[
 								styles.periodPill,
-								active && { backgroundColor: colors.primary },
+								active && { backgroundColor: t.accent },
 							]}
 							onPress={() => {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -242,12 +244,7 @@ function CollectionValueChartInner() {
 							<Text
 								style={[
 									styles.periodText,
-									{
-										color: active
-											? colors.primaryForeground
-											: colors.foreground,
-										opacity: active ? 1 : 0.75,
-									},
+									{ color: active ? "#FFFFFF" : t.text.secondary },
 								]}
 							>
 								{p.toUpperCase()}
@@ -271,20 +268,17 @@ const styles = StyleSheet.create({
 		paddingTop: 8,
 	},
 	title: {
-		fontSize: 13,
-		fontWeight: "600",
-		letterSpacing: 0.2,
+		...typeScale.overline,
 	},
 	totalValue: {
-		fontSize: 38,
-		fontWeight: "700",
-		marginTop: 4,
+		...typeScale.heroNumber,
+		marginTop: 6,
 		fontVariant: ["tabular-nums"],
 	},
 	deltaText: {
-		fontSize: 13,
+		fontSize: 14,
 		fontWeight: "600",
-		marginTop: 2,
+		marginTop: 3,
 		fontVariant: ["tabular-nums"],
 	},
 	chartHoverHeader: {
@@ -314,11 +308,11 @@ const styles = StyleSheet.create({
 		padding: 0,
 	},
 	chartContainer: {
-		height: 180,
+		height: CHART_HEIGHT,
 		marginTop: 4,
 	},
 	chartPlaceholder: {
-		height: 180,
+		height: CHART_HEIGHT,
 		marginTop: 12,
 		alignItems: "center",
 		justifyContent: "center",
@@ -331,17 +325,15 @@ const styles = StyleSheet.create({
 	},
 	periodRow: {
 		flexDirection: "row",
-		borderRadius: 8,
-		padding: 2,
-		gap: 2,
+		gap: 4,
 		marginTop: 12,
 		alignSelf: "center",
 	},
 	periodPill: {
-		paddingHorizontal: 10,
+		paddingHorizontal: 12,
 		paddingVertical: 6,
-		borderRadius: 6,
-		minWidth: 36,
+		borderRadius: radius.pill,
+		minWidth: 40,
 		alignItems: "center",
 	},
 	periodText: {

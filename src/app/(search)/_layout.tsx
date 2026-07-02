@@ -2,12 +2,12 @@ import { Pressable } from "react-native";
 import { Redirect, router, Stack } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import * as Haptics from "expo-haptics";
-import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "@/context/ThemeContext";
+import { SymbolView } from "expo-symbols";
+import { useRiverTheme } from "@/constants/theme";
 
 export default function SearchLayout() {
 	const { isSignedIn, isLoaded } = useAuth();
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 
 	if (!isLoaded) {
 		return null;
@@ -25,7 +25,8 @@ export default function SearchLayout() {
 				headerShadowVisible: false,
 				headerTransparent: true,
 				headerStyle: { backgroundColor: "transparent" },
-				headerTintColor: colors.foreground,
+				// Native chrome tinted with the accent per the design system.
+				headerTintColor: t.accentOn,
 				headerLeft: () => (
 					<Pressable
 						onPress={() => {
@@ -33,7 +34,12 @@ export default function SearchLayout() {
 							router.back();
 						}}
 					>
-						<Ionicons name="close" size={24} color={colors.foreground} />
+						<SymbolView
+							name="xmark"
+							size={20}
+							tintColor={t.accentOn}
+							weight="medium"
+						/>
 					</Pressable>
 				),
 			}}

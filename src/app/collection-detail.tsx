@@ -19,11 +19,12 @@ import Animated, {
 	withTiming,
 	ZoomOut,
 } from "react-native-reanimated";
-import { Ionicons } from "@expo/vector-icons";
+import { SymbolView } from "expo-symbols";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTheme } from "@/context/ThemeContext";
+import { radius, spacing, typeScale, useRiverTheme } from "@/constants/theme";
 import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
 import {
 	useCollectionCards,
@@ -45,10 +46,13 @@ import type { CollectionCard } from "@/types/collection";
 
 const COLUMNS = 3;
 const GAP = 8;
-const PADDING = 12;
+const PADDING = spacing.screen;
+const TILE_PAD = 8;
 const screenWidth = Dimensions.get("window").width;
-const imageWidth = (screenWidth - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
-const imageHeight = imageWidth * 1.4;
+const tileWidth = (screenWidth - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
+const imageWidth = tileWidth - TILE_PAD * 2;
+// Card art is always TCG ratio (63:88), never cropped.
+const imageHeight = imageWidth * (88 / 63);
 
 const SKELETON_DATA = Array.from({ length: 9 }, (_, i) => ({
 	id: `skeleton-${i}`,
@@ -131,7 +135,7 @@ export default function CollectionDetail() {
 		totalValue?: string;
 		cardCount?: string;
 	}>();
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
 	const prefetchDetail = usePrefetchDetail();
 	// Explicit header offset: contentInsetAdjustmentBehavior applies its inset
@@ -229,18 +233,18 @@ export default function CollectionDetail() {
 	const summaryHeader = hasBannerData ? (
 		<View style={styles.summaryRow}>
 			<View>
-				<Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>
+				<Text style={[styles.summaryLabel, { color: t.text.secondary }]}>
 					Collection value
 				</Text>
-				<Text style={[styles.summaryValue, { color: colors.foreground }]}>
+				<Text style={[styles.summaryValue, { color: t.text.primary }]}>
 					{formatCurrency(bannerValue!)}
 				</Text>
 			</View>
 			<View style={styles.summaryRight}>
-				<Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>
+				<Text style={[styles.summaryLabel, { color: t.text.secondary }]}>
 					Cards
 				</Text>
-				<Text style={[styles.summaryValue, { color: colors.foreground }]}>
+				<Text style={[styles.summaryValue, { color: t.text.primary }]}>
 					{bannerCount}
 				</Text>
 			</View>
@@ -251,20 +255,20 @@ export default function CollectionDetail() {
 	const summarySkeleton = (
 		<View style={styles.summaryRow}>
 			<View>
-				<SkeletonBlock width={110} height={13} color={colors.border} />
+				<SkeletonBlock width={110} height={13} color={t.glass.elevatedFill} />
 				<SkeletonBlock
 					width={90}
 					height={22}
-					color={colors.border}
+					color={t.glass.elevatedFill}
 					style={{ marginTop: 4 }}
 				/>
 			</View>
 			<View style={styles.summaryRight}>
-				<SkeletonBlock width={44} height={13} color={colors.border} />
+				<SkeletonBlock width={44} height={13} color={t.glass.elevatedFill} />
 				<SkeletonBlock
 					width={36}
 					height={22}
-					color={colors.border}
+					color={t.glass.elevatedFill}
 					style={{ marginTop: 4 }}
 				/>
 			</View>
@@ -339,6 +343,17 @@ export default function CollectionDetail() {
 			const firstAppearance = !animatedIdsRef.current.has(item.id);
 			if (firstAppearance) animatedIdsRef.current.add(item.id);
 			const isSelected = selected.has(item.id);
+			const isGraded =
+				item.productType !== "sealed" &&
+				item.pricingType === "Graded" &&
+				item.gradedCompany &&
+				item.gradedGrade;
+			const badgeText =
+				item.productType === "sealed"
+					? "Sealed"
+					: isGraded
+						? `${item.gradedCompany} ${item.gradedGrade}`
+						: item.condition;
 			return (
 				<Animated.View
 					entering={
@@ -400,65 +415,17 @@ export default function CollectionDetail() {
 						});
 					}}
 				>
-					<View style={styles.cardCell}>
-						{/* Info panel rendered first so the image overlays its top edge */}
-						<View
-							style={[
-								styles.infoPanel,
-								{
-									backgroundColor: colors.card,
-									borderColor: colors.border,
-								},
-							]}
-						>
-							<Text
-								style={[styles.infoName, { color: colors.foreground }]}
-								numberOfLines={1}
-							>
-								{item.cardName}
-							</Text>
-							{/* Middle line always renders so card and sealed tiles
-							    keep identical heights. */}
-							<Text
-								style={[
-									styles.infoNumber,
-									{ color: colors.mutedForeground },
-								]}
-								numberOfLines={1}
-							>
-								{item.productType === "sealed"
-									? item.setName || " "
-									: item.cardNumber
-										? `#${item.cardNumber}`
-										: " "}
-							</Text>
-							<View style={styles.infoValueRow}>
-								<Text
-									style={[styles.infoValue, { color: colors.foreground }]}
-									numberOfLines={1}
-								>
-									{formatCurrency(item.cardValue)}
-								</Text>
-								<Text
-									style={[
-										styles.infoCondition,
-										{ color: colors.mutedForeground },
-									]}
-									numberOfLines={1}
-								>
-									{item.productType === "sealed"
-										? "Sealed"
-										: item.pricingType === "Graded" &&
-												item.gradedCompany &&
-												item.gradedGrade
-											? `${item.gradedCompany} ${item.gradedGrade}`
-											: item.condition}
-									{item.quantity > 1 ? ` ×${item.quantity}` : ""}
-								</Text>
-							</View>
-						</View>
-
-						{/* Image overlaid on top, kept fully rounded so its bottom curve sits on the info card */}
+					{/* Glass tile: art on top (radius 8), name, price + condition badge. */}
+					<View
+						style={[
+							styles.tile,
+							{
+								backgroundColor: t.glass.surfaceFill,
+								borderColor: t.glass.surfaceBorder,
+							},
+							t.glass.shadow,
+						]}
+					>
 						{item.cardImageUrl && item.productType === "sealed" ? (
 							// Sealed art comes in arbitrary aspect ratios — inset it on the
 							// tile background so the tile keeps the same card silhouette.
@@ -466,38 +433,75 @@ export default function CollectionDetail() {
 								style={[
 									styles.cardImage,
 									styles.sealedTile,
-									{ backgroundColor: colors.card },
+									{ backgroundColor: t.glass.elevatedFill },
 								]}
 							>
 								<CardImage
 									uri={item.cardImageUrl}
 									style={styles.sealedImage}
 									backgroundColor="transparent"
-									shimmerColor={colors.border}
+									shimmerColor={t.glass.elevatedFill}
 								/>
 							</View>
 						) : item.cardImageUrl ? (
 							<CardImage
 								uri={item.cardImageUrl}
 								style={styles.cardImage}
-								backgroundColor={colors.card}
-								shimmerColor={colors.border}
+								backgroundColor="transparent"
+								shimmerColor={t.glass.elevatedFill}
 							/>
 						) : (
 							<View
 								style={[
 									styles.cardImage,
 									styles.placeholder,
-									{ backgroundColor: colors.card },
+									{ backgroundColor: t.glass.elevatedFill },
 								]}
 							>
-								<Ionicons
-									name="image-outline"
+								<SymbolView
+									name="photo"
 									size={24}
-									color={colors.mutedForeground}
+									tintColor={t.text.tertiary}
+									weight="regular"
 								/>
 							</View>
 						)}
+
+						<Text
+							style={[styles.infoName, { color: t.text.primary }]}
+							numberOfLines={1}
+						>
+							{item.cardName}
+						</Text>
+						<View style={styles.infoValueRow}>
+							<Text
+								style={[styles.infoValue, { color: t.text.primary }]}
+								numberOfLines={1}
+							>
+								{formatCurrency(item.cardValue)}
+								{item.quantity > 1 ? ` ×${item.quantity}` : ""}
+							</Text>
+							<View
+								style={[
+									styles.conditionBadge,
+									{
+										backgroundColor: isGraded
+											? t.accentIconFill
+											: t.glass.elevatedFill,
+									},
+								]}
+							>
+								<Text
+									style={[
+										styles.conditionText,
+										{ color: isGraded ? t.accentOn : t.text.secondary },
+									]}
+									numberOfLines={1}
+								>
+									{badgeText}
+								</Text>
+							</View>
+						</View>
 
 						{selectMode && !isSelected && (
 							<View style={styles.greyOverlay} />
@@ -507,12 +511,17 @@ export default function CollectionDetail() {
 								style={[
 									styles.check,
 									isSelected
-										? { backgroundColor: colors.primary, borderColor: colors.primary }
+										? { backgroundColor: t.accent, borderColor: t.accent }
 										: { backgroundColor: "rgba(0,0,0,0.4)", borderColor: "#fff" },
 								]}
 							>
 								{isSelected && (
-									<Ionicons name="checkmark" size={15} color="#fff" />
+									<SymbolView
+										name="checkmark"
+										size={13}
+										tintColor="#FFFFFF"
+										weight="bold"
+									/>
 								)}
 							</View>
 						)}
@@ -521,7 +530,7 @@ export default function CollectionDetail() {
 			</Animated.View>
 			);
 		},
-		[colors, prefetchDetail, selectMode, selected, toggleSelected],
+		[t, prefetchDetail, selectMode, selected, toggleSelected],
 	);
 
 	return (
@@ -545,15 +554,21 @@ export default function CollectionDetail() {
 										onPress={handleDeleteSelected}
 										style={styles.headerButton}
 									>
-										<Ionicons
-											name="trash-outline"
-											size={20}
-											color={colors.destructive}
+										<SymbolView
+											name="trash"
+											size={19}
+											tintColor={t.loss}
+											weight="medium"
 										/>
 									</Pressable>
 								)}
 								<Pressable onPress={exitSelect} style={styles.headerButton}>
-									<Ionicons name="checkmark" size={24} color={colors.primary} />
+									<SymbolView
+										name="checkmark"
+										size={20}
+										tintColor={t.accentOn}
+										weight="semibold"
+									/>
 								</Pressable>
 							</View>
 						) : (
@@ -566,14 +581,15 @@ export default function CollectionDetail() {
 									style={styles.headerButton}
 									disabled={(cards?.length ?? 0) === 0}
 								>
-									<Ionicons
-										name="checkmark-circle-outline"
-										size={22}
-										color={
+									<SymbolView
+										name="checkmark.circle"
+										size={20}
+										tintColor={
 											(cards?.length ?? 0) === 0
-												? colors.mutedForeground
-												: colors.foreground
+												? t.text.tertiary
+												: t.accentOn
 										}
+										weight="medium"
 									/>
 								</Pressable>
 								<Pressable
@@ -583,10 +599,11 @@ export default function CollectionDetail() {
 									}}
 									style={styles.headerButton}
 								>
-									<Ionicons
-										name="trash-outline"
-										size={20}
-										color={colors.foreground}
+									<SymbolView
+										name="trash"
+										size={19}
+										tintColor={t.accentOn}
+										weight="medium"
 									/>
 								</Pressable>
 								<Pressable
@@ -596,10 +613,11 @@ export default function CollectionDetail() {
 									}}
 									style={styles.headerButton}
 								>
-									<Ionicons
-										name="pencil-outline"
-										size={20}
-										color={colors.foreground}
+									<SymbolView
+										name="pencil"
+										size={19}
+										tintColor={t.accentOn}
+										weight="medium"
 									/>
 								</Pressable>
 								<Pressable
@@ -609,7 +627,12 @@ export default function CollectionDetail() {
 									}}
 									style={styles.headerButton}
 								>
-									<Ionicons name="add" size={26} color={colors.foreground} />
+									<SymbolView
+										name="plus"
+										size={22}
+										tintColor={t.accentOn}
+										weight="medium"
+									/>
 								</Pressable>
 							</View>
 						),
@@ -624,9 +647,9 @@ export default function CollectionDetail() {
 				hideWhenScrolling={HAS_BOTTOM_SEARCH_BAR ? undefined : false}
 			/>
 
-			<Stack.Toolbar placement="bottom" tintColor={colors.foreground}>
+			<Stack.Toolbar placement="bottom" tintColor={t.accentOn}>
 				<Stack.Toolbar.SearchBarSlot />
-				<Stack.Toolbar.Menu icon="arrow.up.arrow.down">
+				<Stack.Toolbar.Menu icon="arrow.up.arrow.down" tintColor={t.accentOn}>
 					{(Object.keys(SORT_LABELS) as SortOption[]).map((o) => (
 						<Stack.Toolbar.MenuAction
 							key={o}
@@ -642,7 +665,14 @@ export default function CollectionDetail() {
 				</Stack.Toolbar.Menu>
 			</Stack.Toolbar>
 
-			<View style={[styles.container, { backgroundColor: colors.background }]}>
+			<View style={styles.container}>
+				{/* Deep-water gradient — the one background every screen shares. */}
+				<LinearGradient
+					colors={t.background.colors}
+					locations={t.background.locations}
+					pointerEvents="none"
+					style={StyleSheet.absoluteFill}
+				/>
 				<RefreshingPill
 					visible={refreshPrices.isPending}
 					topOffset={headerHeight + 8}
@@ -679,9 +709,9 @@ export default function CollectionDetail() {
 								// spinner from lingering behind it; pulling still refreshes.
 								refreshing={false}
 								onRefresh={() => refreshPrices.mutate(id)}
-								tintColor={colors.mutedForeground}
+								tintColor={t.text.secondary}
 								title="Pull to refresh prices"
-								titleColor={colors.mutedForeground}
+								titleColor={t.text.secondary}
 							/>
 						}
 					/>
@@ -692,9 +722,9 @@ export default function CollectionDetail() {
 						numColumns={COLUMNS}
 						renderItem={() => (
 							<SkeletonBlock
-								width={imageWidth}
-								height={imageHeight}
-								color={colors.border}
+								width={tileWidth}
+								height={imageHeight + 44}
+								color={t.glass.elevatedFill}
 							/>
 						)}
 						ListHeaderComponent={summaryHeader ?? summarySkeleton}
@@ -713,16 +743,17 @@ export default function CollectionDetail() {
 							{ paddingTop: topPadding, paddingBottom: insets.bottom + 24 },
 						]}
 					>
-						<Ionicons
-							name="folder-open-outline"
-							size={48}
-							color={colors.mutedForeground}
+						<SymbolView
+							name="folder"
+							size={44}
+							tintColor={t.text.tertiary}
+							weight="regular"
 						/>
-						<Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+						<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
 							No Cards Yet
 						</Text>
 						<Text
-							style={[styles.emptySubtitle, { color: colors.mutedForeground }]}
+							style={[styles.emptySubtitle, { color: t.text.secondary }]}
 						>
 							Tap + to search and add cards to this collection
 						</Text>
@@ -739,13 +770,14 @@ export default function CollectionDetail() {
 						contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}
 						ListEmptyComponent={
 							<View style={styles.emptyStateCentered}>
-								<Ionicons
-									name="search-outline"
-									size={48}
-									color={colors.mutedForeground}
+								<SymbolView
+									name="magnifyingglass"
+									size={44}
+									tintColor={t.text.tertiary}
+									weight="regular"
 								/>
 								<Text
-									style={[styles.emptyTitle, { color: colors.foreground }]}
+									style={[styles.emptyTitle, { color: t.text.primary }]}
 								>
 									No matching cards
 								</Text>
@@ -773,20 +805,19 @@ const styles = StyleSheet.create({
 	summaryRow: {
 		flexDirection: "row",
 		justifyContent: "space-between",
-		paddingHorizontal: 16,
 		paddingTop: 4,
-		paddingBottom: 12,
+		paddingBottom: 14,
 	},
 	summaryRight: {
 		alignItems: "flex-end",
 	},
 	summaryLabel: {
-		fontSize: 13,
-		marginBottom: 2,
+		...typeScale.overline,
+		marginBottom: 4,
 	},
 	summaryValue: {
-		fontSize: 22,
-		fontWeight: "700",
+		...typeScale.bigNumber,
+		fontVariant: ["tabular-nums"],
 	},
 	grid: {
 		padding: PADDING,
@@ -797,9 +828,12 @@ const styles = StyleSheet.create({
 		gap: GAP,
 		marginBottom: GAP,
 	},
-	cardCell: {
-		width: imageWidth,
-		position: "relative",
+	// Glass grid tile (dense grids get radius 14).
+	tile: {
+		width: tileWidth,
+		borderRadius: 14,
+		borderWidth: 1,
+		padding: TILE_PAD,
 	},
 	check: {
 		position: "absolute",
@@ -814,20 +848,17 @@ const styles = StyleSheet.create({
 		zIndex: 2,
 	},
 	cardImage: {
-		position: "absolute",
-		top: 0,
-		left: 0,
 		width: imageWidth,
 		height: imageHeight,
-		borderRadius: 8,
+		borderRadius: radius.thumb,
 	},
 	greyOverlay: {
 		position: "absolute",
 		top: 0,
 		left: 0,
-		width: imageWidth,
-		height: imageHeight,
-		borderRadius: 8,
+		right: 0,
+		bottom: 0,
+		borderRadius: 14,
 		backgroundColor: "rgba(120,120,120,0.5)",
 		zIndex: 1,
 	},
@@ -842,32 +873,16 @@ const styles = StyleSheet.create({
 		flex: 1,
 		borderRadius: 4,
 	},
-	infoPanel: {
-		// Push the info card down so the image (positioned absolutely at top:0)
-		// overlays its top edge by INFO_OVERLAP pixels. Content padding pushes
-		// the text below the image bottom; the BG/rounded corners peek out for
-		// the smooth "card-behind-card" transition.
-		marginTop: imageHeight - 12,
-		paddingHorizontal: 6,
-		paddingTop: 12 + 4,
-		paddingBottom: 6,
-		gap: 1,
-		borderRadius: 8,
-		borderWidth: StyleSheet.hairlineWidth,
-	},
 	infoName: {
-		fontSize: 11,
-		fontWeight: "700",
-	},
-	infoNumber: {
-		fontSize: 9,
-		fontWeight: "500",
+		fontSize: 12,
+		fontWeight: "600",
+		marginTop: 7,
 	},
 	infoValueRow: {
 		flexDirection: "row",
 		justifyContent: "space-between",
-		alignItems: "baseline",
-		marginTop: 2,
+		alignItems: "center",
+		marginTop: 3,
 		gap: 4,
 	},
 	infoValue: {
@@ -876,10 +891,14 @@ const styles = StyleSheet.create({
 		fontVariant: ["tabular-nums"],
 		flexShrink: 1,
 	},
-	infoCondition: {
-		fontSize: 9,
-		fontWeight: "600",
+	conditionBadge: {
+		borderRadius: 6,
+		paddingHorizontal: 5,
+		paddingVertical: 2,
 		flexShrink: 0,
+	},
+	conditionText: {
+		...typeScale.badge,
 	},
 	emptyState: {
 		flex: 1,

@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { SymbolView } from "expo-symbols";
 import * as Haptics from "expo-haptics";
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 
 export default function ErrorState({
 	title = "Something went wrong",
@@ -12,31 +12,45 @@ export default function ErrorState({
 	message?: string;
 	onRetry?: () => void;
 }) {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 
 	return (
 		<View style={styles.container}>
-			<Ionicons
-				name="cloud-offline-outline"
-				size={48}
-				color={colors.mutedForeground}
+			<SymbolView
+				name="wifi.slash"
+				size={44}
+				tintColor={t.text.tertiary}
+				weight="regular"
 			/>
-			<Text style={[styles.title, { color: colors.foreground }]}>
+			<Text style={[styles.title, { color: t.text.primary }]}>
 				{title}
 			</Text>
-			<Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+			<Text style={[styles.subtitle, { color: t.text.secondary }]}>
 				{message}
 			</Text>
 			{onRetry ? (
 				<Pressable
-					style={[styles.retryButton, { backgroundColor: colors.card }]}
+					style={({ pressed }) => [
+						styles.retryButton,
+						{
+							backgroundColor: pressed
+								? t.glass.pressedFill
+								: t.glass.elevatedFill,
+							borderColor: t.glass.elevatedBorder,
+						},
+					]}
 					onPress={() => {
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 						onRetry();
 					}}
 				>
-					<Ionicons name="refresh" size={16} color={colors.foreground} />
-					<Text style={[styles.retryText, { color: colors.foreground }]}>
+					<SymbolView
+						name="arrow.clockwise"
+						size={14}
+						tintColor={t.text.primary}
+						weight="medium"
+					/>
+					<Text style={[styles.retryText, { color: t.text.primary }]}>
 						Try Again
 					</Text>
 				</Pressable>
@@ -69,7 +83,8 @@ const styles = StyleSheet.create({
 		gap: 6,
 		paddingHorizontal: 16,
 		paddingVertical: 10,
-		borderRadius: 12,
+		borderRadius: 999,
+		borderWidth: 1,
 		marginTop: 8,
 	},
 	retryText: {

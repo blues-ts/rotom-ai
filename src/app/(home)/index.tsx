@@ -6,8 +6,6 @@ import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, {
-	FadeIn,
-	FadeOut,
 	interpolate,
 	useAnimatedStyle,
 } from "react-native-reanimated";
@@ -23,12 +21,12 @@ import ChatMessageList, {
 } from "@/components/ChatMessageList";
 import ChatSuggestions from "@/components/ChatSuggestions";
 import EmptyChat from "@/components/EmptyChat";
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 import { useChat } from "@/hooks/useChat";
 import { warmScanner } from "@/lib/scannerWarmup";
 
 export default function Home() {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const { bottom } = useSafeAreaInsets();
 	const chatListRef = useRef<ChatMessageListRef>(null);
 	const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
@@ -73,8 +71,6 @@ export default function Home() {
 		void sendMessage(chatPrefill);
 	}, [chatPrefill, isStreaming, sendMessage]);
 
-	const hasMessages = messages.length > 0 || isStreaming;
-
 	const handleNewChat = () => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -99,34 +95,32 @@ export default function Home() {
 
 	return (
 		<>
-			{/* Background Gradient — fades in on empty state, out when messages exist */}
-			{!hasMessages && (
-				<Animated.View
-					style={StyleSheet.absoluteFill}
-					entering={FadeIn.duration(500)}
-					exiting={FadeOut.duration(500)}
-					pointerEvents="none"
-				>
-					<LinearGradient
-						colors={[colors.primary, colors.background]}
-						accessibilityRespondsToUserInteraction={false}
-						style={StyleSheet.absoluteFill}
-					/>
-				</Animated.View>
-			)}
+			{/* "Glass on deep water" background — one vertical gradient per screen,
+			    always visible (never stacked with a second gradient). */}
+			<LinearGradient
+				colors={t.background.colors}
+				locations={t.background.locations}
+				accessibilityRespondsToUserInteraction={false}
+				pointerEvents="none"
+				style={StyleSheet.absoluteFill}
+			/>
 
-			{/* Toolbar — explicit tint: untinted native bar items fall back to
-			    system blue on pre-26 iOS (26's glass toolbars use label color). */}
-			<Stack.Toolbar placement="left" tintColor={colors.foreground}>
+			{/* Toolbar — native Liquid Glass chrome, accent-tinted per the design
+			    system (rule 5: never rebuild chrome as custom glass). Tint goes on
+			    each button: the Toolbar-level tintColor is dropped for header
+			    (left/right) placements on iOS in this expo-router version. */}
+			<Stack.Toolbar placement="left">
 				<Stack.Toolbar.Button
 					icon={"square.and.pencil"}
+					tintColor={t.accentOn}
 					onPress={handleNewChat}
 				/>
 			</Stack.Toolbar>
 
-			<Stack.Toolbar placement="right" tintColor={colors.foreground}>
+			<Stack.Toolbar placement="right">
 				<Stack.Toolbar.Button
 					icon="gearshape"
+					tintColor={t.accentOn}
 					onPress={() => {
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 						router.push("/(settings)");
@@ -134,6 +128,7 @@ export default function Home() {
 				/>
 				<Stack.Toolbar.Button
 					icon={"folder"}
+					tintColor={t.accentOn}
 					onPress={() => {
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 						router.push("/(collections)");
@@ -141,6 +136,7 @@ export default function Home() {
 				/>
 				<Stack.Toolbar.Button
 					icon={"magnifyingglass"}
+					tintColor={t.accentOn}
 					onPress={() => {
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 						router.push("/(search)");

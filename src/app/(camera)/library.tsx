@@ -1,4 +1,5 @@
-import { Ionicons } from "@expo/vector-icons";
+import { SymbolView } from "expo-symbols";
+import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import { router, Stack } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -23,7 +24,7 @@ import ContextMenu, {
 } from "react-native-context-menu-view";
 import type { NativeSyntheticEvent } from "react-native";
 
-import { useTheme } from "@/context/ThemeContext";
+import { spacing, useRiverTheme } from "@/constants/theme";
 import { useScanSession, type ScannedCard } from "@/context/ScanSessionContext";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
@@ -34,15 +35,16 @@ import CardPressable from "@/components/CardPressable";
 // hair of slack or the third tile rounds onto the next row).
 const COLUMNS = 3;
 const GAP = 8;
-const PADDING = 12;
+const PADDING = spacing.screen;
 const screenWidth = Dimensions.get("window").width;
 const imageWidth = Math.floor(
 	(screenWidth - PADDING * 2 - GAP * (COLUMNS - 1) - 1) / COLUMNS,
 );
-const imageHeight = imageWidth * 1.4;
+// Card art is always TCG ratio (63:88), never cropped.
+const imageHeight = imageWidth * (88 / 63);
 
 export default function ScanLibraryScreen() {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
 	const { isPro } = useRevenueCat();
 	const { scans, count, removeScans } = useScanSession();
@@ -100,28 +102,39 @@ export default function ScanLibraryScreen() {
 		);
 	}, [selected, removeScans, exitSelect]);
 
+	const pushAddToCollection = useCallback(
+		(ids: string[]) => {
+			if (ids.length === 0) return;
+			// Collections are Pro — gate before opening the picker, like the
+			// long-press quick-add on search (CardContextMenu).
+			if (!isPro) {
+				void presentProPaywallIfNeeded();
+				return;
+			}
+			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+			const byId = new Map(scans.map((s) => [s.id, s.image]));
+			router.push({
+				pathname: "/add-to-collection",
+				params: {
+					cardIds: ids.join(","),
+					cardImages: ids
+						.map((id) => encodeURIComponent(byId.get(id) ?? ""))
+						.join(","),
+				},
+			});
+			exitSelect();
+		},
+		[isPro, scans, exitSelect],
+	);
+
 	const handleAddToCollection = useCallback(() => {
-		const ids = [...selected];
-		if (ids.length === 0) return;
-		// Collections are Pro — gate before opening the picker, like the long-press
-		// quick-add on search (CardContextMenu).
-		if (!isPro) {
-			void presentProPaywallIfNeeded();
-			return;
-		}
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-		const byId = new Map(scans.map((s) => [s.id, s.image]));
-		router.push({
-			pathname: "/add-to-collection",
-			params: {
-				cardIds: ids.join(","),
-				cardImages: ids
-					.map((id) => encodeURIComponent(byId.get(id) ?? ""))
-					.join(","),
-			},
-		});
-		exitSelect();
-	}, [selected, isPro, scans, exitSelect]);
+		pushAddToCollection([...selected]);
+	}, [pushAddToCollection, selected]);
+
+	// The screen's primary action: add the whole scanning session at once.
+	const handleAddAll = useCallback(() => {
+		pushAddToCollection(scans.map((s) => s.id));
+	}, [pushAddToCollection, scans]);
 
 	const handleMenuPress = useCallback(
 		(e: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>) => {
@@ -136,11 +149,18 @@ export default function ScanLibraryScreen() {
 			? `${selected.size} Selected`
 			: "Select cards"
 		: count > 0
-			? `${count} Scanned`
+			? `${count} scanned`
 			: "Your Scans";
 
 	return (
-		<View style={[styles.container, { backgroundColor: colors.background }]}>
+		<View style={styles.container}>
+			{/* Deep-water gradient — the one background every screen shares. */}
+			<LinearGradient
+				colors={t.background.colors}
+				locations={t.background.locations}
+				pointerEvents="none"
+				style={StyleSheet.absoluteFill}
+			/>
 			<Stack.Screen
 				options={{
 					headerTitle,
@@ -153,7 +173,12 @@ export default function ScanLibraryScreen() {
 								router.back();
 							}}
 						>
-							<Ionicons name="close" size={24} color={colors.foreground} />
+							<SymbolView
+								name="xmark"
+								size={20}
+								tintColor={t.accentOn}
+								weight="medium"
+							/>
 						</Pressable>
 					),
 					headerRight: () => {
@@ -168,10 +193,11 @@ export default function ScanLibraryScreen() {
 										setSelectMode(true);
 									}}
 								>
-									<Ionicons
-										name="checkmark-circle-outline"
-										size={25}
-										color={colors.foreground}
+									<SymbolView
+										name="checkmark.circle"
+										size={22}
+										tintColor={t.accentOn}
+										weight="medium"
 									/>
 								</Pressable>
 							);
@@ -188,10 +214,11 @@ export default function ScanLibraryScreen() {
 										onPress={handleMenuPress}
 									>
 										<View style={styles.headerIconBtn}>
-											<Ionicons
-												name="ellipsis-horizontal"
-												size={22}
-												color={colors.foreground}
+											<SymbolView
+												name="ellipsis"
+												size={20}
+												tintColor={t.accentOn}
+												weight="medium"
 											/>
 										</View>
 									</ContextMenu>
@@ -201,7 +228,12 @@ export default function ScanLibraryScreen() {
 									style={styles.headerIconBtn}
 									onPress={exitSelect}
 								>
-									<Ionicons name="checkmark" size={26} color={colors.primary} />
+									<SymbolView
+										name="checkmark"
+										size={21}
+										tintColor={t.accentOn}
+										weight="semibold"
+									/>
 								</Pressable>
 							</View>
 						);
@@ -216,11 +248,16 @@ export default function ScanLibraryScreen() {
 						{ paddingTop: insets.top + 52, paddingBottom: insets.bottom + 24 },
 					]}
 				>
-					<Ionicons name="scan-outline" size={48} color={colors.mutedForeground} />
-					<Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+					<SymbolView
+						name="viewfinder"
+						size={44}
+						tintColor={t.text.tertiary}
+						weight="regular"
+					/>
+					<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
 						No Scans Yet
 					</Text>
-					<Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
+					<Text style={[styles.emptySubtitle, { color: t.text.secondary }]}>
 						Point the scanner at a card and it&apos;ll land here.
 					</Text>
 				</View>
@@ -230,11 +267,15 @@ export default function ScanLibraryScreen() {
 						styles.grid,
 						{
 							paddingTop: insets.top + 56,
-							paddingBottom: insets.bottom + 24,
+							// Clear the pinned "Add to collection" button below.
+							paddingBottom: insets.bottom + 96,
 						},
 					]}
 					showsVerticalScrollIndicator={false}
 				>
+					<Text style={[styles.subtitle, { color: t.text.secondary }]}>
+						Tap a card to review
+					</Text>
 					{scans.map((card, index) => {
 						const isSelected = selected.has(card.id);
 						return (
@@ -261,12 +302,17 @@ export default function ScanLibraryScreen() {
 											style={[
 												styles.check,
 												isSelected
-													? { backgroundColor: colors.primary, borderColor: colors.primary }
+													? { backgroundColor: t.accent, borderColor: t.accent }
 													: { backgroundColor: "rgba(0,0,0,0.35)", borderColor: "#fff" },
 											]}
 										>
 											{isSelected && (
-												<Ionicons name="checkmark" size={15} color="#fff" />
+												<SymbolView
+													name="checkmark"
+													size={13}
+													tintColor="#FFFFFF"
+													weight="bold"
+												/>
 											)}
 										</View>
 									)}
@@ -275,6 +321,37 @@ export default function ScanLibraryScreen() {
 						);
 					})}
 				</ScrollView>
+			)}
+
+			{/* Primary action — full-width accent pill with glow, pinned above the
+			    home indicator. Hidden in select mode (the header menu takes over). */}
+			{count > 0 && !selectMode && (
+				<View
+					style={[styles.addAllWrap, { paddingBottom: insets.bottom + 12 }]}
+					pointerEvents="box-none"
+				>
+					<Pressable
+						onPress={handleAddAll}
+						style={({ pressed }) => [
+							styles.addAllButton,
+							{
+								backgroundColor: t.accent,
+								transform: [{ scale: pressed ? 0.97 : 1 }],
+							},
+							t.buttonGlow,
+						]}
+					>
+						<SymbolView
+							name="checkmark"
+							size={15}
+							tintColor="#FFFFFF"
+							weight="semibold"
+						/>
+						<Text style={styles.addAllText}>
+							Add {count} to collection
+						</Text>
+					</Pressable>
+				</View>
 			)}
 		</View>
 	);
@@ -293,6 +370,34 @@ const styles = StyleSheet.create({
 	},
 	emptyTitle: { fontSize: 20, fontWeight: "700", marginTop: 8 },
 	emptySubtitle: { fontSize: 15, textAlign: "center", lineHeight: 21 },
+	// Full-width line under the native "N scanned" title.
+	subtitle: {
+		width: "100%",
+		textAlign: "center",
+		fontSize: 12,
+		fontWeight: "500",
+		marginTop: -6,
+		marginBottom: 6,
+	},
+	addAllWrap: {
+		position: "absolute",
+		left: spacing.screen,
+		right: spacing.screen,
+		bottom: 0,
+	},
+	addAllButton: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "center",
+		gap: 8,
+		height: 52,
+		borderRadius: 999,
+	},
+	addAllText: {
+		color: "#FFFFFF",
+		fontSize: 16,
+		fontWeight: "700",
+	},
 	grid: {
 		flexDirection: "row",
 		flexWrap: "wrap",
@@ -301,14 +406,14 @@ const styles = StyleSheet.create({
 		rowGap: GAP,
 	},
 	tile: { width: imageWidth },
-	cardImage: { width: imageWidth, height: imageHeight, borderRadius: 8 },
+	cardImage: { width: imageWidth, height: imageHeight, borderRadius: 10 },
 	greyOverlay: {
 		position: "absolute",
 		top: 0,
 		left: 0,
 		width: imageWidth,
 		height: imageHeight,
-		borderRadius: 8,
+		borderRadius: 10,
 		backgroundColor: "rgba(120,120,120,0.5)",
 	},
 	check: {
