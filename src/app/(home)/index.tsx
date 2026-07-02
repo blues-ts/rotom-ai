@@ -103,15 +103,16 @@ export default function Home() {
 				</Animated.View>
 			)}
 
-			{/* Toolbar */}
-			<Stack.Toolbar placement="left">
+			{/* Toolbar — explicit tint: untinted native bar items fall back to
+			    system blue on pre-26 iOS (26's glass toolbars use label color). */}
+			<Stack.Toolbar placement="left" tintColor={colors.foreground}>
 				<Stack.Toolbar.Button
 					icon={"square.and.pencil"}
 					onPress={handleNewChat}
 				/>
 			</Stack.Toolbar>
 
-			<Stack.Toolbar placement="right">
+			<Stack.Toolbar placement="right" tintColor={colors.foreground}>
 				<Stack.Toolbar.Button
 					icon="gearshape"
 					onPress={() => {

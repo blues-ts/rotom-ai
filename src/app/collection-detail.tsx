@@ -36,6 +36,10 @@ import CardImage from "@/components/CardImage";
 import CardPressable from "@/components/CardPressable";
 import ErrorState from "@/components/ErrorState";
 import { formatCurrency } from "@/lib/format";
+import {
+	HAS_BOTTOM_SEARCH_BAR,
+	HEADER_SEARCH_BAR_HEIGHT,
+} from "@/lib/platform";
 import { CONDITION_LABELS, formatVariantLabel } from "@/lib/scrydex";
 import type { CollectionCard } from "@/types/collection";
 
@@ -132,7 +136,11 @@ export default function CollectionDetail() {
 	const prefetchDetail = usePrefetchDetail();
 	// Explicit header offset: contentInsetAdjustmentBehavior applies its inset
 	// a frame after mount, which made the summary jump down on remounts.
-	const topPadding = insets.top + 52;
+	// Pre-26 iOS puts the search bar under the header (no bottom slot), so the
+	// content clears that extra strip too.
+	const headerHeight =
+		52 + (HAS_BOTTOM_SEARCH_BAR ? 0 : HEADER_SEARCH_BAR_HEIGHT);
+	const topPadding = insets.top + headerHeight;
 	const { renameCollection, deleteCollection, removeCardRows } =
 		useCollections();
 	const refreshPrices = useRefreshCollectionPrices();
@@ -609,9 +617,12 @@ export default function CollectionDetail() {
 			<Stack.SearchBar
 				placeholder="Search cards..."
 				onChangeText={(e) => setFilterQuery(e.nativeEvent.text)}
+				// Pre-26 iOS renders this under the header — pin it so the manual
+				// content offset above stays correct instead of collapsing on scroll.
+				hideWhenScrolling={HAS_BOTTOM_SEARCH_BAR ? undefined : false}
 			/>
 
-			<Stack.Toolbar placement="bottom">
+			<Stack.Toolbar placement="bottom" tintColor={colors.foreground}>
 				<Stack.Toolbar.SearchBarSlot />
 				<Stack.Toolbar.Menu icon="arrow.up.arrow.down">
 					{(Object.keys(SORT_LABELS) as SortOption[]).map((o) => (
@@ -630,7 +641,10 @@ export default function CollectionDetail() {
 			</Stack.Toolbar>
 
 			<View style={[styles.container, { backgroundColor: colors.background }]}>
-				<RefreshingPill visible={refreshPrices.isPending} topOffset={52 + 8} />
+				<RefreshingPill
+					visible={refreshPrices.isPending}
+					topOffset={headerHeight + 8}
+				/>
 
 				{/* Card grid or empty state. Banner lives inside the list as its
 				    header (matching set-detail) so it shares the list's layout

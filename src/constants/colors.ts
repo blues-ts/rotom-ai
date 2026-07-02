@@ -12,6 +12,9 @@ export const colors = {
     secondaryForeground: "#ffffff",
     muted: "#e5e5e6",
     mutedForeground: "#0f1419",
+    // Cells/blocks resting ON a `card` surface (e.g. the collections sheet) —
+    // one step lighter than the surface, like iOS grouped-list cells.
+    elevated: "#ffffff",
     accent: "#e3ecf6",
     accentForeground: "#1e9df1",
     destructive: "#f4212e",
@@ -38,6 +41,9 @@ export const colors = {
     secondaryForeground: "#0f1419",
     muted: "#181818",
     mutedForeground: "#72767a",
+    // Cells/blocks resting ON a `card` surface (e.g. the collections sheet) —
+    // one step lighter than the surface, like iOS grouped-list cells.
+    elevated: "#1f2127",
     accent: "#061622",
     accentForeground: "#1c9cf0",
     destructive: "#f4212e",

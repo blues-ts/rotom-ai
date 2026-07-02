@@ -25,6 +25,7 @@ import * as Haptics from "expo-haptics";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/context/ThemeContext";
+import { HAS_BOTTOM_SEARCH_BAR } from "@/lib/platform";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { useApi } from "@/lib/axios";
@@ -94,6 +95,11 @@ const SKELETON_DATA = Array.from({ length: 15 }, (_, i) => ({
 const COLUMNS = 3;
 const GAP = 8;
 const PADDING = 12;
+// Pre-26 iOS has no bottom search slot: the nav bar + pinned header search
+// bar occupy ~96pt below the safe area, so content starts below that instead
+// of the compact iOS 26 offsets.
+const LEGACY_TOP_GRID = 108; // 96 header+search, plus the grid gap
+const LEGACY_TOP_TEXT = 116; // 96 header+search, plus the text gap
 const screenWidth = Dimensions.get("window").width;
 const imageWidth = (screenWidth - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 const imageHeight = imageWidth * 1.4;
@@ -335,7 +341,7 @@ function SetsBrowser({
 				keyExtractor={(item) => item.id}
 				numColumns={2}
 				renderItem={() => <SkeletonSetTile color={colors.border} />}
-				contentContainerStyle={[styles.grid, { paddingTop: insets.top + 56 }]}
+				contentContainerStyle={[styles.grid, { paddingTop: insets.top + (HAS_BOTTOM_SEARCH_BAR ? 56 : LEGACY_TOP_GRID) }]}
 				columnWrapperStyle={styles.row}
 				scrollEnabled={false}
 			/>
@@ -347,7 +353,7 @@ function SetsBrowser({
 			<Text
 				style={[
 					styles.empty,
-					{ color: colors.mutedForeground, marginTop: insets.top + 20 },
+					{ color: colors.mutedForeground, marginTop: insets.top + (HAS_BOTTOM_SEARCH_BAR ? 20 : LEGACY_TOP_TEXT) },
 				]}
 			>
 				No sets found
@@ -364,7 +370,7 @@ function SetsBrowser({
 			renderItem={renderSet}
 			onViewableItemsChanged={onViewableItemsChanged}
 			viewabilityConfig={viewabilityConfig}
-			contentContainerStyle={[styles.grid, { paddingTop: insets.top + 56 }]}
+			contentContainerStyle={[styles.grid, { paddingTop: insets.top + (HAS_BOTTOM_SEARCH_BAR ? 56 : LEGACY_TOP_GRID) }]}
 			columnWrapperStyle={styles.row}
 			showsVerticalScrollIndicator={false}
 			keyboardDismissMode="on-drag"
@@ -647,9 +653,12 @@ export default function Search() {
 				placeholder="Search cards..."
 				onChangeText={(e) => setSearchQuery(e.nativeEvent.text)}
 				onCancelButtonPress={() => router.back()}
+				// Pre-26 iOS renders this under the header — pin it so the manual
+				// content offsets stay correct instead of collapsing on scroll.
+				hideWhenScrolling={HAS_BOTTOM_SEARCH_BAR ? undefined : false}
 			/>
 
-			<Stack.Toolbar placement="right">
+			<Stack.Toolbar placement="right" tintColor={colors.foreground}>
 				<Stack.Toolbar.Button
 					icon="camera"
 					onPress={() => {
@@ -663,7 +672,7 @@ export default function Search() {
 				/>
 			</Stack.Toolbar>
 
-			<Stack.Toolbar placement="bottom">
+			<Stack.Toolbar placement="bottom" tintColor={colors.foreground}>
 				<Stack.Toolbar.SearchBarSlot />
 				<Stack.Toolbar.Menu icon="line.3.horizontal.decrease.circle">
 					<Stack.Toolbar.MenuAction
@@ -725,7 +734,11 @@ export default function Search() {
 						renderItem={() => <SkeletonCard color={colors.border} />}
 						contentContainerStyle={[
 							styles.grid,
-							{ paddingTop: insets.top + PADDING },
+							{
+								paddingTop:
+									insets.top +
+									(HAS_BOTTOM_SEARCH_BAR ? PADDING : LEGACY_TOP_GRID),
+							},
 						]}
 						columnWrapperStyle={styles.row}
 						scrollEnabled={false}
@@ -740,7 +753,7 @@ export default function Search() {
 					<Text
 						style={[
 							styles.empty,
-							{ color: colors.mutedForeground, marginTop: insets.top + 20 },
+							{ color: colors.mutedForeground, marginTop: insets.top + (HAS_BOTTOM_SEARCH_BAR ? 20 : LEGACY_TOP_TEXT) },
 						]}
 					>
 						{mode === "sealed" ? "No products found" : "No cards found"}
@@ -755,7 +768,11 @@ export default function Search() {
 							renderItem={renderItem}
 							contentContainerStyle={[
 								styles.grid,
-								{ paddingTop: insets.top + PADDING },
+								{
+								paddingTop:
+									insets.top +
+									(HAS_BOTTOM_SEARCH_BAR ? PADDING : LEGACY_TOP_GRID),
+							},
 							]}
 							columnWrapperStyle={styles.row}
 							showsVerticalScrollIndicator={false}

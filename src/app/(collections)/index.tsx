@@ -123,9 +123,10 @@ export default function Collections() {
 									cardCount={c.cardCount}
 									totalValue={c.totalValue}
 									cardImages={c.cardImages}
-									// `border` (not `muted`) so blocks stay visible against
-									// the sheet's `card` — same trick as the card detail.
-									backgroundColor={colors.border}
+									// `elevated`: one step lighter than the sheet's `card`
+									// surface, like iOS grouped-list cells — flat `border` gray
+									// and pure black both felt unnatural here.
+									backgroundColor={colors.elevated}
 									onPress={() =>
 										router.push(
 											`/collection-detail?id=${c.id}&name=${encodeURIComponent(c.name)}&totalValue=${c.totalValue}&cardCount=${c.cardCount}`,

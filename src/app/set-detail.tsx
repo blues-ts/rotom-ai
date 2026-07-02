@@ -25,6 +25,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/context/ThemeContext";
 import { useApi } from "@/lib/axios";
+import {
+	HAS_BOTTOM_SEARCH_BAR,
+	HEADER_SEARCH_BAR_HEIGHT,
+} from "@/lib/platform";
 import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
 import { searchCards, searchSealed } from "@/lib/api/pricing";
 import { getCatalogSet, catalogCardToScrydex } from "@/lib/api/catalog";
@@ -152,8 +156,10 @@ export default function SetDetail() {
 	const prefetchDetail = usePrefetchDetail();
 	// Explicit header offset: contentInsetAdjustmentBehavior applies its inset
 	// a frame after mount, which made the summary jump down on every list
-	// remount (initial load, sort changes).
-	const topPadding = insets.top + 20;
+	// remount (initial load, sort changes). Pre-26 iOS puts the search bar
+	// under the header (no bottom slot), so clear that extra strip too.
+	const topPadding =
+		insets.top + 20 + (HAS_BOTTOM_SEARCH_BAR ? 0 : HEADER_SEARCH_BAR_HEIGHT);
 	const [filterQuery, setFilterQuery] = useState("");
 	const [debouncedFilter, setDebouncedFilter] = useState("");
 	const [sortBy, setSortBy] = useState<SortOption>(
@@ -556,9 +562,12 @@ export default function SetDetail() {
 			<Stack.SearchBar
 				placeholder={isSealedMode ? "Search products..." : "Search this set..."}
 				onChangeText={(e) => setFilterQuery(e.nativeEvent.text)}
+				// Pre-26 iOS renders this under the header — pin it so the manual
+				// content offset above stays correct instead of collapsing on scroll.
+				hideWhenScrolling={HAS_BOTTOM_SEARCH_BAR ? undefined : false}
 			/>
 
-			<Stack.Toolbar placement="bottom">
+			<Stack.Toolbar placement="bottom" tintColor={colors.foreground}>
 				<Stack.Toolbar.SearchBarSlot />
 				<Stack.Toolbar.Menu icon="arrow.up.arrow.down">
 					{/* Sealed products have no collector numbers */}
