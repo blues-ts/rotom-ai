@@ -228,15 +228,20 @@ export function useChat() {
 
 							flushBuffer();
 
+							// Empty content = the model produced nothing (server already
+							// retried once) — surface it as an error so the retry
+							// button shows instead of a dead-end "complete" message.
+							const content =
+								fullMarkdownRef.current.trim() ||
+								bufferRef.current.trim();
 							const assistantMessage: Message = {
 								id: (Date.now() + 1).toString(),
 								role: "assistant",
 								content:
-									fullMarkdownRef.current.trim() ||
-									bufferRef.current.trim() ||
+									content ||
 									"Sorry, I wasn't able to generate a response. Please try again.",
 								createdAt: new Date().toISOString(),
-								status: "complete",
+								status: content ? "complete" : "error",
 							};
 
 							setMessages((prev) => [...prev, assistantMessage]);

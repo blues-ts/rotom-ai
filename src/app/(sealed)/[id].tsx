@@ -104,6 +104,7 @@ export default function SealedDetail() {
 	const {
 		id,
 		name,
+		image: initImage,
 		variant: initVariant,
 		collectionId,
 		quantity: initQuantity,
@@ -111,6 +112,8 @@ export default function SealedDetail() {
 	} = useLocalSearchParams<{
 		id: string;
 		name?: string;
+		/** Thumbnail URL passed from the grid — already cached, shown instantly. */
+		image?: string;
 		variant?: string;
 		collectionId?: string;
 		quantity?: string;
@@ -196,6 +199,13 @@ export default function SealedDetail() {
 	const productImage = product
 		? getCardImage(product, variant || undefined, "large")
 		: undefined;
+	// The grid thumbnail is already cached, so it paints instantly as the hero
+	// placeholder (crossfaded to the hi-res art once it loads) and as the blurred
+	// backdrop — same treatment as the card detail screen.
+	const productImageSmall =
+		(product ? getCardImage(product, variant || undefined, "small") : undefined) ??
+		initImage;
+	const bgImage = initImage ?? productImageSmall;
 
 	// Frame height tracks the artwork's natural ratio, clamped to sane bounds.
 	// We ease the height into place once the image reports its dimensions so the
@@ -235,6 +245,20 @@ export default function SealedDetail() {
 		id,
 		variant,
 	]);
+
+	// Pops this modal (and anything under it) back to the home chat screen with
+	// a ready-to-send question about this product seeded into the input.
+	const openChatAboutProduct = () => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		const displayName = product?.name ?? name ?? "this product";
+		const setName = product?.expansion
+			? ` from ${getExpansionDisplayName(product.expansion)}`
+			: "";
+		router.dismissTo({
+			pathname: "/(home)",
+			params: { chatPrefill: `Tell me about ${displayName}${setName}` },
+		});
+	};
 
 	const confirmRemove = () => {
 		Alert.alert("Remove Product", "Remove this product from the collection?", [
@@ -321,51 +345,15 @@ export default function SealedDetail() {
 				}}
 			/>
 
-			{isLoading ? (
-				<ScrollView
-					style={[styles.container, { backgroundColor: colors.background }]}
-					contentContainerStyle={styles.content}
-					contentInsetAdjustmentBehavior="automatic"
-					scrollEnabled={false}
-				>
-					<View style={styles.imageContainer}>
-						<Skeleton
-							width={IMAGE_WIDTH}
-							height={IMAGE_WIDTH * MAX_ASPECT}
-							color={colors.muted}
-							style={{ borderRadius: 19 }}
-						/>
-					</View>
-					<View
-						style={[
-							styles.sheet,
-							{ backgroundColor: colors.card, borderColor: colors.border },
-						]}
-					>
-						<View
-							style={[
-								styles.grabber,
-								{ backgroundColor: colors.mutedForeground + "66" },
-							]}
-						/>
-						<View style={styles.valueGate}>
-							<Skeleton width={120} height={12} color={colors.muted} />
-							<Skeleton
-								width={180}
-								height={44}
-								color={colors.muted}
-								style={{ marginTop: 8 }}
-							/>
-						</View>
-					</View>
-				</ScrollView>
-			) : product ? (
+			{isLoading || product ? (
 				<View
 					style={[styles.container, { backgroundColor: colors.background }]}
 				>
-					{productImage && (
+					{/* Blurred backdrop — the cached thumbnail paints it immediately,
+					    even while the product data is still loading. */}
+					{bgImage && (
 						<Image
-							source={{ uri: productImage }}
+							source={{ uri: bgImage }}
 							style={StyleSheet.absoluteFill}
 							contentFit="cover"
 							blurRadius={30}
@@ -384,12 +372,15 @@ export default function SealedDetail() {
 						contentInsetAdjustmentBehavior="automatic"
 						showsVerticalScrollIndicator={false}
 					>
-						{/* Product Image — art floating on the blurred backdrop,
-						    frame sized to the artwork's natural ratio */}
+						{/* Product Image — persistent across the data load: the cached
+						    grid thumbnail shows instantly as the placeholder, then
+						    crossfades to the hi-res art. Frame sized to the artwork's
+						    natural ratio once it reports dimensions. */}
 						<View style={styles.imageContainer}>
 							<Animated.View style={[{ width: IMAGE_WIDTH }, imageFrameStyle]}>
 								<CardImage
-									uri={productImage ?? ""}
+									uri={productImage ?? initImage ?? ""}
+									placeholder={productImageSmall}
 									style={styles.imageInset}
 									backgroundColor="transparent"
 									shimmerColor={colors.border}
@@ -421,7 +412,7 @@ export default function SealedDetail() {
 												}}
 												numberOfLines={2}
 											>
-												{product.name}
+												{product?.name ?? name}
 											</Text>
 										</View>
 									}
@@ -429,6 +420,24 @@ export default function SealedDetail() {
 							</Animated.View>
 						</View>
 
+						{!product ? (
+							<View
+								style={[
+									styles.sheet,
+									{ backgroundColor: colors.card, borderColor: colors.border },
+								]}
+							>
+								<View style={styles.valueGate}>
+									<Skeleton width={120} height={12} color={colors.muted} />
+									<Skeleton
+										width={180}
+										height={44}
+										color={colors.muted}
+										style={{ marginTop: 8 }}
+									/>
+								</View>
+							</View>
+						) : (
 						<View
 							style={[
 								styles.sheet,
@@ -443,13 +452,6 @@ export default function SealedDetail() {
 								},
 							]}
 						>
-							<View
-								style={[
-									styles.grabber,
-									{ backgroundColor: colors.mutedForeground + "66" },
-								]}
-							/>
-
 							{/* Market price — the sheet's headline, on the counter */}
 							<Animated.View entering={sectionEntering(1)}>
 								<ProGate style={styles.valueGate}>
@@ -464,6 +466,11 @@ export default function SealedDetail() {
 												MARKET PRICE · UNOPENED
 											</Text>
 											<Text
+												// Long values ($100k+) shrink to fit on one line
+												// instead of wrapping under the quantity badge.
+												numberOfLines={1}
+												adjustsFontSizeToFit
+												minimumFontScale={0.5}
 												style={[
 													styles.heroPrice,
 													{ color: colors.foreground },
@@ -767,6 +774,34 @@ export default function SealedDetail() {
 							</View>
 						</Animated.View>
 
+						<View
+							style={[styles.divider, { backgroundColor: colors.border }]}
+						/>
+
+						{/* Chat about this product — jumps to River with it seeded */}
+						<Animated.View entering={sectionEntering(5)}>
+							<Pressable
+								onPress={openChatAboutProduct}
+								style={styles.linkOutRow}
+							>
+								<Ionicons
+									name="chatbubble-ellipses-outline"
+									size={18}
+									color={colors.foreground}
+								/>
+								<Text
+									style={[styles.linkOutText, { color: colors.foreground }]}
+								>
+									Chat about this product
+								</Text>
+								<Ionicons
+									name="chevron-forward"
+									size={16}
+									color={colors.mutedForeground}
+								/>
+							</Pressable>
+						</Animated.View>
+
 						{/* Description */}
 						{!!product.description && (
 							<>
@@ -831,6 +866,7 @@ export default function SealedDetail() {
 							</Animated.View>
 						)}
 						</View>
+						)}
 					</ScrollView>
 				</View>
 			) : (
@@ -889,13 +925,6 @@ const styles = StyleSheet.create({
 		shadowRadius: 18,
 		elevation: 12,
 	},
-	grabber: {
-		width: 38,
-		height: 5,
-		borderRadius: 3,
-		alignSelf: "center",
-		marginBottom: 6,
-	},
 	sheetSection: {
 		paddingHorizontal: 22,
 		paddingVertical: 18,
@@ -903,6 +932,19 @@ const styles = StyleSheet.create({
 	divider: {
 		height: StyleSheet.hairlineWidth,
 		marginHorizontal: 22,
+	},
+	// Link-out — a slim tappable row between sheet sections.
+	linkOutRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 10,
+		paddingHorizontal: 22,
+		paddingVertical: 16,
+	},
+	linkOutText: {
+		flex: 1,
+		fontSize: 15,
+		fontWeight: "600",
 	},
 
 	// Value header — the headline price + owned quantity, on the counter lip

@@ -39,7 +39,9 @@ function CardImagePressable({ cardId, name, image, children }: { cardId: string;
 // No `g` flag: a global regex makes `.test()` stateful (it advances `lastIndex`),
 // which intermittently mis-fires across messages. `.split()` still splits every
 // match and keeps the capture group without it.
-const PERCENT_REGEX = /(\([+-][\d.]+%\))/;
+// Matches bare signed percentages ("+11.83%", "-1.74%", incl. Unicode minus)
+// wherever they appear — "7-day trend: -1.74%", "(7-day: +0.81%, 30-day: …)".
+const PERCENT_REGEX = /([+\-−][\d.]+%)/;
 
 /**
  * Custom markdown renderer that colorizes percentage changes
@@ -93,10 +95,14 @@ export class ColoredRenderer extends Renderer {
 
 	text(text: string | ReactNode[], styles?: TextStyle): ReactNode {
 		if (typeof text === "string" && PERCENT_REGEX.test(text)) {
+			// A single capture group means matches land at odd indices of the split.
 			const parts = text.split(PERCENT_REGEX);
 			const children = parts.map((part, i) => {
-				if (PERCENT_REGEX.test(part)) {
-					const isPositive = part.includes("+");
+				if (i % 2 === 1) {
+					// Skip numeric ranges ("10-15%"): the "-15%" there is not a delta.
+					const prev = parts[i - 1];
+					if (prev && /\d$/.test(prev)) return part;
+					const isPositive = part.startsWith("+");
 					return (
 						<Text
 							key={i}

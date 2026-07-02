@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Alert, InteractionManager, StyleSheet, View } from "react-native";
 
-import { router, Stack } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
@@ -33,6 +33,12 @@ export default function Home() {
 	const chatListRef = useRef<ChatMessageListRef>(null);
 	const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
 
+	// Auto-send the question when arriving via "Chat about this card" on the
+	// card detail screen. Waits for any in-flight stream to finish (sendMessage
+	// no-ops while streaming), and clears the param only once sent so the same
+	// card can be asked about again later.
+	const { chatPrefill } = useLocalSearchParams<{ chatPrefill?: string }>();
+
 	// Warm the ~66 MB on-device scanner index once we're home — deferred until
 	// after the entry transition/animations settle so the heavy native load never
 	// janks the splash exit or this screen's mount. Idempotent (see scannerWarmup).
@@ -60,6 +66,12 @@ export default function Home() {
 		retryLast,
 		startNewChat,
 	} = useChat();
+
+	useEffect(() => {
+		if (!chatPrefill || isStreaming) return;
+		router.setParams({ chatPrefill: "" });
+		void sendMessage(chatPrefill);
+	}, [chatPrefill, isStreaming, sendMessage]);
 
 	const hasMessages = messages.length > 0 || isStreaming;
 

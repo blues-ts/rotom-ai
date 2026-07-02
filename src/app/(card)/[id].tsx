@@ -200,6 +200,21 @@ const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
 // AnimatedTextInput so every interpolated frame is painted without JS churn.
 function TickerPrice({ value, style }: { value: number; style: any }) {
 	const animated = useSharedValue(value);
+	// A TextInput's intrinsic width is measured once at mount — animated text
+	// updates never re-trigger layout, so a value that grows longer than the
+	// mount-time string gets clipped. Fill the row instead and shrink the font
+	// to fit long values (a TextInput can't adjustsFontSizeToFit like Text can).
+	const [rowWidth, setRowWidth] = useState(0);
+	const targetText = formatPrice(value);
+	// ~0.62em per glyph: tabular-nums digits at weight 800, net of the -1.5
+	// letter-spacing. Conservative so the string never overflows the row.
+	const fontSize =
+		rowWidth > 0
+			? Math.min(
+					44,
+					Math.max(22, Math.floor(rowWidth / (targetText.length * 0.62))),
+				)
+			: 44;
 
 	useEffect(() => {
 		animated.value = withTiming(value, {
@@ -223,14 +238,19 @@ function TickerPrice({ value, style }: { value: number; style: any }) {
 	});
 
 	return (
-		<AnimatedTextInput
-			editable={false}
-			pointerEvents="none"
-			underlineColorAndroid="transparent"
-			style={[style, styles.tickerInput]}
-			animatedProps={animatedProps}
-			defaultValue={formatPrice(value)}
-		/>
+		<View
+			style={{ width: "100%" }}
+			onLayout={(e) => setRowWidth(e.nativeEvent.layout.width)}
+		>
+			<AnimatedTextInput
+				editable={false}
+				pointerEvents="none"
+				underlineColorAndroid="transparent"
+				style={[style, styles.tickerInput, { width: "100%", fontSize }]}
+				animatedProps={animatedProps}
+				defaultValue={targetText}
+			/>
+		</View>
 	);
 }
 
@@ -899,6 +919,19 @@ export default function CardDetail() {
 	const tcgplayerUrl = card
 		? getTcgplayerProductUrl(card, variant || undefined)
 		: undefined;
+
+	// Pops this modal (and anything under it) back to the home chat screen with
+	// a ready-to-send question about this card seeded into the input.
+	const openChatAboutCard = useCallback(() => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		const label = `${displayName}${cardNumber ? ` #${cardNumber}` : ""}${
+			setDisplayName ? ` from ${setDisplayName}` : ""
+		}`;
+		router.dismissTo({
+			pathname: "/(home)",
+			params: { chatPrefill: `Tell me about ${label}` },
+		});
+	}, [displayName, cardNumber, setDisplayName]);
 
 	// Scroll the detail view up so the estimate price stays visible above the
 	// configure sheet while options are changed.
@@ -1620,6 +1653,36 @@ export default function CardDetail() {
 								<View
 									style={[styles.divider, { backgroundColor: colors.border }]}
 								/>
+
+								{/* Chat about this card — jumps to River with the card seeded */}
+								<Animated.View entering={sectionEntering(4)}>
+									<Pressable
+										onPress={openChatAboutCard}
+										style={styles.linkOutRow}
+									>
+										<Ionicons
+											name="chatbubble-ellipses-outline"
+											size={18}
+											color={colors.foreground}
+										/>
+										<Text
+											style={[
+												styles.linkOutText,
+												{ color: colors.foreground },
+											]}
+										>
+											Chat about this card
+										</Text>
+										<Ionicons
+											name="chevron-forward"
+											size={16}
+											color={colors.mutedForeground}
+										/>
+									</Pressable>
+									<View
+										style={[styles.divider, { backgroundColor: colors.border }]}
+									/>
+								</Animated.View>
 
 								{/* Buy on TCGplayer — follows the selected variant */}
 								{tcgplayerUrl && (

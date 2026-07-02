@@ -367,6 +367,8 @@ export default function CollectionDetail() {
 								params: {
 									id: item.cardId,
 									name: item.cardName,
+									// Cached image — shows instantly while the product loads.
+									...(item.cardImageUrl ? { image: item.cardImageUrl } : {}),
 									variant: item.variant,
 									collectionId: item.collectionId,
 									quantity: String(item.quantity),
