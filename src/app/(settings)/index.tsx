@@ -430,7 +430,7 @@ export default function Settings() {
 									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 									await resetTapHoldHint();
 									toast.show(
-										"Tap & hold hint reset — open search or a set.",
+										"Hints reset — open search, a set, or a card.",
 										"success",
 									);
 								}}

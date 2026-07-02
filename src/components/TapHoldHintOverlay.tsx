@@ -16,10 +16,12 @@ import { frame, padding } from "@expo/ui/swift-ui/modifiers";
 export default function TapHoldHintOverlay({
 	width,
 	height,
+	label = "Tap and hold me!",
 	onDismiss,
 }: {
 	width: number;
 	height: number;
+	label?: string;
 	onDismiss: () => void;
 }) {
 	return (
@@ -39,7 +41,7 @@ export default function TapHoldHintOverlay({
 					</Popover.Trigger>
 					<Popover.Content>
 						<Text modifiers={[padding({ horizontal: 16, vertical: 12 })]}>
-							Tap and hold me!
+							{label}
 						</Text>
 					</Popover.Content>
 				</Popover>

@@ -42,6 +42,8 @@ import * as Haptics from "expo-haptics";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { LineChart } from "react-native-wagmi-charts";
 import { useApi } from "@/lib/axios";
+import TapHoldHintOverlay from "@/components/TapHoldHintOverlay";
+import { CHAT_CARD_HINT_KEY, useOneTimeHint } from "@/hooks/useTapHoldHint";
 import { getCard, getCardHistory, getCardListings } from "@/lib/api/pricing";
 import { getCatalogCard, catalogCardToScrydex } from "@/lib/api/catalog";
 import {
@@ -940,6 +942,31 @@ export default function CardDetail() {
 		});
 	}, [displayName, cardNumber, setDisplayName]);
 
+	// One-time nudge at the "Chat about this card" row — same coachmark as the
+	// card grids, but it only pops once the row has actually scrolled into
+	// view (it sits below the price-history card, usually under the fold).
+	const chatHint = useOneTimeHint(CHAT_CARD_HINT_KEY, Boolean(card));
+	const chatRowRef = useRef<View>(null);
+	const [chatRowFrame, setChatRowFrame] = useState<{
+		width: number;
+		height: number;
+	} | null>(null);
+	const [chatRowInView, setChatRowInView] = useState(false);
+	const checkChatRowVisible = useCallback(() => {
+		if (!chatHint.show || chatRowInView) return;
+		chatRowRef.current?.measureInWindow((_x, y, _w, h) => {
+			const windowHeight = Dimensions.get("window").height;
+			if (y >= 0 && y + h <= windowHeight - 24) setChatRowInView(true);
+		});
+	}, [chatHint.show, chatRowInView]);
+	// The row can already be on screen on tall devices — check once the
+	// entrance animations settle, then again on every scroll.
+	useEffect(() => {
+		if (!chatHint.show) return;
+		const timer = setTimeout(checkChatRowVisible, 800);
+		return () => clearTimeout(timer);
+	}, [chatHint.show, checkChatRowVisible]);
+
 	// Scroll the detail view up so the estimate price stays visible above the
 	// configure sheet while options are changed.
 	const scrollRef = useRef<ScrollView>(null);
@@ -1174,6 +1201,8 @@ export default function CardDetail() {
 						contentContainerStyle={styles.content}
 						contentInsetAdjustmentBehavior="automatic"
 						showsVerticalScrollIndicator={false}
+						onScroll={chatHint.show ? checkChatRowVisible : undefined}
+						scrollEventThrottle={100}
 					>
 						{/* Card Image — persistent, OUTSIDE the crossfade: a single
 						    element that just switches from the cached small thumbnail to
@@ -1664,6 +1693,15 @@ export default function CardDetail() {
 
 								{/* Chat about this card — jumps to River with the card seeded */}
 								<Animated.View entering={sectionEntering(4)}>
+									<View
+										ref={chatRowRef}
+										onLayout={(e) =>
+											setChatRowFrame({
+												width: e.nativeEvent.layout.width,
+												height: e.nativeEvent.layout.height,
+											})
+										}
+									>
 									<Pressable
 										onPress={openChatAboutCard}
 										style={styles.linkOutRow}
@@ -1689,6 +1727,15 @@ export default function CardDetail() {
 	weight="medium"
 />
 									</Pressable>
+									{chatHint.show && chatRowInView && chatRowFrame ? (
+										<TapHoldHintOverlay
+											width={chatRowFrame.width}
+											height={chatRowFrame.height}
+											label="Ask River anything about this card!"
+											onDismiss={chatHint.dismiss}
+										/>
+									) : null}
+									</View>
 									<View
 										style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]}
 									/>
