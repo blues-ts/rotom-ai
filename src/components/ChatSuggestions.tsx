@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import * as Haptics from "expo-haptics";
@@ -5,6 +6,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 
 import CardPressable from "@/components/CardPressable";
 import { spacing, typeScale, useRiverTheme } from "@/constants/theme";
+import { useCollectionSnapshot } from "@/hooks/useCollectionSnapshot";
 
 type Suggestion = {
 	icon: SFSymbol;
@@ -14,31 +16,13 @@ type Suggestion = {
 	overline?: string;
 };
 
-// Example prompts shown on the empty chat screen. `label` is the short card text;
-// `prompt` is what actually gets sent (kept conversational for better answers).
-const SUGGESTIONS: Suggestion[] = [
-	{
-		icon: "chart.bar",
-		label: "What's my collection worth?",
-		prompt: "What's my collection worth right now?",
-	},
-	{
-		icon: "chart.line.uptrend.xyaxis",
-		label: "Analyze Bubble Mew",
-		prompt: "Do a market analysis on Bubble Mew from Paldean Fates",
-		overline: "Your top card",
-	},
-	{
-		icon: "sparkles",
-		label: "What should I invest in?",
-		prompt: "Which Pokémon cards are good investments right now?",
-	},
-	{
-		icon: "rosette",
-		label: "How does grading work?",
-		prompt: "How does card grading work and is it worth it?",
-	},
-];
+// Shown until the user owns a card worth analyzing.
+const FALLBACK_ANALYZE: Suggestion = {
+	icon: "chart.line.uptrend.xyaxis",
+	label: "Analyze Bubble Mew",
+	prompt: "Do a market analysis on Bubble Mew from Paldean Fates",
+	overline: "Your top card",
+};
 
 export default function ChatSuggestions({
 	onSelect,
@@ -48,6 +32,41 @@ export default function ChatSuggestions({
 	disabled?: boolean;
 }) {
 	const t = useRiverTheme();
+	const { data: snapshot } = useCollectionSnapshot();
+
+	// Personalize the analyze row with the user's most valuable card (top
+	// holding by line value, skipping sealed product) across all collections.
+	const suggestions = useMemo<Suggestion[]>(() => {
+		const topCard = snapshot?.topCards.find(
+			(c) => c.productType !== "sealed",
+		);
+		const analyze: Suggestion = topCard
+			? {
+					icon: "chart.line.uptrend.xyaxis",
+					label: `Analyze ${topCard.name}`,
+					prompt: `Do a market analysis on ${topCard.name} from my collection`,
+					overline: "Your top card",
+				}
+			: FALLBACK_ANALYZE;
+		return [
+			{
+				icon: "chart.bar",
+				label: "What's my collection worth?",
+				prompt: "What's my collection worth right now?",
+			},
+			analyze,
+			{
+				icon: "sparkles",
+				label: "What should I invest in?",
+				prompt: "Which Pokémon cards are good investments right now?",
+			},
+			{
+				icon: "rosette",
+				label: "How does grading work?",
+				prompt: "How does card grading work and is it worth it?",
+			},
+		];
+	}, [snapshot]);
 
 	const handlePress = (prompt: string) => {
 		if (disabled) return;
@@ -60,7 +79,7 @@ export default function ChatSuggestions({
 			entering={FadeInDown.duration(500).delay(120)}
 			style={styles.list}
 		>
-			{SUGGESTIONS.map((s) => (
+			{suggestions.map((s) => (
 				<CardPressable
 					key={s.label}
 					onPress={() => handlePress(s.prompt)}

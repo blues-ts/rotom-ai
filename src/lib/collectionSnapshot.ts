@@ -98,6 +98,7 @@ export function buildCollectionSnapshot(
 				quantity: card.quantity ?? 1,
 				condition: card.condition,
 				pricingType: card.pricingType,
+				productType: card.productType,
 			};
 			if (card.cardImageUrl) entry.imageUrl = card.cardImageUrl;
 			if (card.gradedCompany) entry.gradedCompany = card.gradedCompany;

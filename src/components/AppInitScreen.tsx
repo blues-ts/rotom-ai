@@ -1,8 +1,10 @@
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import RiverLogo from "@/components/RiverLogo";
+import { darkTheme } from "@/constants/theme";
 import Animated, {
 	Easing,
 	useAnimatedStyle,
@@ -12,14 +14,18 @@ import Animated, {
 } from "react-native-reanimated";
 
 // Cold-start warm-up screen. Its first frame matches the native splash — solid
-// River blue with the centered white River logo mark — so the native → JS
-// handoff is invisible. A halo blooms behind the mark while we warm up, with a
-// small spinner + caption pinned to the bottom telling the user what's happening.
+// deep-water navy with the centered white River logo mark — so the native → JS
+// handoff is invisible. The full deep-water gradient then fades in over the
+// solid base while a halo blooms behind the mark, with a small spinner +
+// caption pinned to the bottom telling the user what's happening.
+//
+// Always deep water, even in light mode (like the scanner): the white logo
+// needs the dark ground, and the app cross-fades to the themed screen anyway.
 //
 // On leaving we hand off immediately: the root Stack gives the (home) screen an
 // `animation: "fade"`, so navigation cross-fades this whole screen into the app —
 // no bespoke zoom/bloom needed here.
-const RIVER = "#208AEF"; // exact native-splash background
+const SPLASH = "#0E2A47"; // exact native-splash background (gradient mid stop)
 const GLOW = require("../../assets/images/logo-glow.png");
 
 const CAPTION = "Downloading the latest data";
@@ -33,19 +39,22 @@ export default function AppInitScreen({
 }) {
 	const insets = useSafeAreaInsets();
 
+	const gradientOpacity = useSharedValue(0);
 	const glowScale = useSharedValue(0.92);
 	const glowOpacity = useSharedValue(0);
 	const footerOpacity = useSharedValue(0);
 
-	// Come alive after the seamless handoff: fade in the halo and the footer.
+	// Come alive after the seamless handoff: fade in the gradient, the halo,
+	// and the footer.
 	useEffect(() => {
+		gradientOpacity.value = withTiming(1, { duration: 600 });
 		glowOpacity.value = withTiming(0.85, { duration: 600 });
 		glowScale.value = withTiming(1, {
 			duration: 600,
 			easing: Easing.out(Easing.cubic),
 		});
 		footerOpacity.value = withDelay(250, withTiming(1, { duration: 450 }));
-	}, [footerOpacity, glowOpacity, glowScale]);
+	}, [footerOpacity, glowOpacity, glowScale, gradientOpacity]);
 
 	// Hand off the moment warm-up is done — the Stack's fade animation cross-fades
 	// this screen into home.
@@ -53,6 +62,9 @@ export default function AppInitScreen({
 		if (leaving) onExitComplete?.();
 	}, [leaving, onExitComplete]);
 
+	const gradientStyle = useAnimatedStyle(() => ({
+		opacity: gradientOpacity.value,
+	}));
 	const glowStyle = useAnimatedStyle(() => ({
 		opacity: glowOpacity.value,
 		transform: [{ scale: glowScale.value }],
@@ -61,6 +73,15 @@ export default function AppInitScreen({
 
 	return (
 		<View style={styles.container}>
+			<Animated.View style={[StyleSheet.absoluteFill, gradientStyle]}>
+				<LinearGradient
+					colors={darkTheme.background.colors}
+					locations={darkTheme.background.locations}
+					pointerEvents="none"
+					style={StyleSheet.absoluteFill}
+				/>
+			</Animated.View>
+
 			<View style={styles.center} pointerEvents="none">
 				<Animated.View style={glowStyle}>
 					<Image source={GLOW} style={styles.glow} contentFit="contain" />
@@ -85,7 +106,7 @@ export default function AppInitScreen({
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: RIVER,
+		backgroundColor: SPLASH,
 		alignItems: "center",
 		justifyContent: "center",
 	},

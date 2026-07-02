@@ -17,6 +17,7 @@ export interface CollectionSnapshotTopCard {
 	quantity: number;
 	condition: string;
 	pricingType: string;
+	productType?: string;
 	gradedCompany?: string;
 	gradedGrade?: string;
 	pricePaid?: number;
