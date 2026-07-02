@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 
-import { useTheme } from "@/context/ThemeContext";
+import { radius, useRiverTheme } from "@/constants/theme";
 import type { DemoCard } from "@/constants/demoCards";
 
 interface RiverSnapshotCardProps {
@@ -11,43 +11,50 @@ interface RiverSnapshotCardProps {
 }
 
 export function RiverSnapshotCard({ card, riverQuote }: RiverSnapshotCardProps) {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
   const trendPositive = card.pct30d >= 0;
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.brand, { color: colors.primary }]}>RIVER SNAPSHOT</Text>
-        <Ionicons name="flash" size={14} color={colors.primary} />
+    <View
+      style={[
+        styles.card,
+        // Near-opaque sheet fill: this card is a shareable artifact, so it
+        // needs more presence than see-through glass.
+        { backgroundColor: t.glass.sheetFill, borderColor: t.glass.surfaceBorder },
+      ]}
+    >
+      <View style={[styles.header, { borderBottomColor: t.glass.surfaceBorder }]}>
+        <Text style={[styles.brand, { color: t.accentOn }]}>RIVER SNAPSHOT</Text>
+        <Ionicons name="flash" size={14} color={t.accentOn} />
       </View>
 
       <View style={styles.artWrap}>
         <Image source={{ uri: card.image }} style={styles.art} contentFit="contain" />
       </View>
 
-      <Text style={[styles.cardName, { color: colors.foreground }]} numberOfLines={1}>
+      <Text style={[styles.cardName, { color: t.text.primary }]} numberOfLines={1}>
         {card.name}
       </Text>
-      <Text style={[styles.cardMeta, { color: colors.mutedForeground }]}>
+      <Text style={[styles.cardMeta, { color: t.text.secondary }]}>
         {card.setName} · {card.cardNumber}
       </Text>
 
-      <View style={[styles.divider, { backgroundColor: colors.border }]} />
+      <View style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]} />
 
       <View style={styles.priceRow}>
-        <Text style={[styles.priceLabel, { color: colors.mutedForeground }]}>Raw NM</Text>
-        <Text style={[styles.priceValue, { color: colors.foreground }]}>${card.rawNM}</Text>
+        <Text style={[styles.priceLabel, { color: t.text.secondary }]}>Raw NM</Text>
+        <Text style={[styles.priceValue, { color: t.text.primary }]}>${card.rawNM}</Text>
       </View>
       <View style={styles.priceRow}>
-        <Text style={[styles.priceLabel, { color: colors.mutedForeground }]}>PSA 10</Text>
+        <Text style={[styles.priceLabel, { color: t.text.secondary }]}>PSA 10</Text>
         <View style={styles.priceRight}>
-          <Text style={[styles.priceValue, { color: colors.foreground }]}>
+          <Text style={[styles.priceValue, { color: t.text.primary }]}>
             ${card.psa10.toLocaleString()}
           </Text>
           <Text
             style={[
               styles.trend,
-              { color: trendPositive ? colors.chart2 : colors.destructive },
+              { color: trendPositive ? t.gain : t.loss },
             ]}
           >
             {trendPositive ? "▲" : "▼"} {Math.abs(card.pct30d)}% 30d
@@ -55,19 +62,19 @@ export function RiverSnapshotCard({ card, riverQuote }: RiverSnapshotCardProps) 
         </View>
       </View>
 
-      <View style={[styles.divider, { backgroundColor: colors.border }]} />
+      <View style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]} />
 
       <View style={styles.quoteWrap}>
         <View style={styles.quoteHeader}>
-          <Ionicons name="chatbubble-ellipses-outline" size={14} color={colors.primary} />
-          <Text style={[styles.quoteLabel, { color: colors.primary }]}>River says</Text>
+          <Ionicons name="chatbubble-ellipses-outline" size={14} color={t.accentOn} />
+          <Text style={[styles.quoteLabel, { color: t.accentOn }]}>River says</Text>
         </View>
-        <Text style={[styles.quote, { color: colors.foreground }]}>
+        <Text style={[styles.quote, { color: t.text.body }]}>
           &ldquo;{shortenQuote(riverQuote)}&rdquo;
         </Text>
       </View>
 
-      <Text style={[styles.footer, { color: colors.mutedForeground }]}>riverai.app</Text>
+      <Text style={[styles.footer, { color: t.text.secondary }]}>riverai.app</Text>
     </View>
   );
 }
@@ -82,13 +89,13 @@ function shortenQuote(q: string): string {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 20,
+    borderRadius: radius.card,
     borderWidth: 1,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    shadowColor: "#000",
+    shadowColor: "#000A19",
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.35,
     shadowRadius: 24,
     elevation: 12,
   },

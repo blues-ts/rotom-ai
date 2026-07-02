@@ -2,7 +2,7 @@ import { StyleSheet, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useEffect } from "react";
 
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 import { ONBOARDING_STEPS } from "@/constants/onboarding";
 
 interface ProgressBarProps {
@@ -11,7 +11,7 @@ interface ProgressBarProps {
 }
 
 export function ProgressBar({ step, total = ONBOARDING_STEPS }: ProgressBarProps) {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
   const pct = Math.min(Math.max(step / total, 0), 1);
   const progress = useSharedValue(pct);
 
@@ -24,9 +24,9 @@ export function ProgressBar({ step, total = ONBOARDING_STEPS }: ProgressBarProps
   }));
 
   return (
-    <View style={[styles.track, { backgroundColor: colors.muted }]}>
+    <View style={[styles.track, { backgroundColor: t.glass.elevatedFill }]}>
       <Animated.View
-        style={[styles.fill, { backgroundColor: colors.primary }, fillStyle]}
+        style={[styles.fill, { backgroundColor: t.accent }, fillStyle]}
       />
     </View>
   );
@@ -37,7 +37,9 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     overflow: "hidden",
-    marginHorizontal: 24,
+    // The header row now carries the 24px screen margin; keep a smaller
+    // breather between the bar and the chevron/spacer beside it.
+    marginHorizontal: 12,
   },
   fill: {
     height: "100%",

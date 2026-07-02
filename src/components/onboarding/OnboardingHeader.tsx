@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 import { ProgressBar } from "./ProgressBar";
 
 interface OnboardingHeaderProps {
@@ -19,7 +19,7 @@ export function OnboardingHeader({
   showProgress = true,
   onBack,
 }: OnboardingHeaderProps) {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
 
   const handleBack = () => {
     Haptics.selectionAsync();
@@ -37,7 +37,7 @@ export function OnboardingHeader({
       <View style={styles.row}>
         {canBack ? (
           <Pressable onPress={handleBack} hitSlop={12} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={24} color={colors.foreground} />
+            <Ionicons name="chevron-back" size={24} color={t.accentOn} />
           </Pressable>
         ) : (
           <View style={styles.backButton} />
@@ -60,11 +60,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    // Match the screens' 24px content margin so the chevron lines up with
+    // the title below it.
+    paddingHorizontal: 24,
   },
   backButton: {
-    width: 40,
+    width: 32,
     height: 32,
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
   },
   progressWrap: {

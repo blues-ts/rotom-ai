@@ -15,7 +15,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { FlowStep } from "@/components/onboarding/FlowStep";
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 
 const BULLETS: { icon: keyof typeof Ionicons.glyphMap; text: string }[] = [
   { icon: "scan-outline", text: "River identifies any Pokemon card instantly" },
@@ -28,28 +28,28 @@ const CARD_W = 130;
 const CARD_H = 180;
 
 export function CameraStep() {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
 
   return (
     <FlowStep>
       <View style={styles.hero}>
         <Animated.View entering={FadeIn.duration(500)} style={styles.illoWrap}>
           <LinearGradient
-            colors={[colors.primary + "33", "transparent"]}
+            colors={[t.accent + "33", "transparent"]}
             style={StyleSheet.absoluteFill}
           />
-          <ScanFrame primary={colors.primary} />
+          <ScanFrame primary={t.accent} />
         </Animated.View>
 
         <Animated.Text
           entering={FadeInUp.duration(400).delay(200)}
-          style={[styles.title, { color: colors.foreground }]}
+          style={[styles.title, { color: t.text.primary }]}
         >
           Let River see your cards.
         </Animated.Text>
         <Animated.Text
           entering={FadeInUp.duration(400).delay(300)}
-          style={[styles.subtitle, { color: colors.mutedForeground }]}
+          style={[styles.subtitle, { color: t.text.secondary }]}
         >
           Camera access = instant pricing.
         </Animated.Text>
@@ -61,10 +61,10 @@ export function CameraStep() {
               entering={FadeInUp.duration(400).delay(400 + i * 80)}
               style={styles.bullet}
             >
-              <View style={[styles.bulletIcon, { backgroundColor: colors.primary + "22" }]}>
-                <Ionicons name={b.icon} size={18} color={colors.primary} />
+              <View style={[styles.bulletIcon, { backgroundColor: t.accentIconFill }]}>
+                <Ionicons name={b.icon} size={18} color={t.accentOn} />
               </View>
-              <Text style={[styles.bulletText, { color: colors.foreground }]}>{b.text}</Text>
+              <Text style={[styles.bulletText, { color: t.text.primary }]}>{b.text}</Text>
             </Animated.View>
           ))}
         </View>

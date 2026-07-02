@@ -8,11 +8,13 @@ import { PAYWALL_RESULT } from "react-native-purchases-ui";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { LinearGradient } from "expo-linear-gradient";
+
 import { OnboardingHeader } from "@/components/onboarding/OnboardingHeader";
 import { PrimaryCTA, TextLink } from "@/components/onboarding/PrimaryCTA";
 import { PRIVACY_URL, TERMS_URL } from "@/constants/links";
 import { STEP_NUMBERS } from "@/constants/onboarding";
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import {
   PRO_ENTITLEMENT_ID,
@@ -24,7 +26,7 @@ const ONBOARDING_KEY = "onboarding_complete";
 type Stage = "presenting" | "cancelled" | "error";
 
 export default function Paywall() {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
   const { top, bottom } = useSafeAreaInsets();
   const { isPro, isReady, refresh } = useRevenueCat();
   const [stage, setStage] = useState<Stage>("presenting");
@@ -127,17 +129,19 @@ export default function Paywall() {
   };
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: colors.background, paddingTop: top },
-      ]}
-    >
+    <View style={[styles.container, { paddingTop: top }]}>
+      {/* Deep-water gradient — the one background every screen shares. */}
+      <LinearGradient
+        colors={t.background.colors}
+        locations={t.background.locations}
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+      />
       <OnboardingHeader step={STEP_NUMBERS.paywall} showProgress />
 
       <View style={styles.body}>
         {stage === "presenting" ? (
-          <Text style={[styles.bodyText, { color: colors.mutedForeground }]}>
+          <Text style={[styles.bodyText, { color: t.text.secondary }]}>
             Loading offers…
           </Text>
         ) : stage === "cancelled" ? (
@@ -146,10 +150,10 @@ export default function Paywall() {
             entering={FadeIn.duration(450)}
             style={styles.bodyInner}
           >
-            <Text style={[styles.title, { color: colors.foreground }]}>
+            <Text style={[styles.title, { color: t.text.primary }]}>
               No rush.
             </Text>
-            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+            <Text style={[styles.subtitle, { color: t.text.secondary }]}>
               You can unlock River AI Pro any time from Settings.
             </Text>
           </Animated.View>
@@ -159,12 +163,12 @@ export default function Paywall() {
             entering={FadeIn.duration(450)}
             style={styles.bodyInner}
           >
-            <Text style={[styles.title, { color: colors.foreground }]}>
+            <Text style={[styles.title, { color: t.text.primary }]}>
               Couldn't load the paywall.
             </Text>
             {errorMessage ? (
               <Text
-                style={[styles.subtitle, { color: colors.mutedForeground }]}
+                style={[styles.subtitle, { color: t.text.secondary }]}
               >
                 {errorMessage}
               </Text>
@@ -188,14 +192,14 @@ export default function Paywall() {
           <TextLink title="Continue without Pro" onPress={handleContinueFree} />
           <View style={styles.legal}>
             <TextLink title="Restore purchases" onPress={handleRestore} />
-            <Text style={[styles.legalDot, { color: colors.mutedForeground }]}>
+            <Text style={[styles.legalDot, { color: t.text.secondary }]}>
               ·
             </Text>
             <TextLink
               title="Terms"
               onPress={() => Linking.openURL(TERMS_URL)}
             />
-            <Text style={[styles.legalDot, { color: colors.mutedForeground }]}>
+            <Text style={[styles.legalDot, { color: t.text.secondary }]}>
               ·
             </Text>
             <TextLink

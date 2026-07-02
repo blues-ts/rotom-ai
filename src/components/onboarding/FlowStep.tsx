@@ -1,7 +1,7 @@
 import React from "react";
 import { ScrollView, StyleSheet, Text, View, ViewStyle } from "react-native";
 
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 
 interface FlowStepProps {
   title?: string;
@@ -18,15 +18,15 @@ export function FlowStep({
   contentStyle,
   children,
 }: FlowStepProps) {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
 
   const body = (
     <>
       {title ? (
-        <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
+        <Text style={[styles.title, { color: t.text.primary }]}>{title}</Text>
       ) : null}
       {subtitle ? (
-        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>
+        <Text style={[styles.subtitle, { color: t.text.secondary }]}>{subtitle}</Text>
       ) : null}
       {children}
     </>

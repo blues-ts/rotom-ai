@@ -1,8 +1,9 @@
 import React from "react";
 import { ScrollView, StyleSheet, Text, View, ViewStyle } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 import { OnboardingHeader } from "./OnboardingHeader";
 
 interface ScreenLayoutProps {
@@ -28,7 +29,7 @@ export function ScreenLayout({
   footer,
   children,
 }: ScreenLayoutProps) {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
   const { top, bottom } = useSafeAreaInsets();
 
   const BodyWrapper: React.ComponentType<{ children: React.ReactNode }> = scrollable
@@ -44,28 +45,26 @@ export function ScreenLayout({
     : ({ children: c }) => <View style={[styles.flex, styles.body, contentStyle]}>{c}</View>;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: top }]}>
+    <View style={[styles.container, { paddingTop: top }]}>
+      {/* Deep-water gradient — the one background every screen shares. */}
+      <LinearGradient
+        colors={t.background.colors}
+        locations={t.background.locations}
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+      />
       <OnboardingHeader step={step} showBack={showBack} showProgress={showProgress} />
       <BodyWrapper>
         {title ? (
-          <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
+          <Text style={[styles.title, { color: t.text.primary }]}>{title}</Text>
         ) : null}
         {subtitle ? (
-          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>
+          <Text style={[styles.subtitle, { color: t.text.secondary }]}>{subtitle}</Text>
         ) : null}
         {children}
       </BodyWrapper>
       {footer ? (
-        <View
-          style={[
-            styles.footer,
-            {
-              paddingBottom: bottom + 16,
-              borderTopColor: colors.border,
-              backgroundColor: colors.background,
-            },
-          ]}
-        >
+        <View style={[styles.footer, { paddingBottom: bottom + 16 }]}>
           {footer}
         </View>
       ) : null}

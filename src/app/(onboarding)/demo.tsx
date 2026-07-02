@@ -1,24 +1,17 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import Animated, {
-  FadeInUp,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
+import Animated, { FadeInUp } from "react-native-reanimated";
 
+import CardPressable from "@/components/CardPressable";
 import { ScreenLayout } from "@/components/onboarding/ScreenLayout";
 import { useOnboarding } from "@/context/OnboardingContext";
 import { STEP_NUMBERS } from "@/constants/onboarding";
 import { DEMO_CARDS, type DemoCard } from "@/constants/demoCards";
-import { useTheme } from "@/context/ThemeContext";
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-const SPRING = { damping: 18, stiffness: 350, mass: 0.6 };
+import { useRiverTheme } from "@/constants/theme";
 
 export default function Demo() {
   const { setDemoCard } = useOnboarding();
@@ -52,36 +45,27 @@ export default function Demo() {
 }
 
 function DemoCardCell({ card, onPress }: { card: DemoCard; onPress: () => void }) {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
   const [imageError, setImageError] = useState(false);
-  const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
 
   return (
-    <AnimatedPressable
+    <CardPressable
       onPress={onPress}
-      onPressIn={() => {
-        scale.value = withSpring(0.97, SPRING);
-      }}
-      onPressOut={() => {
-        scale.value = withSpring(1, SPRING);
-      }}
+      accessibilityRole="button"
+      accessibilityLabel={shortName(card.name)}
+      pressScale={0.97}
+      baseColor={t.glass.surfaceFill}
+      pressedColor={t.glass.pressedFill}
       style={[
         styles.cell,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-        },
-        animatedStyle,
+        { borderColor: t.glass.surfaceBorder },
+        t.glass.shadow,
       ]}
     >
       <View style={styles.imageWrap}>
         {imageError ? (
           <View style={styles.fallback}>
-            <Ionicons name="image-outline" size={28} color={colors.mutedForeground} />
+            <Ionicons name="image-outline" size={28} color={t.text.tertiary} />
           </View>
         ) : (
           <Image
@@ -96,13 +80,13 @@ function DemoCardCell({ card, onPress }: { card: DemoCard; onPress: () => void }
       <View style={styles.cellFooter}>
         <Text
           numberOfLines={1}
-          style={[styles.cardName, { color: colors.foreground }]}
+          style={[styles.cardName, { color: t.text.primary }]}
         >
           {shortName(card.name)}
         </Text>
-        <Ionicons name="chevron-forward" size={14} color={colors.mutedForeground} />
+        <Ionicons name="chevron-forward" size={14} color={t.text.tertiary} />
       </View>
-    </AnimatedPressable>
+    </CardPressable>
   );
 }
 
@@ -124,7 +108,7 @@ const styles = StyleSheet.create({
   cell: {
     width: "100%",
     aspectRatio: 0.78,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     padding: 10,
     gap: 8,

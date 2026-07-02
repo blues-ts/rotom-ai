@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useCameraPermission } from "react-native-vision-camera";
 import Animated, { FadeIn } from "react-native-reanimated";
@@ -17,7 +18,7 @@ import { ProofStep } from "@/components/onboarding/steps/ProofStep";
 import { SolutionStep } from "@/components/onboarding/steps/SolutionStep";
 import { STEP_NUMBERS } from "@/constants/onboarding";
 import { useOnboarding } from "@/context/OnboardingContext";
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 
 interface StepEntry {
   number: number;
@@ -36,7 +37,7 @@ const STEPS: StepEntry[] = [
 ];
 
 export default function Flow() {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
   const { top, bottom } = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
 
@@ -93,7 +94,14 @@ export default function Flow() {
   const isCameraStep = index === STEPS.length - 1;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: top }]}>
+    <View style={[styles.container, { paddingTop: top }]}>
+      {/* Deep-water gradient — the one background every screen shares. */}
+      <LinearGradient
+        colors={t.background.colors}
+        locations={t.background.locations}
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+      />
       <OnboardingHeader step={current.number} onBack={back} />
       <Animated.View
         key={index}
@@ -102,16 +110,7 @@ export default function Flow() {
       >
         <StepComponent />
       </Animated.View>
-      <View
-        style={[
-          styles.footer,
-          {
-            paddingBottom: bottom + 16,
-            borderTopColor: colors.border,
-            backgroundColor: colors.background,
-          },
-        ]}
-      >
+      <View style={[styles.footer, { paddingBottom: bottom + 16 }]}>
         <PrimaryCTA title={cta.title} disabled={cta.disabled} onPress={cta.onPress} />
         {isCameraStep ? (
           <TextLink

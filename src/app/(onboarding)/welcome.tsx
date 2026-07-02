@@ -4,24 +4,27 @@ import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated"
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 import { PrimaryCTA } from "@/components/onboarding/PrimaryCTA";
 
 export default function Welcome() {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
   const { top, bottom } = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={styles.container}>
+      {/* Deep-water gradient — the one background every screen shares. */}
       <LinearGradient
-        colors={[colors.primary, colors.background]}
+        colors={t.background.colors}
+        locations={t.background.locations}
+        pointerEvents="none"
         style={StyleSheet.absoluteFill}
       />
 
       <View style={[styles.content, { paddingTop: top + 24 }]}>
         <Animated.View entering={FadeInUp.duration(500).delay(100)}>
-          <Text style={[styles.title, { color: colors.foreground }]}>Meet River.</Text>
-          <Text style={[styles.subtitle, { color: colors.foreground, opacity: 0.85 }]}>
+          <Text style={[styles.title, { color: t.text.primary }]}>Meet River.</Text>
+          <Text style={[styles.subtitle, { color: t.text.body, opacity: 0.85 }]}>
             The AI that knows every Pokemon card.
           </Text>
         </Animated.View>
@@ -32,7 +35,7 @@ export default function Welcome() {
 
         <Animated.Text
           entering={FadeIn.duration(500).delay(2900)}
-          style={[styles.caption, { color: colors.mutedForeground }]}
+          style={[styles.caption, { color: t.text.secondary }]}
         >
           Prices, trends, grading calls — just ask.
         </Animated.Text>
@@ -49,29 +52,34 @@ export default function Welcome() {
 }
 
 function ChatMockup() {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
   return (
-    <View style={[styles.phone, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View
+      style={[
+        styles.phone,
+        { backgroundColor: t.glass.sheetFill, borderColor: t.glass.surfaceBorder },
+      ]}
+    >
       <View style={styles.chat}>
         <Animated.View
           entering={FadeInUp.duration(400).delay(500)}
-          style={[styles.userBubble, { backgroundColor: colors.primary }]}
+          style={[styles.userBubble, { backgroundColor: t.accent }]}
         >
-          <Text style={[styles.userText, { color: colors.primaryForeground }]}>
+          <Text style={[styles.userText, { color: "#FFFFFF" }]}>
             River, what's a Moonbreon worth right now?
           </Text>
         </Animated.View>
 
         <Animated.View
           entering={FadeInUp.duration(400).delay(1100)}
-          style={[styles.aiBubble, { backgroundColor: colors.muted }]}
+          style={[styles.aiBubble, { backgroundColor: t.glass.elevatedFill }]}
         >
-          <Text style={[styles.aiText, { color: colors.foreground }]}>
+          <Text style={[styles.aiText, { color: t.text.body }]}>
             Near Mint raw: <Text style={styles.aiStrong}>$412</Text>
             {"\n"}
             PSA 10: <Text style={styles.aiStrong}>$1,180</Text>
             {"  "}
-            <Text style={[styles.aiTrend, { color: colors.chart2 }]}>▲ 18% 30d</Text>
+            <Text style={[styles.aiTrend, { color: t.gain }]}>▲ 18% 30d</Text>
             {"\n"}
             Sold last 7d: <Text style={styles.aiStrong}>142</Text>
             {"\n\n"}
@@ -81,18 +89,18 @@ function ChatMockup() {
 
         <Animated.View
           entering={FadeInUp.duration(400).delay(1900)}
-          style={[styles.userBubble, { backgroundColor: colors.primary }]}
+          style={[styles.userBubble, { backgroundColor: t.accent }]}
         >
-          <Text style={[styles.userText, { color: colors.primaryForeground }]}>
+          <Text style={[styles.userText, { color: "#FFFFFF" }]}>
             Best place to sell a PSA 10?
           </Text>
         </Animated.View>
 
         <Animated.View
           entering={FadeInUp.duration(400).delay(2500)}
-          style={[styles.aiBubble, { backgroundColor: colors.muted }]}
+          style={[styles.aiBubble, { backgroundColor: t.glass.elevatedFill }]}
         >
-          <Text style={[styles.aiText, { color: colors.foreground }]}>
+          <Text style={[styles.aiText, { color: t.text.body }]}>
             eBay auction, ending Sunday night.
             {"\n"}
             Comps are hot — skip Buy It Now or you'll leave{" "}
@@ -136,7 +144,7 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     borderWidth: 1,
     padding: 16,
-    shadowColor: "#000",
+    shadowColor: "#000A19",
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.35,
     shadowRadius: 24,

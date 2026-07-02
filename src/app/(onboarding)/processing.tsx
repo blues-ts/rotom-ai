@@ -12,7 +12,7 @@ import Animated, {
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 import { PROCESSING_CAPTIONS } from "@/constants/onboarding";
 
 const OSHAWOTT_SPRITE =
@@ -21,7 +21,7 @@ const OSHAWOTT_SPRITE =
 const CAPTION_INTERVAL = 800;
 
 export default function Processing() {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
   const [captionIndex, setCaptionIndex] = useState(0);
   const pulse = useSharedValue(1);
 
@@ -50,15 +50,18 @@ export default function Processing() {
   }));
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={styles.container}>
+      {/* Deep-water gradient — the one background every screen shares. */}
       <LinearGradient
-        colors={[colors.primary, colors.background]}
+        colors={t.background.colors}
+        locations={t.background.locations}
+        pointerEvents="none"
         style={StyleSheet.absoluteFill}
       />
 
       <View style={styles.center}>
         <Animated.View
-          style={[styles.pulse, { backgroundColor: colors.primary + "33" }, pulseStyle]}
+          style={[styles.pulse, { backgroundColor: t.accent + "33" }, pulseStyle]}
         >
           <Image
             source={OSHAWOTT_SPRITE}
@@ -67,10 +70,10 @@ export default function Processing() {
           />
         </Animated.View>
 
-        <Text style={[styles.title, { color: colors.foreground }]}>
+        <Text style={[styles.title, { color: t.text.primary }]}>
           Building River for you…
         </Text>
-        <Text style={[styles.caption, { color: colors.mutedForeground }]}>
+        <Text style={[styles.caption, { color: t.text.secondary }]}>
           {PROCESSING_CAPTIONS[captionIndex]}
         </Text>
       </View>

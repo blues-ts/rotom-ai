@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, Text } from "react-native";
 import * as Haptics from "expo-haptics";
 
-import { useTheme } from "@/context/ThemeContext";
+import CardPressable from "@/components/CardPressable";
+import { radius, useRiverTheme } from "@/constants/theme";
 
 interface PrimaryCTAProps {
   title: string;
@@ -20,38 +21,39 @@ export function PrimaryCTA({
   loading,
   loadingText,
 }: PrimaryCTAProps) {
-  const { colors } = useTheme();
-
-  const backgroundColor =
-    variant === "primary" ? colors.primary : colors.card;
-  const textColor =
-    variant === "primary" ? colors.primaryForeground : colors.foreground;
-  const borderColor =
-    variant === "primary" ? colors.primary : colors.border;
+  const t = useRiverTheme();
+  const isPrimary = variant === "primary";
+  const inactive = disabled || loading;
 
   const handlePress = () => {
-    if (disabled || loading) return;
+    if (inactive) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPress();
   };
 
   return (
-    <Pressable
+    <CardPressable
       onPress={handlePress}
-      disabled={disabled || loading}
-      style={({ pressed }) => [
+      disabled={inactive}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      pressScale={0.97}
+      baseColor={isPrimary ? t.accent : t.glass.surfaceFill}
+      pressedColor={isPrimary ? t.accent : t.glass.pressedFill}
+      style={[
         styles.button,
-        {
-          backgroundColor,
-          borderColor,
-          opacity: disabled ? 0.45 : pressed ? 0.85 : 1,
-        },
+        isPrimary
+          ? [{ borderColor: "transparent" }, disabled ? null : t.buttonGlow]
+          : { borderColor: t.glass.surfaceBorder },
+        { opacity: disabled ? 0.45 : 1 },
       ]}
     >
-      <Text style={[styles.text, { color: textColor }]}>
+      <Text
+        style={[styles.text, { color: isPrimary ? "#FFFFFF" : t.text.primary }]}
+      >
         {loading ? loadingText ?? title : title}
       </Text>
-    </Pressable>
+    </CardPressable>
   );
 }
 
@@ -62,7 +64,7 @@ interface TextLinkProps {
 }
 
 export function TextLink({ title, onPress, color }: TextLinkProps) {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
   const handlePress = () => {
     Haptics.selectionAsync();
     onPress();
@@ -70,7 +72,7 @@ export function TextLink({ title, onPress, color }: TextLinkProps) {
 
   return (
     <Pressable onPress={handlePress} hitSlop={12} style={styles.link}>
-      <Text style={[styles.linkText, { color: color ?? colors.mutedForeground }]}>{title}</Text>
+      <Text style={[styles.linkText, { color: color ?? t.text.secondary }]}>{title}</Text>
     </Pressable>
   );
 }
@@ -78,14 +80,14 @@ export function TextLink({ title, onPress, color }: TextLinkProps) {
 const styles = StyleSheet.create({
   button: {
     paddingVertical: 16,
-    borderRadius: 14,
+    borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
   text: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
     letterSpacing: -0.2,
   },
   link: {

@@ -2,11 +2,11 @@ import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { FlowStep } from "@/components/onboarding/FlowStep";
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 import { COMPARISON_ROWS } from "@/constants/onboarding";
 
 export function ComparisonStep() {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
 
   return (
     <FlowStep
@@ -14,14 +14,23 @@ export function ComparisonStep() {
       subtitle="No AI. No edge."
       scrollable
     >
-      <View style={[styles.table, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={[styles.headerRow, { borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.table,
+          {
+            backgroundColor: t.glass.surfaceFill,
+            borderColor: t.glass.surfaceBorder,
+          },
+          t.glass.shadow,
+        ]}
+      >
+        <View style={[styles.headerRow, { borderBottomColor: t.glass.surfaceBorder }]}>
           <View style={styles.labelCell} />
           <View style={styles.valueCell}>
-            <Text style={[styles.headerLabel, { color: colors.primary }]}>River AI</Text>
+            <Text style={[styles.headerLabel, { color: t.accentOn }]}>River AI</Text>
           </View>
           <View style={styles.valueCell}>
-            <Text style={[styles.headerLabel, { color: colors.mutedForeground }]}>
+            <Text style={[styles.headerLabel, { color: t.text.secondary }]}>
               Without
             </Text>
           </View>
@@ -32,26 +41,26 @@ export function ComparisonStep() {
             style={[
               styles.row,
               i < COMPARISON_ROWS.length - 1 && {
-                borderBottomColor: colors.border,
+                borderBottomColor: t.glass.surfaceBorder,
                 borderBottomWidth: 1,
               },
             ]}
           >
             <View style={styles.labelCell}>
-              <Text style={[styles.rowLabel, { color: colors.foreground }]}>{row.label}</Text>
+              <Text style={[styles.rowLabel, { color: t.text.primary }]}>{row.label}</Text>
             </View>
             <View style={styles.valueCell}>
               <Ionicons
                 name={row.river ? "checkmark-circle" : "close-circle"}
                 size={22}
-                color={row.river ? colors.chart2 : colors.destructive}
+                color={row.river ? t.gain : t.loss}
               />
             </View>
             <View style={styles.valueCell}>
               <Ionicons
                 name={row.without ? "checkmark-circle" : "close-circle"}
                 size={22}
-                color={row.without ? colors.chart2 : colors.destructive}
+                color={row.without ? t.gain : t.loss}
               />
             </View>
           </View>

@@ -1,33 +1,26 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import Animated, {
-  FadeIn,
-  FadeInUp,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
+import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import CardPressable from "@/components/CardPressable";
 import { OnboardingHeader } from "@/components/onboarding/OnboardingHeader";
 import { PrimaryCTA } from "@/components/onboarding/PrimaryCTA";
 import { useOnboarding } from "@/context/OnboardingContext";
 import { DEMO_CHIPS, type DemoChipId } from "@/constants/demoCards";
 import { STEP_NUMBERS } from "@/constants/onboarding";
-import { useTheme } from "@/context/ThemeContext";
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-const SPRING = { damping: 18, stiffness: 350, mass: 0.6 };
+import { useRiverTheme } from "@/constants/theme";
 
 const CHARS_PER_TICK = 3;
 const TICK_MS = 22;
 
 export default function DemoChat() {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
   const { top, bottom } = useSafeAreaInsets();
   const { demoCard, demoChip, demoResponse, setDemoChip } = useOnboarding();
   const scrollRef = useRef<ScrollView>(null);
@@ -88,7 +81,14 @@ export default function DemoChat() {
     : null;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: top }]}>
+    <View style={[styles.container, { paddingTop: top }]}>
+      {/* Deep-water gradient — the one background every screen shares. */}
+      <LinearGradient
+        colors={t.background.colors}
+        locations={t.background.locations}
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+      />
       <OnboardingHeader step={STEP_NUMBERS.demo} showProgress />
 
       <ScrollView
@@ -97,30 +97,39 @@ export default function DemoChat() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.cardHero, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.cardHero,
+            {
+              backgroundColor: t.glass.surfaceFill,
+              borderColor: t.glass.surfaceBorder,
+            },
+            t.glass.shadow,
+          ]}
+        >
           <Image
             source={{ uri: demoCard.image }}
             style={styles.cardImage}
             contentFit="contain"
           />
-          <Text style={[styles.cardName, { color: colors.foreground }]}>
+          <Text style={[styles.cardName, { color: t.text.primary }]}>
             {demoCard.name}
           </Text>
-          <Text style={[styles.cardMeta, { color: colors.mutedForeground }]}>
+          <Text style={[styles.cardMeta, { color: t.text.secondary }]}>
             {demoCard.setName} · {demoCard.cardNumber}
           </Text>
         </View>
 
-        <Text style={[styles.prompt, { color: colors.foreground }]}>
+        <Text style={[styles.prompt, { color: t.text.primary }]}>
           Ask River about this card.
         </Text>
 
         {chosenChipLabel ? (
           <Animated.View
             entering={FadeInUp.duration(300)}
-            style={[styles.userBubble, { backgroundColor: colors.primary }]}
+            style={[styles.userBubble, { backgroundColor: t.accent }]}
           >
-            <Text style={[styles.userBubbleText, { color: colors.primaryForeground }]}>
+            <Text style={[styles.userBubbleText, { color: "#FFFFFF" }]}>
               {chosenChipLabel}
             </Text>
           </Animated.View>
@@ -129,28 +138,28 @@ export default function DemoChat() {
         {streamedText ? (
           <Animated.View
             entering={FadeIn.duration(200)}
-            style={[styles.aiBubble, { backgroundColor: colors.muted }]}
+            style={[styles.aiBubble, { backgroundColor: t.glass.elevatedFill }]}
           >
             <View style={styles.aiHeader}>
-              <View style={[styles.aiAvatar, { backgroundColor: colors.primary }]}>
+              <View style={[styles.aiAvatar, { backgroundColor: t.accent }]}>
                 <Text style={styles.aiAvatarText}>R</Text>
               </View>
-              <Text style={[styles.aiName, { color: colors.foreground }]}>River</Text>
+              <Text style={[styles.aiName, { color: t.text.primary }]}>River</Text>
               {isStreaming ? (
-                <Text style={[styles.streamingDot, { color: colors.primary }]}>●</Text>
+                <Text style={[styles.streamingDot, { color: t.accentOn }]}>●</Text>
               ) : null}
             </View>
-            <Text style={[styles.aiText, { color: colors.foreground }]}>
+            <Text style={[styles.aiText, { color: t.text.body }]}>
               {streamedText}
               {isStreaming ? (
-                <Text style={[styles.cursor, { color: colors.primary }]}>▌</Text>
+                <Text style={[styles.cursor, { color: t.accentOn }]}>▌</Text>
               ) : null}
             </Text>
           </Animated.View>
         ) : null}
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: bottom + 16, borderTopColor: colors.border }]}>
+      <View style={[styles.footer, { paddingBottom: bottom + 16 }]}>
         <View style={styles.chips}>
           {DEMO_CHIPS.map((chip) => {
             const selected = demoChip === chip.id;
@@ -173,8 +182,8 @@ export default function DemoChat() {
           />
         ) : (
           <View style={styles.ctaPlaceholder}>
-            <Ionicons name="arrow-up" size={18} color={colors.mutedForeground} />
-            <Text style={[styles.ctaHint, { color: colors.mutedForeground }]}>
+            <Ionicons name="arrow-up" size={18} color={t.text.secondary} />
+            <Text style={[styles.ctaHint, { color: t.text.secondary }]}>
               Tap a question to ask River
             </Text>
           </View>
@@ -192,47 +201,41 @@ interface ChipProps {
 }
 
 function Chip({ chip, selected, disabled, onPress }: ChipProps) {
-  const { colors } = useTheme();
-  const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+  const t = useRiverTheme();
 
   return (
-    <AnimatedPressable
+    <CardPressable
       onPress={onPress}
       disabled={disabled}
-      onPressIn={() => {
-        scale.value = withSpring(0.94, SPRING);
-      }}
-      onPressOut={() => {
-        scale.value = withSpring(1, SPRING);
-      }}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={chip.label}
+      // Selection chips brighten without moving (iOS convention).
+      pressScale={1}
+      baseColor={selected ? t.accent : t.glass.elevatedFill}
+      pressedColor={selected ? t.accent : t.glass.pressedFill}
       style={[
         styles.chip,
         {
-          backgroundColor: selected ? colors.primary : colors.card,
-          borderColor: selected ? colors.primary : colors.border,
+          borderColor: selected ? t.accent : t.glass.elevatedBorder,
           opacity: disabled ? 0.6 : 1,
         },
-        animatedStyle,
       ]}
     >
       <Ionicons
         name={chip.icon}
         size={14}
-        color={selected ? colors.primaryForeground : colors.foreground}
+        color={selected ? "#FFFFFF" : t.accentOn}
       />
       <Text
         style={[
           styles.chipLabel,
-          { color: selected ? colors.primaryForeground : colors.foreground },
+          { color: selected ? "#FFFFFF" : t.text.primary },
         ]}
       >
         {chip.label}
       </Text>
-    </AnimatedPressable>
+    </CardPressable>
   );
 }
 
@@ -330,7 +333,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 12,
     gap: 12,
-    borderTopWidth: 1,
   },
   chips: {
     flexDirection: "row",

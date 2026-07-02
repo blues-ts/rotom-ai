@@ -12,6 +12,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OnboardingHeader } from "@/components/onboarding/OnboardingHeader";
@@ -19,12 +20,12 @@ import { PrimaryCTA, TextLink } from "@/components/onboarding/PrimaryCTA";
 import { RiverSnapshotCard } from "@/components/onboarding/RiverSnapshotCard";
 import { useOnboarding } from "@/context/OnboardingContext";
 import { STEP_NUMBERS } from "@/constants/onboarding";
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 
 const PROCESSING_MS = 1400;
 
 export default function Snapshot() {
-  const { colors } = useTheme();
+  const t = useRiverTheme();
   const { top, bottom } = useSafeAreaInsets();
   const { demoCard, demoResponse } = useOnboarding();
   const [isProcessing, setIsProcessing] = useState(true);
@@ -36,10 +37,10 @@ export default function Snapshot() {
       -1,
       false,
     );
-    const t = setTimeout(() => setIsProcessing(false), PROCESSING_MS);
+    const timer = setTimeout(() => setIsProcessing(false), PROCESSING_MS);
     return () => {
       cancelAnimation(spin);
-      clearTimeout(t);
+      clearTimeout(timer);
     };
   }, [spin]);
 
@@ -70,7 +71,14 @@ export default function Snapshot() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: top }]}>
+    <View style={[styles.container, { paddingTop: top }]}>
+      {/* Deep-water gradient — the one background every screen shares. */}
+      <LinearGradient
+        colors={t.background.colors}
+        locations={t.background.locations}
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+      />
       <OnboardingHeader step={STEP_NUMBERS.snapshot} showProgress />
 
       {isProcessing ? (
@@ -78,21 +86,21 @@ export default function Snapshot() {
           <Animated.View
             style={[
               styles.spinner,
-              { borderColor: colors.border, borderTopColor: colors.primary },
+              { borderColor: t.glass.elevatedBorder, borderTopColor: t.accent },
               spinStyle,
             ]}
           />
-          <Text style={[styles.loadingText, { color: colors.foreground }]}>
+          <Text style={[styles.loadingText, { color: t.text.primary }]}>
             Saving your River snapshot…
           </Text>
         </View>
       ) : (
         <>
           <Animated.View entering={FadeIn.duration(400)} style={styles.titleWrap}>
-            <Text style={[styles.title, { color: colors.foreground }]}>
+            <Text style={[styles.title, { color: t.text.primary }]}>
               Your first snapshot.
             </Text>
-            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+            <Text style={[styles.subtitle, { color: t.text.secondary }]}>
               Screenshot it or tap share.
             </Text>
           </Animated.View>
@@ -108,7 +116,7 @@ export default function Snapshot() {
             style={[styles.footer, { paddingBottom: bottom + 12 }]}
           >
             <PrimaryCTA title="Build my collection →" onPress={handleNext} />
-            <TextLink title="Share snapshot" onPress={handleShare} color={colors.primary} />
+            <TextLink title="Share snapshot" onPress={handleShare} color={t.accentOn} />
           </Animated.View>
         </>
       )}

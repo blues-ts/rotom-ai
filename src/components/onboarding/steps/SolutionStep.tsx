@@ -5,7 +5,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { FlowStep } from "@/components/onboarding/FlowStep";
 import { useOnboarding } from "@/context/OnboardingContext";
 import { PAIN_OPTIONS } from "@/constants/onboarding";
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 
 const ROWS: {
   icon: keyof typeof Ionicons.glyphMap;
@@ -40,7 +40,7 @@ const ROWS: {
 
 export function SolutionStep() {
   const { pains } = useOnboarding();
-  const { colors } = useTheme();
+  const t = useRiverTheme();
 
   const resolvePain = (row: (typeof ROWS)[number]) => {
     if (row.painMatch) {
@@ -63,16 +63,23 @@ export function SolutionStep() {
           <Animated.View
             key={i}
             entering={FadeInDown.duration(400).delay(i * 100)}
-            style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={[
+              styles.row,
+              {
+                backgroundColor: t.glass.surfaceFill,
+                borderColor: t.glass.surfaceBorder,
+              },
+              t.glass.shadow,
+            ]}
           >
-            <View style={[styles.iconWrap, { backgroundColor: colors.accent }]}>
-              <Ionicons name={row.icon} size={22} color={colors.accentForeground} />
+            <View style={[styles.iconWrap, { backgroundColor: t.accentIconFill }]}>
+              <Ionicons name={row.icon} size={22} color={t.accentOn} />
             </View>
             <View style={styles.rowBody}>
-              <Text style={[styles.pain, { color: colors.mutedForeground }]}>
+              <Text style={[styles.pain, { color: t.text.secondary }]}>
                 {resolvePain(row)}
               </Text>
-              <Text style={[styles.solution, { color: colors.foreground }]}>
+              <Text style={[styles.solution, { color: t.text.primary }]}>
                 {row.solution}
               </Text>
             </View>

@@ -1,13 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
+import { StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 
-import { useTheme } from "@/context/ThemeContext";
+import CardPressable from "@/components/CardPressable";
+import { useRiverTheme } from "@/constants/theme";
 import type { IconName } from "@/constants/onboarding";
 
 interface OptionRowProps {
@@ -19,46 +15,50 @@ interface OptionRowProps {
 }
 
 const RIGHT_SLOT_SIZE = 22;
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-const SPRING = { damping: 18, stiffness: 350, mass: 0.6 };
 
 export function OptionRow({ icon, label, selected, multi, onPress }: OptionRowProps) {
-  const { colors } = useTheme();
-  const scale = useSharedValue(1);
+  const t = useRiverTheme();
 
   const handlePress = () => {
     Haptics.selectionAsync();
     onPress();
   };
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
   return (
-    <AnimatedPressable
+    <CardPressable
       onPress={handlePress}
-      onPressIn={() => {
-        scale.value = withSpring(0.97, SPRING);
-      }}
-      onPressOut={() => {
-        scale.value = withSpring(1, SPRING);
-      }}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={label}
+      pressScale={0.98}
       style={[
         styles.container,
-        {
-          backgroundColor: selected ? colors.accent : colors.card,
-          borderColor: selected ? colors.primary : colors.border,
-        },
-        animatedStyle,
+        // Accent fill means selected (design rule) — unselected rows are
+        // elevated glass like every other input surface.
+        selected
+          ? { backgroundColor: t.accent, borderColor: t.accent }
+          : {
+              backgroundColor: t.glass.elevatedFill,
+              borderColor: t.glass.elevatedBorder,
+            },
+        t.glass.shadow,
       ]}
     >
       {icon ? (
-        <View style={[styles.iconWrap, { backgroundColor: selected ? colors.primary + "22" : colors.muted }]}>
+        <View
+          style={[
+            styles.iconWrap,
+            {
+              backgroundColor: selected
+                ? "rgba(255, 255, 255, 0.20)"
+                : t.accentIconFill,
+            },
+          ]}
+        >
           <Ionicons
             name={icon}
             size={18}
-            color={selected ? colors.primary : colors.foreground}
+            color={selected ? "#FFFFFF" : t.accentOn}
           />
         </View>
       ) : null}
@@ -66,7 +66,9 @@ export function OptionRow({ icon, label, selected, multi, onPress }: OptionRowPr
         numberOfLines={2}
         style={[
           styles.label,
-          { color: selected ? colors.accentForeground : colors.foreground },
+          selected
+            ? { color: "#FFFFFF", fontWeight: "600" }
+            : { color: t.text.primary },
         ]}
       >
         {label}
@@ -76,21 +78,26 @@ export function OptionRow({ icon, label, selected, multi, onPress }: OptionRowPr
           <View
             style={[
               styles.checkbox,
-              {
-                backgroundColor: selected ? colors.primary : "transparent",
-                borderColor: selected ? colors.primary : colors.border,
-              },
+              selected
+                ? {
+                    backgroundColor: "rgba(255, 255, 255, 0.25)",
+                    borderColor: "#FFFFFF",
+                  }
+                : {
+                    backgroundColor: "transparent",
+                    borderColor: t.glass.elevatedBorder,
+                  },
             ]}
           >
             {selected ? (
-              <Ionicons name="checkmark" size={14} color={colors.primaryForeground} />
+              <Ionicons name="checkmark" size={14} color="#FFFFFF" />
             ) : null}
           </View>
         ) : selected ? (
-          <Ionicons name="checkmark-circle" size={RIGHT_SLOT_SIZE} color={colors.primary} />
+          <Ionicons name="checkmark-circle" size={RIGHT_SLOT_SIZE} color="#FFFFFF" />
         ) : null}
       </View>
-    </AnimatedPressable>
+    </CardPressable>
   );
 }
 
@@ -100,8 +107,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 14,
     paddingHorizontal: 14,
-    borderRadius: 14,
-    borderWidth: 1.5,
+    borderRadius: 16,
+    borderWidth: 1,
     gap: 12,
     minHeight: 76,
   },
