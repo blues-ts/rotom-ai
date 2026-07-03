@@ -37,7 +37,7 @@ import {
 } from "@/lib/scrydex";
 import { formatCurrency } from "@/lib/format";
 import { typeScale, useRiverTheme } from "@/constants/theme";
-import { ProGate } from "@/components/ProGate";
+import { ProGate, ProUnlockPill, RedactBar } from "@/components/ProGate";
 import CardImage from "@/components/CardImage";
 import ErrorState from "@/components/ErrorState";
 import type { ScrydexRawPrice, ScrydexTrends } from "@/types/scrydex";
@@ -449,7 +449,25 @@ export default function SealedDetail() {
 						>
 							{/* Market price — the sheet's headline, on the counter */}
 							<Animated.View entering={sectionEntering(1)}>
-								<ProGate style={styles.valueGate}>
+								<ProGate
+									style={styles.valueGate}
+									lockedView={
+										<>
+											<Text
+												style={[
+													styles.estimateLabel,
+													{ color: t.text.secondary },
+												]}
+											>
+												Market price · Unopened
+											</Text>
+											<RedactBar style={styles.redactHeroPrice} />
+											<View style={styles.lockedPillRow}>
+												<ProUnlockPill />
+											</View>
+										</>
+									}
+								>
 									<View style={styles.valueTopRow}>
 										<View style={styles.valueMain}>
 											<Text
@@ -954,6 +972,17 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 22,
 		paddingTop: 12,
 		paddingBottom: 18,
+	},
+	// Locked-state redaction bar, sized to the hero price it replaces
+	redactHeroPrice: {
+		width: 150,
+		height: 34,
+		borderRadius: 9,
+		marginTop: 4,
+	},
+	lockedPillRow: {
+		marginTop: 16,
+		alignItems: "center",
 	},
 	valueTopRow: {
 		flexDirection: "row",

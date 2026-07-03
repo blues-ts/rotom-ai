@@ -11,7 +11,9 @@ import { LineChart } from "react-native-wagmi-charts";
 import * as Haptics from "expo-haptics";
 import { chart, radius, typeScale, useRiverTheme } from "@/constants/theme";
 import { formatCurrency } from "@/lib/format";
-import { ProGate } from "@/components/ProGate";
+import { RedactBar } from "@/components/ProGate";
+import { LockedChartTeaser } from "@/components/LockedChartTeaser";
+import { useRevenueCat } from "@/context/RevenueCatContext";
 import {
 	useCollectionValueHistory,
 	type ValueHistoryPeriod,
@@ -42,6 +44,9 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 // Hero on the stage — no card chrome; just the hero's horizontal padding (20 × 2).
 const CHART_WIDTH = SCREEN_WIDTH - 40;
 const CHART_HEIGHT = 170;
+// Locked teaser is deliberately shorter — the gate should be a compact
+// preview, not a full-height hero of blurred content.
+const LOCKED_CHART_HEIGHT = 110;
 // One point per ~2px is visually identical to the full series but keeps the
 // SVG path and cursor work bounded however long the snapshot history grows.
 const MAX_CHART_POINTS = Math.round(CHART_WIDTH / 2);
@@ -104,6 +109,7 @@ function lttb(data: ValueHistoryPoint[], threshold: number): ValueHistoryPoint[]
  */
 function CollectionValueChartInner() {
 	const t = useRiverTheme();
+	const { isPro } = useRevenueCat();
 	const [period, setPeriod] = useState<ValueHistoryPeriod>("30d");
 	const { data: allHistory, isLoading } = useCollectionValueHistory();
 
@@ -137,8 +143,30 @@ function CollectionValueChartInner() {
 		hasBaseline ? ` (${Math.abs(deltaPct).toFixed(1)}%)` : ""
 	} ${PERIOD_LABELS[period]}`;
 
+	// Locked: no blur — blurred content on the dark gradient reads as smudge.
+	// Instead a deliberate teaser: crisp label, glass redaction bars where the
+	// numbers would be, a dimmed decoy chart, and the unlock pill over it.
+	if (!isPro) {
+		return (
+			<View style={styles.container}>
+				<Text style={[styles.title, { color: t.text.secondary }]}>
+					Portfolio Value
+				</Text>
+				<RedactBar style={styles.redactValue} />
+				<RedactBar tone="surface" style={styles.redactDelta} />
+				<View style={styles.lockedChart}>
+					<LockedChartTeaser
+						height={LOCKED_CHART_HEIGHT}
+						width={CHART_WIDTH}
+						ctaText="Unlock portfolio tracking"
+					/>
+				</View>
+			</View>
+		);
+	}
+
 	return (
-		<ProGate ctaText="Unlock portfolio tracking" style={styles.container}>
+		<View style={styles.container}>
 			<Text style={[styles.title, { color: t.text.secondary }]}>
 				Portfolio Value
 			</Text>
@@ -258,7 +286,7 @@ function CollectionValueChartInner() {
 					);
 				})}
 			</View>
-		</ProGate>
+		</View>
 	);
 }
 
@@ -315,6 +343,23 @@ const styles = StyleSheet.create({
 	chartContainer: {
 		height: CHART_HEIGHT,
 		marginTop: 4,
+	},
+	// Locked teaser — glass bars stand in for the value/delta text, sized to
+	// the type they replace so the layout doesn't jump on unlock.
+	redactValue: {
+		width: 150,
+		height: 30,
+		borderRadius: 8,
+		marginTop: 10,
+	},
+	redactDelta: {
+		width: 200,
+		height: 12,
+		borderRadius: 6,
+		marginTop: 10,
+	},
+	lockedChart: {
+		marginTop: 16,
 	},
 	chartPlaceholder: {
 		height: CHART_HEIGHT,

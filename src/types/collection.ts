@@ -25,4 +25,6 @@ export interface CollectionCard {
   gradedGrade?: string;
   quantity: number;
   pricePaid?: number;
+  /** ISO timestamp of the last successful price refresh for this row. */
+  valueUpdatedAt?: string;
 }

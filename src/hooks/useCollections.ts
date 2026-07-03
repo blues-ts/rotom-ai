@@ -559,6 +559,7 @@ export function useCollectionCards(collectionId: string) {
       gradedGrade: row.graded_grade ?? undefined,
       quantity: row.quantity,
       pricePaid: row.price_paid ?? undefined,
+      valueUpdatedAt: row.card_value_updated_at ?? undefined,
     }));
   };
 

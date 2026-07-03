@@ -69,7 +69,8 @@ import { useCollections } from "@/hooks/useCollections";
 import { useCardConfig } from "@/context/CardConfigContext";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
-import { ProGate } from "@/components/ProGate";
+import { ProGate, ProUnlockPill, RedactBar } from "@/components/ProGate";
+import { LockedChartTeaser } from "@/components/LockedChartTeaser";
 import CardImage from "@/components/CardImage";
 import ErrorState from "@/components/ErrorState";
 
@@ -1293,7 +1294,25 @@ export default function CardDetail() {
 										estimateBottom.current = contentTop.current + y + height;
 									}}
 								>
-									<ProGate style={styles.valueGate}>
+									<ProGate
+										style={styles.valueGate}
+										lockedView={
+											<>
+												<Text
+													style={[
+														styles.estimateLabel,
+														{ color: t.text.secondary },
+													]}
+												>
+													Market value
+												</Text>
+												<RedactBar style={styles.redactHeroPrice} />
+												<View style={styles.lockedPillRow}>
+													<ProUnlockPill />
+												</View>
+											</>
+										}
+									>
 										<View style={styles.valueTopRow}>
 											<View style={styles.valueMain}>
 												<Text
@@ -1780,7 +1799,26 @@ export default function CardDetail() {
 
 								{/* Price History Chart */}
 								<Animated.View entering={sectionEntering(4)}>
-									<ProGate style={styles.sheetSection}>
+									<ProGate
+										style={styles.sheetSection}
+										lockedView={
+											<>
+												<Text
+													style={[
+														styles.sectionTitle,
+														{ color: t.text.primary },
+													]}
+												>
+													Price History
+												</Text>
+												<LockedChartTeaser
+													height={140}
+													width={CHART_WIDTH}
+													ctaText="Unlock price history"
+												/>
+											</>
+										}
+									>
 										<View style={styles.chartHeader}>
 											<Text
 												style={[
@@ -1992,7 +2030,10 @@ export default function CardDetail() {
 												))}
 											</AnimatedCollapsible>
 										) : (
-											<ProGate style={styles.sheetSection}>
+											// Locked: redacted placeholder rows with the unlock pill
+											// over them — real sale prices never render (and no blur;
+											// it reads as smudge on the dark gradient).
+											<View style={styles.sheetSection}>
 												<View style={styles.collapsibleHeader}>
 													<Text
 														style={[
@@ -2002,56 +2043,47 @@ export default function CardDetail() {
 													>
 														Recent Sales
 													</Text>
-													<SymbolView
-	name="chevron.down"
-	size={18}
-	tintColor={t.text.secondary}
-	weight="medium"
-/>
 												</View>
-												{salesList.slice(0, 3).map((item, i) => (
+												<View>
+													<View pointerEvents="none">
+														{[0, 1, 2].map((i) => (
+															<View
+																key={i}
+																style={[
+																	styles.historyRow,
+																	i < 2 && {
+																		borderBottomWidth: 1,
+																		borderBottomColor:
+																			t.glass.surfaceBorder,
+																	},
+																]}
+															>
+																<View style={styles.redactRowLeft}>
+																	<RedactBar
+																		style={styles.redactRowDate}
+																	/>
+																	<RedactBar
+																		tone="surface"
+																		style={styles.redactRowTitle}
+																	/>
+																</View>
+																<RedactBar
+																	style={styles.redactRowPrice}
+																/>
+															</View>
+														))}
+													</View>
 													<View
-														key={item.id}
+														pointerEvents="box-none"
 														style={[
-															styles.historyRow,
-															i < Math.min(salesList.length, 3) - 1 && {
-																borderBottomWidth: 1,
-																borderBottomColor: t.glass.surfaceBorder,
-															},
+															StyleSheet.absoluteFill,
+															styles.lockedPillCenter,
 														]}
 													>
-														<View style={{ flex: 1, paddingRight: 12 }}>
-															<Text
-																style={[
-																	styles.historyDate,
-																	{ color: t.text.primary },
-																]}
-															>
-																{new Date(
-																	item.sold_at.replace(/\//g, "-"),
-																).toLocaleDateString()}
-															</Text>
-															<Text
-																style={[
-																	styles.historyMeta,
-																	{ color: t.text.primary, opacity: 0.6 },
-																]}
-																numberOfLines={1}
-															>
-																{item.title}
-															</Text>
-														</View>
-														<Text
-															style={[
-																styles.historyPrice,
-																{ color: t.text.primary },
-															]}
-														>
-															{formatPrice(item.price)}
-														</Text>
+														<ProUnlockPill ctaText="Unlock recent sales" />
 													</View>
-												))}
-											</ProGate>
+												</View>
+											</View>
 										)}
 									</Animated.View>
 								)}
@@ -2183,6 +2215,41 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 22,
 		paddingTop: 12,
 		paddingBottom: 18,
+	},
+	// Locked-state redaction bars, sized to the type they replace
+	redactHeroPrice: {
+		width: 150,
+		height: 34,
+		borderRadius: 9,
+		marginTop: 4,
+	},
+	lockedPillRow: {
+		marginTop: 16,
+		alignItems: "center",
+	},
+	lockedPillCenter: {
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	redactRowLeft: {
+		flex: 1,
+		paddingRight: 12,
+		gap: 7,
+	},
+	redactRowDate: {
+		width: 88,
+		height: 12,
+		borderRadius: 6,
+	},
+	redactRowTitle: {
+		width: 180,
+		height: 10,
+		borderRadius: 5,
+	},
+	redactRowPrice: {
+		width: 56,
+		height: 12,
+		borderRadius: 6,
 	},
 	valueTopRow: {
 		flexDirection: "row",

@@ -36,6 +36,8 @@ import RefreshingPill from "@/components/RefreshingPill";
 import CardImage from "@/components/CardImage";
 import CardPressable from "@/components/CardPressable";
 import ErrorState from "@/components/ErrorState";
+import { useRevenueCat } from "@/context/RevenueCatContext";
+import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { formatCurrency } from "@/lib/format";
 import {
 	HAS_BOTTOM_SEARCH_BAR,
@@ -230,24 +232,70 @@ export default function CollectionDetail() {
 		(cardCountParam !== undefined ? Number(cardCountParam) : undefined);
 	const hasBannerData = bannerValue !== undefined && bannerCount !== undefined;
 
+	// Lapsed-Pro honesty: prices freeze when Pro ends (the refresh mutation
+	// no-ops for non-Pro), so tell the user how old the numbers are instead of
+	// letting frozen values pass as live. Tapping re-opens the paywall.
+	const { isPro, refresh: refreshEntitlements } = useRevenueCat();
+	const lastPriceUpdate = useMemo(() => {
+		if (!cards?.length) return null;
+		let latest: string | null = null;
+		for (const c of cards) {
+			if (c.valueUpdatedAt && (!latest || c.valueUpdatedAt > latest)) {
+				latest = c.valueUpdatedAt;
+			}
+		}
+		return latest;
+	}, [cards]);
+	const staleNotice =
+		!isPro && lastPriceUpdate
+			? `Prices last updated ${new Date(lastPriceUpdate).toLocaleDateString(
+					undefined,
+					{ month: "short", day: "numeric" },
+				)} — renew Pro to refresh`
+			: null;
+
 	const summaryHeader = hasBannerData ? (
-		<View style={styles.summaryRow}>
-			<View>
-				<Text style={[styles.summaryLabel, { color: t.text.secondary }]}>
-					Collection value
-				</Text>
-				<Text style={[styles.summaryValue, { color: t.text.primary }]}>
-					{formatCurrency(bannerValue!)}
-				</Text>
+		<View>
+			<View style={styles.summaryRow}>
+				<View>
+					<Text style={[styles.summaryLabel, { color: t.text.secondary }]}>
+						Collection value
+					</Text>
+					<Text style={[styles.summaryValue, { color: t.text.primary }]}>
+						{formatCurrency(bannerValue!)}
+					</Text>
+				</View>
+				<View style={styles.summaryRight}>
+					<Text style={[styles.summaryLabel, { color: t.text.secondary }]}>
+						Cards
+					</Text>
+					<Text style={[styles.summaryValue, { color: t.text.primary }]}>
+						{bannerCount}
+					</Text>
+				</View>
 			</View>
-			<View style={styles.summaryRight}>
-				<Text style={[styles.summaryLabel, { color: t.text.secondary }]}>
-					Cards
-				</Text>
-				<Text style={[styles.summaryValue, { color: t.text.primary }]}>
-					{bannerCount}
-				</Text>
-			</View>
+			{staleNotice ? (
+				<Pressable
+					onPress={async () => {
+						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+						await presentProPaywallIfNeeded();
+						await refreshEntitlements();
+					}}
+					style={styles.staleNotice}
+					accessibilityRole="button"
+					accessibilityLabel={staleNotice}
+				>
+					<SymbolView
+						name="clock.arrow.circlepath"
+						size={13}
+						tintColor={t.text.secondary}
+						weight="medium"
+					/>
+					<Text style={[styles.staleNoticeText, { color: t.text.secondary }]}>
+						{staleNotice}
+					</Text>
+				</Pressable>
+			) : null}
 		</View>
 	) : null;
 
@@ -823,6 +871,17 @@ const styles = StyleSheet.create({
 		justifyContent: "space-between",
 		paddingTop: 4,
 		paddingBottom: 14,
+	},
+	// Lapsed-Pro "prices frozen" line under the summary row.
+	staleNotice: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 5,
+		marginTop: -6,
+		paddingBottom: 12,
+	},
+	staleNoticeText: {
+		...typeScale.caption,
 	},
 	summaryRight: {
 		alignItems: "flex-end",
