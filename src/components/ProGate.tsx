@@ -67,7 +67,7 @@ export function RedactBar({
  * real content behind ProGate.
  */
 export function ProUnlockPill({
-	ctaText = "Unlock with River AI Pro",
+	ctaText = "Unlock with River AI TCG Pro",
 }: {
 	ctaText?: string;
 }) {
@@ -101,7 +101,7 @@ export function ProGate({
 	// shape still teases through — the gate should read as frosted glass,
 	// not an empty slab.
 	blurIntensity = 40,
-	ctaText = "Unlock with River AI Pro",
+	ctaText = "Unlock with River AI TCG Pro",
 	lockedView,
 }: ProGateProps) {
 	const { isPro } = useRevenueCat();

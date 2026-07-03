@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/clerk-expo";
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "expo-symbols";
 import { useRiverTheme } from "@/constants/theme";
+import { legacyHeaderBlur } from "@/lib/platform";
 
 export default function SearchLayout() {
 	const { isSignedIn, isLoaded } = useAuth();
@@ -25,6 +26,7 @@ export default function SearchLayout() {
 				headerShadowVisible: false,
 				headerTransparent: true,
 				headerStyle: { backgroundColor: "transparent" },
+				...legacyHeaderBlur(t.isDark),
 				// Native chrome tinted with the accent per the design system.
 				headerTintColor: t.accentOn,
 				headerLeft: () => (

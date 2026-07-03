@@ -26,7 +26,8 @@ import * as Haptics from "expo-haptics";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacing, useRiverTheme } from "@/constants/theme";
-import { HAS_BOTTOM_SEARCH_BAR } from "@/lib/platform";
+import { HAS_BOTTOM_SEARCH_BAR, legacySearchBarStyle } from "@/lib/platform";
+import { LegacyToolbarMenu } from "@/components/LegacyToolbarMenu";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { useApi } from "@/lib/axios";
@@ -657,6 +658,47 @@ export default function Search() {
 		cards.length === 0 &&
 		displayCards.length === 0;
 
+	// One list drives both the iOS 26 toolbar menu and the legacy FAB sheet.
+	const filterActions = [
+		{
+			label: MODE_LABELS.cards,
+			isOn: mode === "cards",
+			onPress: () => {
+				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+				setMode("cards");
+			},
+		},
+		{
+			label: MODE_LABELS.sealed,
+			isOn: mode === "sealed",
+			onPress: () => {
+				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+				// Sealed pricing is a Pro feature (no free catalog data for it).
+				if (!isPro) {
+					void presentProPaywallIfNeeded();
+					return;
+				}
+				setMode("sealed");
+			},
+		},
+		{
+			label: "🇺🇸 English Sets",
+			isOn: setsLanguage === "EN",
+			onPress: () => {
+				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+				setSetsLanguage("EN");
+			},
+		},
+		{
+			label: "🇯🇵 Japanese Sets",
+			isOn: setsLanguage === "JA",
+			onPress: () => {
+				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+				setSetsLanguage("JA");
+			},
+		},
+	];
+
 	return (
 		<>
 			<Stack.SearchBar
@@ -666,6 +708,7 @@ export default function Search() {
 				// Pre-26 iOS renders this under the header — pin it so the manual
 				// content offsets stay correct instead of collapsing on scroll.
 				hideWhenScrolling={HAS_BOTTOM_SEARCH_BAR ? undefined : false}
+				{...legacySearchBarStyle(t)}
 			/>
 
 			{/* Per-button tint: Toolbar-level tintColor is dropped for header
@@ -685,55 +728,28 @@ export default function Search() {
 				/>
 			</Stack.Toolbar>
 
-			<Stack.Toolbar placement="bottom" tintColor={t.accentOn}>
-				<Stack.Toolbar.SearchBarSlot />
-				<Stack.Toolbar.Menu
-					icon="line.3.horizontal.decrease.circle"
-					tintColor={t.accentOn}
-				>
-					<Stack.Toolbar.MenuAction
-						isOn={mode === "cards"}
-						onPress={() => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-							setMode("cards");
-						}}
+			{/* iOS 26 gets the glass bottom toolbar; earlier iOS renders that
+			    toolbar as a bare glyph floating over content, so it gets a
+			    frosted FAB + action sheet instead (inside the container below). */}
+			{HAS_BOTTOM_SEARCH_BAR && (
+				<Stack.Toolbar placement="bottom" tintColor={t.accentOn}>
+					<Stack.Toolbar.SearchBarSlot />
+					<Stack.Toolbar.Menu
+						icon="line.3.horizontal.decrease.circle"
+						tintColor={t.accentOn}
 					>
-						{MODE_LABELS.cards}
-					</Stack.Toolbar.MenuAction>
-					<Stack.Toolbar.MenuAction
-						isOn={mode === "sealed"}
-						onPress={() => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-							// Sealed pricing is a Pro feature (no free catalog data for it).
-							if (!isPro) {
-								void presentProPaywallIfNeeded();
-								return;
-							}
-							setMode("sealed");
-						}}
-					>
-						{MODE_LABELS.sealed}
-					</Stack.Toolbar.MenuAction>
-					<Stack.Toolbar.MenuAction
-						isOn={setsLanguage === "EN"}
-						onPress={() => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-							setSetsLanguage("EN");
-						}}
-					>
-						🇺🇸 English Sets
-					</Stack.Toolbar.MenuAction>
-					<Stack.Toolbar.MenuAction
-						isOn={setsLanguage === "JA"}
-						onPress={() => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-							setSetsLanguage("JA");
-						}}
-					>
-						🇯🇵 Japanese Sets
-					</Stack.Toolbar.MenuAction>
-				</Stack.Toolbar.Menu>
-			</Stack.Toolbar>
+						{filterActions.map((a) => (
+							<Stack.Toolbar.MenuAction
+								key={a.label}
+								isOn={a.isOn}
+								onPress={a.onPress}
+							>
+								{a.label}
+							</Stack.Toolbar.MenuAction>
+						))}
+					</Stack.Toolbar.Menu>
+				</Stack.Toolbar>
+			)}
 
 			<View style={styles.container}>
 				{/* Deep-water gradient — the one background every screen shares. */}
@@ -826,6 +842,12 @@ export default function Search() {
 							}
 						/>
 					</Animated.View>
+				)}
+				{!HAS_BOTTOM_SEARCH_BAR && (
+					<LegacyToolbarMenu
+						icon="line.3.horizontal.decrease.circle"
+						actions={filterActions}
+					/>
 				)}
 			</View>
 		</>

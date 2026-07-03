@@ -37,7 +37,7 @@ import {
 } from "@/lib/scrydex";
 import { formatCurrency } from "@/lib/format";
 import { typeScale, useRiverTheme } from "@/constants/theme";
-import { ProGate, ProUnlockPill, RedactBar } from "@/components/ProGate";
+import { ProGate, ProUnlockPill } from "@/components/ProGate";
 import CardImage from "@/components/CardImage";
 import ErrorState from "@/components/ErrorState";
 import type { ScrydexRawPrice, ScrydexTrends } from "@/types/scrydex";
@@ -246,9 +246,14 @@ export default function SealedDetail() {
 	]);
 
 	// Pops this modal (and anything under it) back to the home chat screen with
-	// a ready-to-send question about this product seeded into the input.
+	// a ready-to-send question about this product seeded into the input. Chat
+	// is Pro-only: locked users get the paywall in place, not navigated away.
 	const openChatAboutProduct = () => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		if (!isPro) {
+			void presentProPaywallIfNeeded();
+			return;
+		}
 		const displayName = product?.name ?? name ?? "this product";
 		const setName = product?.expansion
 			? ` from ${getExpansionDisplayName(product.expansion)}`
@@ -461,7 +466,6 @@ export default function SealedDetail() {
 											>
 												Market price · Unopened
 											</Text>
-											<RedactBar style={styles.redactHeroPrice} />
 											<View style={styles.lockedPillRow}>
 												<ProUnlockPill />
 											</View>
@@ -972,13 +976,6 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 22,
 		paddingTop: 12,
 		paddingBottom: 18,
-	},
-	// Locked-state redaction bar, sized to the hero price it replaces
-	redactHeroPrice: {
-		width: 150,
-		height: 34,
-		borderRadius: 9,
-		marginTop: 4,
 	},
 	lockedPillRow: {
 		marginTop: 16,

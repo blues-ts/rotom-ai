@@ -931,9 +931,14 @@ export default function CardDetail() {
 		: undefined;
 
 	// Pops this modal (and anything under it) back to the home chat screen with
-	// a ready-to-send question about this card seeded into the input.
+	// a ready-to-send question about this card seeded into the input. Chat is
+	// Pro-only: locked users get the paywall in place, not navigated away.
 	const openChatAboutCard = useCallback(() => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		if (!isPro) {
+			void presentProPaywallIfNeeded();
+			return;
+		}
 		const label = `${displayName}${cardNumber ? ` #${cardNumber}` : ""}${
 			setDisplayName ? ` from ${setDisplayName}` : ""
 		}`;
@@ -941,7 +946,7 @@ export default function CardDetail() {
 			pathname: "/(home)",
 			params: { chatPrefill: `Tell me about ${label}` },
 		});
-	}, [displayName, cardNumber, setDisplayName]);
+	}, [isPro, displayName, cardNumber, setDisplayName]);
 
 	// One-time nudge at the "Chat about this card" row — same coachmark as the
 	// card grids, but it only pops once the row has actually scrolled into
@@ -980,6 +985,12 @@ export default function CardDetail() {
 
 	const openConfig = useCallback(() => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		// Pricing configuration is Pro-only — locked users get the paywall in
+		// place instead of the configure sheet.
+		if (!isPro) {
+			void presentProPaywallIfNeeded();
+			return;
+		}
 		// Land the market-value block just above the sheet's top edge — the 0.6
 		// detent puts the sheet top at ~40% of the screen height. Content point
 		// c renders at screenY = c - scrollOffset, so target estimateBottom there.
@@ -989,7 +1000,7 @@ export default function CardDetail() {
 			animated: true,
 		});
 		router.push("/(card)/configure");
-	}, []);
+	}, [isPro]);
 
 	const confirmRemove = useCallback(() => {
 		Alert.alert("Remove Card", "Remove this card from the collection?", [
@@ -1306,7 +1317,6 @@ export default function CardDetail() {
 												>
 													Market value
 												</Text>
-												<RedactBar style={styles.redactHeroPrice} />
 												<View style={styles.lockedPillRow}>
 													<ProUnlockPill />
 												</View>
@@ -2215,13 +2225,6 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 22,
 		paddingTop: 12,
 		paddingBottom: 18,
-	},
-	// Locked-state redaction bars, sized to the type they replace
-	redactHeroPrice: {
-		width: 150,
-		height: 34,
-		borderRadius: 9,
-		marginTop: 4,
 	},
 	lockedPillRow: {
 		marginTop: 16,

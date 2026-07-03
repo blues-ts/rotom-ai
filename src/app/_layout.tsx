@@ -13,6 +13,7 @@ import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { ToastProvider } from "@/context/ToastContext";
 import { ScanSessionProvider } from "@/context/ScanSessionContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
+import { legacyHeaderBlur } from "@/lib/platform";
 import { ClerkLoaded, ClerkProvider } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import {
@@ -191,6 +192,7 @@ function AppContent() {
 						headerBackButtonDisplayMode: "minimal",
 						headerTransparent: true,
 						headerStyle: { backgroundColor: "transparent" },
+						...legacyHeaderBlur(t.isDark),
 						headerTintColor: t.accentOn,
 						headerShadowVisible: false,
 						headerLeft: () => <HeaderBackButton />,
@@ -205,6 +207,7 @@ function AppContent() {
 						headerBackButtonDisplayMode: "minimal",
 						headerTransparent: true,
 						headerStyle: { backgroundColor: "transparent" },
+						...legacyHeaderBlur(t.isDark),
 						headerTintColor: t.accentOn,
 						headerShadowVisible: false,
 					}}

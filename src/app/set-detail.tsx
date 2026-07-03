@@ -29,7 +29,9 @@ import { useApi } from "@/lib/axios";
 import {
 	HAS_BOTTOM_SEARCH_BAR,
 	HEADER_SEARCH_BAR_HEIGHT,
+	legacySearchBarStyle,
 } from "@/lib/platform";
+import { LegacyToolbarMenu } from "@/components/LegacyToolbarMenu";
 import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
 import { searchCards, searchSealed } from "@/lib/api/pricing";
 import { getCatalogSet, catalogCardToScrydex } from "@/lib/api/catalog";
@@ -566,6 +568,32 @@ export default function SetDetail() {
 		],
 	);
 
+	// One list drives both the iOS 26 toolbar menu and the legacy FAB sheet.
+	// Sealed products have no collector numbers, so those sorts drop out.
+	const sortActions = (
+		isSealedMode
+			? (["nameAsc", "valueDesc", "valueAsc"] as SortOption[])
+			: ([
+					"number",
+					"numberDesc",
+					"nameAsc",
+					"valueDesc",
+					"valueAsc",
+				] as SortOption[])
+	).map((o) => ({
+		label: SORT_LABELS[o],
+		isOn: sortBy === o,
+		onPress: () => {
+			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+			// Value sorts need prices — a Pro feature.
+			if ((o === "valueDesc" || o === "valueAsc") && !isPro) {
+				void presentProPaywallIfNeeded();
+				return;
+			}
+			setSortBy(o);
+		},
+	}));
+
 	return (
 		<>
 			<Stack.Screen
@@ -596,40 +624,31 @@ export default function SetDetail() {
 				// Pre-26 iOS renders this under the header — pin it so the manual
 				// content offset above stays correct instead of collapsing on scroll.
 				hideWhenScrolling={HAS_BOTTOM_SEARCH_BAR ? undefined : false}
+				{...legacySearchBarStyle(t)}
 			/>
 
-			<Stack.Toolbar placement="bottom" tintColor={t.accentOn}>
-				<Stack.Toolbar.SearchBarSlot />
-				<Stack.Toolbar.Menu icon="arrow.up.arrow.down" tintColor={t.accentOn}>
-					{/* Sealed products have no collector numbers */}
-					{(isSealedMode
-						? (["nameAsc", "valueDesc", "valueAsc"] as SortOption[])
-						: ([
-								"number",
-								"numberDesc",
-								"nameAsc",
-								"valueDesc",
-								"valueAsc",
-							] as SortOption[])
-					).map((o) => (
-						<Stack.Toolbar.MenuAction
-							key={o}
-							isOn={sortBy === o}
-							onPress={() => {
-								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-								// Value sorts need prices — a Pro feature.
-								if ((o === "valueDesc" || o === "valueAsc") && !isPro) {
-									void presentProPaywallIfNeeded();
-									return;
-								}
-								setSortBy(o);
-							}}
-						>
-							{SORT_LABELS[o]}
-						</Stack.Toolbar.MenuAction>
-					))}
-				</Stack.Toolbar.Menu>
-			</Stack.Toolbar>
+			{/* iOS 26 gets the glass bottom toolbar; earlier iOS renders that
+			    toolbar as a bare glyph floating over content, so it gets a
+			    frosted FAB + action sheet instead (inside the container below). */}
+			{HAS_BOTTOM_SEARCH_BAR && (
+				<Stack.Toolbar placement="bottom" tintColor={t.accentOn}>
+					<Stack.Toolbar.SearchBarSlot />
+					<Stack.Toolbar.Menu
+						icon="arrow.up.arrow.down"
+						tintColor={t.accentOn}
+					>
+						{sortActions.map((a) => (
+							<Stack.Toolbar.MenuAction
+								key={a.label}
+								isOn={a.isOn}
+								onPress={a.onPress}
+							>
+								{a.label}
+							</Stack.Toolbar.MenuAction>
+						))}
+					</Stack.Toolbar.Menu>
+				</Stack.Toolbar>
+			)}
 
 			<View style={styles.container}>
 				{/* Deep-water gradient — the one background every screen shares. */}
@@ -683,6 +702,12 @@ export default function SetDetail() {
 						initialNumToRender={15}
 						maxToRenderPerBatch={9}
 						windowSize={7}
+					/>
+				)}
+				{!HAS_BOTTOM_SEARCH_BAR && (
+					<LegacyToolbarMenu
+						icon="arrow.up.arrow.down"
+						actions={sortActions}
 					/>
 				)}
 			</View>
