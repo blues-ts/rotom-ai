@@ -63,7 +63,10 @@ const { width, height } = Dimensions.get("window");
 // Card geometry (2.5" x 3.5")
 const CARD_ASPECT_RATIO = 2.5 / 3.5;
 const CARD_CORNER_RADIUS = 24;
-const CARD_MAX_WIDTH = 286;
+// Deliberately wider than the mock's 286pt reticle: this box doubles as the
+// recognition crop, and shrinking it made scans flaky (cards held at the
+// accustomed distance bled outside the analyzed region).
+const CARD_MAX_WIDTH = 325;
 const CARD_WIDTH_RATIO = 0.78;
 const CARD_CENTER_Y_RATIO = 0.42;
 const SCRIM_OPACITY = 0.28;
