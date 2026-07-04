@@ -50,8 +50,10 @@ export function useCollections() {
 
   const query = useQuery({
     queryKey: COLLECTIONS_KEY,
-    queryFn: () => {
-      const rows = db.getAllSync<CollectionRow>(`
+    // Async read: refetches run after every mutation, and the sync API would
+    // block the JS thread for the duration on big collections.
+    queryFn: async () => {
+      const rows = await db.getAllAsync<CollectionRow>(`
         SELECT
           c.id,
           c.name,
@@ -362,9 +364,7 @@ export function useCollections() {
 export function useCollectionDetail(id: string) {
   const db = getDatabase();
 
-  const read = () => {
-    const row = db.getFirstSync<CollectionRow>(
-      `SELECT
+  const detailSql = `SELECT
         c.id,
         c.name,
         c.created_at,
@@ -374,18 +374,23 @@ export function useCollectionDetail(id: string) {
       FROM collections c
       LEFT JOIN collection_cards cc ON cc.collection_id = c.id
       WHERE c.id = ?
-      GROUP BY c.id`,
-      [id],
-    );
-    return row ? mapRow(row) : null;
-  };
+      GROUP BY c.id`;
 
   return useQuery({
     queryKey: ["collection", id],
-    queryFn: read,
-    // SQLite reads are synchronous — hydrate on first render so the summary
-    // banner doesn't flicker in a frame later.
-    initialData: id ? read : undefined,
+    // Refetches (post-mutation invalidations) read off the JS thread.
+    queryFn: async () => {
+      const row = await db.getFirstAsync<CollectionRow>(detailSql, [id]);
+      return row ? mapRow(row) : null;
+    },
+    // First render hydrates from a one-time sync read so the summary banner
+    // doesn't flicker in a frame later.
+    initialData: id
+      ? () => {
+          const row = db.getFirstSync<CollectionRow>(detailSql, [id]);
+          return row ? mapRow(row) : null;
+        }
+      : undefined,
     enabled: !!id,
   });
 }
@@ -441,12 +446,14 @@ export function useRefreshCollectionPrices() {
       // Pricing is a Pro feature — non-Pro never hits the pricing API. Skip
       // silently (this also runs on an auto-refresh, so no surprise paywall).
       if (!isPro) return { updated: 0 };
+      // Async read: this can be the whole table, and the sync API would block
+      // the JS thread (dead taps) for the duration on big collections.
       const rows = collectionId
-        ? db.getAllSync<CollectionCardRow>(
+        ? await db.getAllAsync<CollectionCardRow>(
             "SELECT * FROM collection_cards WHERE collection_id = ?",
             [collectionId],
           )
-        : db.getAllSync<CollectionCardRow>("SELECT * FROM collection_cards");
+        : await db.getAllAsync<CollectionCardRow>("SELECT * FROM collection_cards");
 
       if (rows.length === 0) return { updated: 0 };
 
@@ -474,45 +481,50 @@ export function useRefreshCollectionPrices() {
 
       const now = new Date().toISOString();
       let updated = 0;
-      for (const row of rows) {
-        const card = cardMap.get(row.card_id);
-        if (!card) continue;
+      // One transaction for the whole sweep — a single disk sync instead of one
+      // per statement — and the async API keeps the statements off the JS
+      // thread, so the UI stays responsive while thousands of rows update.
+      await db.withTransactionAsync(async () => {
+        for (const row of rows) {
+          const card = cardMap.get(row.card_id);
+          if (!card) continue;
 
-        // Backfill card_number if missing and the API returned one
-        // (sealed products have no card number).
-        const freshNumber = "number" in card ? getCardNumber(card) : undefined;
-        if (!row.card_number && freshNumber) {
-          db.runSync(
-            "UPDATE collection_cards SET card_number = ? WHERE id = ?",
-            [freshNumber, row.id],
+          // Backfill card_number if missing and the API returned one
+          // (sealed products have no card number).
+          const freshNumber = "number" in card ? getCardNumber(card) : undefined;
+          if (!row.card_number && freshNumber) {
+            await db.runAsync(
+              "UPDATE collection_cards SET card_number = ? WHERE id = ?",
+              [freshNumber, row.id],
+            );
+          }
+
+          // Backfill set_name if missing and the API returned one.
+          if (!row.set_name && card.expansion?.name) {
+            await db.runAsync(
+              "UPDATE collection_cards SET set_name = ? WHERE id = ?",
+              [getExpansionDisplayName(card.expansion), row.id],
+            );
+          }
+
+          // Refresh the stored image URL so stale links self-heal.
+          const freshImage = getCardImage(card, row.variant, "medium");
+          if (freshImage && freshImage !== row.card_image_url) {
+            await db.runAsync(
+              "UPDATE collection_cards SET card_image_url = ? WHERE id = ?",
+              [freshImage, row.id],
+            );
+          }
+
+          const price = resolvePriceForRow(card, row);
+          if (price === undefined || price === null) continue;
+          await db.runAsync(
+            "UPDATE collection_cards SET card_value = ?, card_value_updated_at = ? WHERE id = ?",
+            [price, now, row.id],
           );
+          updated += 1;
         }
-
-        // Backfill set_name if missing and the API returned one.
-        if (!row.set_name && card.expansion?.name) {
-          db.runSync(
-            "UPDATE collection_cards SET set_name = ? WHERE id = ?",
-            [getExpansionDisplayName(card.expansion), row.id],
-          );
-        }
-
-        // Refresh the stored image URL so stale links self-heal.
-        const freshImage = getCardImage(card, row.variant, "medium");
-        if (freshImage && freshImage !== row.card_image_url) {
-          db.runSync(
-            "UPDATE collection_cards SET card_image_url = ? WHERE id = ?",
-            [freshImage, row.id],
-          );
-        }
-
-        const price = resolvePriceForRow(card, row);
-        if (price === undefined || price === null) continue;
-        db.runSync(
-          "UPDATE collection_cards SET card_value = ?, card_value_updated_at = ? WHERE id = ?",
-          [price, now, row.id],
-        );
-        updated += 1;
-      }
+      });
       return { updated };
     },
     onSuccess: () => {
@@ -536,12 +548,10 @@ export function useRefreshCollectionPrices() {
 export function useCollectionCards(collectionId: string) {
   const db = getDatabase();
 
-  const read = () => {
-    const rows = db.getAllSync<CollectionCardRow>(
-      `SELECT * FROM collection_cards WHERE collection_id = ? ORDER BY added_at DESC`,
-      [collectionId],
-    );
-    return rows.map((row): CollectionCard => ({
+  const cardsSql = `SELECT * FROM collection_cards WHERE collection_id = ? ORDER BY added_at DESC`;
+
+  const mapRows = (rows: CollectionCardRow[]) =>
+    rows.map((row): CollectionCard => ({
       id: row.id,
       collectionId: row.collection_id,
       cardId: row.card_id,
@@ -561,14 +571,19 @@ export function useCollectionCards(collectionId: string) {
       pricePaid: row.price_paid ?? undefined,
       valueUpdatedAt: row.card_value_updated_at ?? undefined,
     }));
-  };
 
   return useQuery({
     queryKey: ["collectionCards", collectionId],
-    queryFn: read,
-    // SQLite reads are synchronous — hydrate on first render so the grid
-    // doesn't flash a loading state.
-    initialData: collectionId ? read : undefined,
+    // Refetches (post-mutation invalidations) read off the JS thread.
+    queryFn: async () =>
+      mapRows(
+        await db.getAllAsync<CollectionCardRow>(cardsSql, [collectionId]),
+      ),
+    // First render hydrates from a one-time sync read so the grid doesn't
+    // flash a loading state.
+    initialData: collectionId
+      ? () => mapRows(db.getAllSync<CollectionCardRow>(cardsSql, [collectionId]))
+      : undefined,
     enabled: !!collectionId,
   });
 }

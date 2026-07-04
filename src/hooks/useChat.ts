@@ -10,8 +10,11 @@ import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
-const DRAIN_INTERVAL_MS = 16;
-const CHARS_PER_TICK = 4;
+// 32ms/8-char ticks are perceptually identical to 16ms/4 (same ~250 chars/s)
+// but cost half the React commits — each tick is a full re-render of the chat
+// screen on the JS thread, which otherwise contends with scrolling mid-stream.
+const DRAIN_INTERVAL_MS = 32;
+const CHARS_PER_TICK = 8;
 // Abort the stream only after this long with no incoming data, so long
 // responses aren't cut off by a fixed total timeout.
 const STREAM_INACTIVITY_TIMEOUT_MS = 30000;

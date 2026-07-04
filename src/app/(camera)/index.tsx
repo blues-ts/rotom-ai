@@ -1,7 +1,7 @@
 import { SymbolView } from "expo-symbols";
 import * as Haptics from "expo-haptics";
 import { router, Stack, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
 	Dimensions,
 	Linking,
@@ -71,6 +71,13 @@ const CARD_WIDTH_RATIO = 0.78;
 const CARD_CENTER_Y_RATIO = 0.42;
 const SCRIM_OPACITY = 0.28;
 
+// Card box (screen points). Derived entirely from launch-time screen constants,
+// so hoisted to module scope — renders only read them.
+const cardWidth = Math.min(CARD_MAX_WIDTH, width * CARD_WIDTH_RATIO);
+const cardHeight = cardWidth / CARD_ASPECT_RATIO;
+const cardX = width / 2 - cardWidth / 2;
+const cardY = height * CARD_CENTER_Y_RATIO - cardHeight / 2;
+
 // Palette — signals layered over the live feed.
 const RIVER = palette.accent; // searching / scan (design-system accent)
 
@@ -78,9 +85,8 @@ const RIVER = palette.accent; // searching / scan (design-system accent)
 // the edge inward — one continuous frame so the corners stay seamless — with
 // opacity falling off toward the centre. Thickness is capped by the side margin
 // so the glow never reaches the card rectangle.
-const _ringCardW = Math.min(CARD_MAX_WIDTH, width * CARD_WIDTH_RATIO);
 const RING_GAP = 16; // keep the glow this far clear of the card
-const RING_THICKNESS = Math.max(0, (width - _ringCardW) / 2 - RING_GAP);
+const RING_THICKNESS = Math.max(0, (width - cardWidth) / 2 - RING_GAP);
 const RING_STEPS = 18;
 const RING_STROKE = RING_THICKNESS / RING_STEPS + 1.5;
 const SCREEN_CORNER = 52;
@@ -111,6 +117,14 @@ const VOTE_NEEDED = 4;
 const VOTE_LEAD = 2;
 const AUTO_INTERVAL_MS = 550;
 const REGION_PAD = 0.04;
+
+// The card box as preview fractions (plus padding) for the recognition crop.
+const scanRegion = {
+	x: Math.max(0, cardX / width - (cardWidth / width) * REGION_PAD),
+	y: Math.max(0, cardY / height - (cardHeight / height) * REGION_PAD),
+	w: Math.min(1, (cardWidth / width) * (1 + 2 * REGION_PAD)),
+	h: Math.min(1, (cardHeight / height) * (1 + 2 * REGION_PAD)),
+};
 
 // Collector-number re-rank. When the visual match is a tight near-twin cluster
 // (holos), OCR the printed number and use it to break the tie — but only as a
@@ -177,6 +191,68 @@ const RETICLE_COLOR: Record<ScanState, string> = {
 	found: RIVER,
 };
 
+// The scrim/mask and the edge glow never change. Hoisted out of the screen and
+// memoized so the scan-state re-renders (~2Hz while scanning) only re-commit
+// the small reticle-outline Svg, not two full-screen SVG trees.
+const ViewfinderScrim = memo(function ViewfinderScrim() {
+	return (
+		<Svg
+			style={StyleSheet.absoluteFill}
+			width={width}
+			height={height}
+			pointerEvents="none"
+		>
+			<Defs>
+				<Mask id="holeMask">
+					<Rect width={width} height={height} fill="white" />
+					<Rect
+						x={cardX}
+						y={cardY}
+						width={cardWidth}
+						height={cardHeight}
+						rx={CARD_CORNER_RADIUS}
+						ry={CARD_CORNER_RADIUS}
+						fill="black"
+					/>
+				</Mask>
+			</Defs>
+			<Rect
+				width={width}
+				height={height}
+				fill={`rgba(0,0,0,${SCRIM_OPACITY})`}
+				mask="url(#holeMask)"
+			/>
+		</Svg>
+	);
+});
+
+const EdgeGlow = memo(function EdgeGlow() {
+	return (
+		<Svg
+			style={StyleSheet.absoluteFill}
+			width={width}
+			height={height}
+			pointerEvents="none"
+		>
+			{RING_RECTS.map((r, i) => (
+				<Rect
+					key={i}
+					x={r.inset}
+					y={r.inset}
+					width={width - 2 * r.inset}
+					height={height - 2 * r.inset}
+					rx={r.rx}
+					ry={r.rx}
+					fill="none"
+					stroke={RIVER}
+					strokeOpacity={r.opacity}
+					strokeWidth={RING_STROKE}
+				/>
+			))}
+		</Svg>
+	);
+});
+
 export default function CameraScreen() {
 	const device = useCameraDevice("back");
 	const { hasPermission, requestPermission } = useCameraPermission();
@@ -221,25 +297,6 @@ export default function CameraScreen() {
 	const deactivateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const voteRef = useRef<string[]>([]); // recent confident top-1 ids (windowed)
-
-	// Card box (screen points) + the same box as preview fractions for cropping.
-	const cardWidth = Math.min(CARD_MAX_WIDTH, width * CARD_WIDTH_RATIO);
-	const cardHeight = cardWidth / CARD_ASPECT_RATIO;
-	const cardX = width / 2 - cardWidth / 2;
-	const cardY = height * CARD_CENTER_Y_RATIO - cardHeight / 2;
-	const scanRegion = useMemo(() => {
-		const pad = REGION_PAD;
-		const nx = cardX / width;
-		const ny = cardY / height;
-		const nw = cardWidth / width;
-		const nh = cardHeight / height;
-		return {
-			x: Math.max(0, nx - nw * pad),
-			y: Math.max(0, ny - nh * pad),
-			w: Math.min(1, nw * (1 + 2 * pad)),
-			h: Math.min(1, nh * (1 + 2 * pad)),
-		};
-	}, [cardX, cardY, cardWidth, cardHeight]);
 
 	// Flight path: reticle centre → the library button at the top-right of the
 	// header. The card shrinks and arcs up into the button on each capture.
@@ -322,7 +379,7 @@ export default function CameraScreen() {
 		} finally {
 			capturingRef.current = false;
 		}
-	}, [scanRegion]);
+	}, []);
 
 	// Capture a locked card into the current scanning session, then keep scanning.
 	// Unlike before, this does NOT navigate away — it plays the captured cue, adds
@@ -461,7 +518,7 @@ export default function CameraScreen() {
 				setScanState(voteRef.current.length ? "locking" : "searching");
 			}
 		},
-		[captureCard, scanRegion],
+		[captureCard],
 	);
 
 	const runLoop = useCallback(async () => {
@@ -652,33 +709,15 @@ export default function CameraScreen() {
 			/>
 
 			{/* Scrim + viewfinder reticle */}
+			<ViewfinderScrim />
+			{/* Outline of the hole — colors through the scan state. Its own small
+			    Svg so the color change doesn't re-commit the scrim/mask tree. */}
 			<Svg
 				style={StyleSheet.absoluteFill}
 				width={width}
 				height={height}
 				pointerEvents="none"
 			>
-				<Defs>
-					<Mask id="holeMask">
-						<Rect width={width} height={height} fill="white" />
-						<Rect
-							x={cardX}
-							y={cardY}
-							width={cardWidth}
-							height={cardHeight}
-							rx={CARD_CORNER_RADIUS}
-							ry={CARD_CORNER_RADIUS}
-							fill="black"
-						/>
-					</Mask>
-				</Defs>
-				<Rect
-					width={width}
-					height={height}
-					fill={`rgba(0,0,0,${SCRIM_OPACITY})`}
-					mask="url(#holeMask)"
-				/>
-				{/* Outline of the hole — colors through the scan state */}
 				<Rect
 					x={cardX}
 					y={cardY}
@@ -701,28 +740,7 @@ export default function CameraScreen() {
 			</Text>
 
 			{/* Blue glow framing the screen — concentric strokes keep corners seamless. */}
-			<Svg
-				style={StyleSheet.absoluteFill}
-				width={width}
-				height={height}
-				pointerEvents="none"
-			>
-				{RING_RECTS.map((r, i) => (
-					<Rect
-						key={i}
-						x={r.inset}
-						y={r.inset}
-						width={width - 2 * r.inset}
-						height={height - 2 * r.inset}
-						rx={r.rx}
-						ry={r.rx}
-						fill="none"
-						stroke={RIVER}
-						strokeOpacity={r.opacity}
-						strokeWidth={RING_STROKE}
-					/>
-				))}
-			</Svg>
+			<EdgeGlow />
 
 			{/* Bottom bar — native SwiftUI glass buttons: info (left), scan status
 			    (centre), torch (right). */}

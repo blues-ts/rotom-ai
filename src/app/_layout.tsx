@@ -13,6 +13,7 @@ import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { ToastProvider } from "@/context/ToastContext";
 import { ScanSessionProvider } from "@/context/ScanSessionContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
+import { maybeRunSqliteBenchmarkFromFlag } from "@/lib/devPerfBench";
 import { legacyHeaderBlur } from "@/lib/platform";
 import { ClerkLoaded, ClerkProvider } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
@@ -106,6 +107,11 @@ function AppContent() {
 
 	// Warm the expansions list + set logos in the background at launch.
 	usePrefetchExpansions();
+
+	// Dev-only: host-triggered SQLite benchmark (see devPerfBench).
+	React.useEffect(() => {
+		if (__DEV__) void maybeRunSqliteBenchmarkFromFlag();
+	}, []);
 
 	const navigationTheme = theme === "dark" ? DarkTheme : DefaultTheme;
 

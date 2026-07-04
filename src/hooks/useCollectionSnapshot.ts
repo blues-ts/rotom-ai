@@ -39,11 +39,13 @@ export function useCollectionSnapshot() {
 
 	return useQuery({
 		queryKey: COLLECTION_SNAPSHOT_KEY,
-		queryFn: () => {
-			const collectionRows = db.getAllSync<CollectionRow>(
+		// Async reads: this pulls the entire card table, and the sync API would
+		// block the JS thread for the duration on big collections.
+		queryFn: async () => {
+			const collectionRows = await db.getAllAsync<CollectionRow>(
 				`SELECT id, name, created_at FROM collections ORDER BY created_at ASC`,
 			);
-			const cardRows = db.getAllSync<CollectionCardRow>(
+			const cardRows = await db.getAllAsync<CollectionCardRow>(
 				`SELECT * FROM collection_cards ORDER BY card_value * quantity DESC`,
 			);
 

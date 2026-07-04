@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PRIVACY_URL, TERMS_URL } from "@/constants/links";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { useToast } from "@/context/ToastContext";
@@ -13,6 +13,7 @@ import {
 	clearCollectionValueHistory,
 	seedCollectionValueHistory,
 } from "@/lib/collectionValueHistory";
+import { runAndStoreSqliteBenchmark } from "@/lib/devPerfBench";
 import { resetTapHoldHint } from "@/hooks/useTapHoldHint";
 import CardPressable from "@/components/CardPressable";
 import { useAuth, useUser } from "@clerk/clerk-expo";
@@ -20,7 +21,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import Purchases from "react-native-purchases";
 import RevenueCatUI from "react-native-purchases-ui";
@@ -158,6 +159,17 @@ export default function Settings() {
 	const queryClient = useQueryClient();
 	const toast = useToast();
 	const [crashTest, setCrashTest] = useState(false);
+
+	// Dev-only: `riverai:///(settings)?bench=1` auto-runs the SQLite benchmark
+	// so it can be triggered headlessly (simctl openurl) and read back from the
+	// sandbox — see runAndStoreSqliteBenchmark.
+	const { bench } = useLocalSearchParams<{ bench?: string }>();
+	useEffect(() => {
+		if (!__DEV__ || bench !== "1") return;
+		runAndStoreSqliteBenchmark()
+			.then((report) => console.log(`[perf-bench]\n${report}`))
+			.catch((e) => console.log("[perf-bench] failed:", e));
+	}, [bench]);
 
 	if (crashTest) {
 		throw new Error("Test crash from Settings dev tools");
@@ -408,6 +420,20 @@ export default function Settings() {
 									queryClient.invalidateQueries({
 										queryKey: ["collectionValueHistory"],
 									});
+								}}
+							/>
+							<SettingsRow
+								label="Run SQLite Benchmark"
+								onPress={async () => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+									toast.show("Running SQLite benchmark…");
+									try {
+										const report = await runAndStoreSqliteBenchmark();
+										console.log(`[perf-bench]\n${report}`);
+										Alert.alert("SQLite benchmark", report);
+									} catch (e) {
+										Alert.alert("SQLite benchmark failed", String(e));
+									}
 								}}
 							/>
 							<SettingsRow

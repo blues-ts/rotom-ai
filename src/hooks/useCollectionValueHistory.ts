@@ -22,8 +22,8 @@ export function useCollectionValueHistory() {
 	const db = getDatabase();
 	return useQuery({
 		queryKey: ["collectionValueHistory"],
-		queryFn: (): ValueHistoryPoint[] => {
-			const rows = db.getAllSync<Row>(
+		queryFn: async (): Promise<ValueHistoryPoint[]> => {
+			const rows = await db.getAllAsync<Row>(
 				`SELECT recorded_at, total_value FROM collection_value_snapshots
 				   ORDER BY recorded_at ASC`,
 			);

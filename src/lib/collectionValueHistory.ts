@@ -50,12 +50,16 @@ export function seedCollectionValueHistory(days = 400): void {
 	// this final value (within $0.005) and skip — no end-of-chart spike.
 	const finalValue = points[points.length - 1].value;
 	const scale = currentTotal / finalValue;
-	for (const p of points) {
-		db.runSync(
-			"INSERT INTO collection_value_snapshots (recorded_at, total_value) VALUES (?, ?)",
-			[p.ts.toISOString(), Math.round(p.value * scale * 100) / 100],
-		);
-	}
+	// One transaction for the batch — 400 individual inserts each pay a disk
+	// sync otherwise.
+	db.withTransactionSync(() => {
+		for (const p of points) {
+			db.runSync(
+				"INSERT INTO collection_value_snapshots (recorded_at, total_value) VALUES (?, ?)",
+				[p.ts.toISOString(), Math.round(p.value * scale * 100) / 100],
+			);
+		}
+	});
 }
 
 /**
