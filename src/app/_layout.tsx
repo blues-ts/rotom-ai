@@ -34,7 +34,8 @@ import { StatusBar } from "expo-status-bar";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SymbolView } from "expo-symbols";
-import { useRiverTheme } from "@/constants/theme";
+import { LinearGradient } from "expo-linear-gradient";
+import { radius, useRiverTheme } from "@/constants/theme";
 import * as Haptics from "expo-haptics";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -47,19 +48,74 @@ SplashScreen.preventAutoHideAsync();
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 
-// Hardcoded colors: this can render outside ThemeProvider when the root errors.
+// This can render when providers have crashed, so it only leans on
+// useRiverTheme (plain useColorScheme, no context) and module imports —
+// no ThemeProvider, toasts, or CardPressable.
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+	const t = useRiverTheme();
 	if (__DEV__) {
 		console.error("[ErrorBoundary]", error);
 	}
 
 	return (
 		<View style={errorStyles.container}>
-			<Text style={errorStyles.title}>Something went wrong</Text>
-			<Text style={errorStyles.subtitle}>
+			<LinearGradient
+				colors={t.background.colors}
+				locations={t.background.locations}
+				pointerEvents="none"
+				style={StyleSheet.absoluteFill}
+			/>
+			<View
+				style={[errorStyles.iconChip, { backgroundColor: t.accentIconFill }]}
+			>
+				<SymbolView
+					name="exclamationmark.triangle.fill"
+					size={30}
+					tintColor={t.accentOn}
+					weight="semibold"
+				/>
+			</View>
+			<Text style={[errorStyles.title, { color: t.text.primary }]}>
+				Something went wrong
+			</Text>
+			<Text style={[errorStyles.subtitle, { color: t.text.secondary }]}>
 				An unexpected error occurred. Please try again.
 			</Text>
-			<Pressable style={errorStyles.button} onPress={retry}>
+			{__DEV__ ? (
+				<View
+					style={[
+						errorStyles.detailCard,
+						{
+							backgroundColor: t.glass.surfaceFill,
+							borderColor: t.glass.surfaceBorder,
+						},
+					]}
+				>
+					<Text
+						style={[errorStyles.detailText, { color: t.text.secondary }]}
+						numberOfLines={8}
+					>
+						{error.message}
+					</Text>
+				</View>
+			) : null}
+			<Pressable
+				onPress={() => {
+					Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+					retry();
+				}}
+				style={({ pressed }) => [
+					errorStyles.button,
+					{ backgroundColor: t.accent, opacity: pressed ? 0.85 : 1 },
+					t.buttonGlow,
+				]}
+			>
+				<SymbolView
+					name="arrow.clockwise"
+					size={15}
+					tintColor="#FFFFFF"
+					weight="semibold"
+				/>
 				<Text style={errorStyles.buttonText}>Try Again</Text>
 			</Pressable>
 		</View>
@@ -73,30 +129,52 @@ const errorStyles = StyleSheet.create({
 		justifyContent: "center",
 		paddingHorizontal: 32,
 		gap: 10,
-		backgroundColor: "#000000",
+	},
+	iconChip: {
+		width: 64,
+		height: 64,
+		borderRadius: 32,
+		alignItems: "center",
+		justifyContent: "center",
+		marginBottom: 6,
 	},
 	title: {
 		fontSize: 20,
 		fontWeight: "700",
-		color: "#e7e9ea",
 	},
 	subtitle: {
 		fontSize: 15,
 		textAlign: "center",
 		lineHeight: 21,
-		color: "#8b8f94",
+	},
+	// Dev-only: the actual error, so a crash in the sim is debuggable
+	// without digging through Metro logs.
+	detailCard: {
+		borderRadius: radius.tile,
+		borderWidth: 1,
+		paddingHorizontal: 14,
+		paddingVertical: 10,
+		marginTop: 6,
+		maxWidth: "100%",
+	},
+	detailText: {
+		fontSize: 12,
+		lineHeight: 17,
+		fontFamily: "Menlo",
 	},
 	button: {
-		paddingHorizontal: 20,
-		paddingVertical: 12,
-		borderRadius: 12,
-		marginTop: 8,
-		backgroundColor: "#1c9cf0",
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
+		paddingHorizontal: 22,
+		paddingVertical: 13,
+		borderRadius: radius.pill,
+		marginTop: 10,
 	},
 	buttonText: {
 		fontSize: 15,
-		fontWeight: "600",
-		color: "#ffffff",
+		fontWeight: "700",
+		color: "#FFFFFF",
 	},
 });
 

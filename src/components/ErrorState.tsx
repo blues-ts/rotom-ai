@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
-import { SymbolView } from "expo-symbols";
+import { SymbolView, type SymbolViewProps } from "expo-symbols";
 import * as Haptics from "expo-haptics";
 import CardPressable from "@/components/CardPressable";
 import { useRiverTheme } from "@/constants/theme";
@@ -7,10 +7,13 @@ import { useRiverTheme } from "@/constants/theme";
 export default function ErrorState({
 	title = "Something went wrong",
 	message = "Check your connection and try again.",
+	icon = "wifi.slash",
 	onRetry,
 }: {
 	title?: string;
 	message?: string;
+	/** SF Symbol name — default suits network failures; pass a fitting one for other errors. */
+	icon?: SymbolViewProps["name"];
 	onRetry?: () => void;
 }) {
 	const t = useRiverTheme();
@@ -18,7 +21,7 @@ export default function ErrorState({
 	return (
 		<View style={styles.container}>
 			<SymbolView
-				name="wifi.slash"
+				name={icon}
 				size={44}
 				tintColor={t.text.tertiary}
 				weight="regular"

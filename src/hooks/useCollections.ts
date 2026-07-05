@@ -27,6 +27,75 @@ interface CollectionRow {
   card_images: string | null;
 }
 
+export interface AddCollectionCardInput {
+  collectionId: string;
+  cardId: string;
+  cardName: string;
+  cardNumber?: string;
+  setName?: string;
+  cardImageUrl: string;
+  cardValue: number;
+  pricingType?: string;
+  productType?: string;
+  variant?: string;
+  condition?: string;
+  gradedCompany?: string;
+  gradedGrade?: string;
+  pricePaid?: number;
+}
+
+// Insert-or-increment for one card config. Shared by the single add and the
+// batch add so the dedupe rules can't drift apart.
+async function upsertCollectionCard(
+  db: ReturnType<typeof getDatabase>,
+  {
+    collectionId,
+    cardId,
+    cardName,
+    cardNumber,
+    setName,
+    cardImageUrl,
+    cardValue,
+    pricingType = "Raw",
+    productType = "card",
+    variant = "normal",
+    condition = "NM",
+    gradedCompany,
+    gradedGrade,
+    pricePaid,
+  }: AddCollectionCardInput,
+): Promise<void> {
+  // Check if this exact config already exists
+  const existing = await db.getFirstAsync<{ id: string }>(
+    `SELECT id FROM collection_cards
+     WHERE collection_id = ? AND card_id = ? AND pricing_type = ? AND variant = ? AND condition = ?
+     AND COALESCE(graded_company, '') = ? AND COALESCE(graded_grade, '') = ?`,
+    [collectionId, cardId, pricingType, variant, condition, gradedCompany ?? "", gradedGrade ?? ""],
+  );
+  if (existing) {
+    if (pricePaid !== undefined) {
+      await db.runAsync(
+        "UPDATE collection_cards SET quantity = quantity + 1, price_paid = ? WHERE id = ?",
+        [pricePaid, existing.id],
+      );
+    } else {
+      await db.runAsync(
+        "UPDATE collection_cards SET quantity = quantity + 1 WHERE id = ?",
+        [existing.id],
+      );
+    }
+  } else {
+    // Random suffix: batch-adding several cards calls this in the same
+    // millisecond, so a bare Date.now() id collides on the PRIMARY KEY and
+    // only one row survives. Keep it unique per insert.
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    await db.runAsync(
+      "INSERT INTO collection_cards (id, collection_id, card_id, card_name, card_number, set_name, card_image_url, card_value, pricing_type, product_type, variant, condition, graded_company, graded_grade, quantity, price_paid, card_value_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
+      [id, collectionId, cardId, cardName, cardNumber ?? null, setName ?? null, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany ?? null, gradedGrade ?? null, pricePaid ?? null, new Date().toISOString()],
+    );
+  }
+}
+
 function mapRow(row: CollectionRow): Collection {
   return {
     id: row.id,
@@ -64,6 +133,7 @@ export function useCollections() {
             SELECT card_image_url FROM collection_cards
             WHERE collection_id = c.id
             ORDER BY card_value DESC
+            LIMIT 4
           )) as card_images
         FROM collections c
         LEFT JOIN collection_cards cc ON cc.collection_id = c.id
@@ -119,67 +189,34 @@ export function useCollections() {
   });
 
   const addCardToCollection = useMutation({
-    mutationFn: ({
+    mutationFn: (input: AddCollectionCardInput) => upsertCollectionCard(db, input),
+    onSuccess: (_data, { collectionId }) => {
+      recordCollectionValueSnapshot();
+      queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
+      queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
+      queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
+      queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
+      queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
+    },
+    onError: onMutationError,
+  });
+
+  // Batch add (scanner library). One transaction for all rows and ONE
+  // snapshot + invalidation pass at the end — per-card mutates fired a full
+  // refetch storm for every card in the batch.
+  const addCardsToCollection = useMutation({
+    mutationFn: async ({
       collectionId,
-      cardId,
-      cardName,
-      cardNumber,
-      setName,
-      cardImageUrl,
-      cardValue,
-      pricingType = "Raw",
-      productType = "card",
-      variant = "normal",
-      condition = "NM",
-      gradedCompany,
-      gradedGrade,
-      pricePaid,
+      cards,
     }: {
       collectionId: string;
-      cardId: string;
-      cardName: string;
-      cardNumber?: string;
-      setName?: string;
-      cardImageUrl: string;
-      cardValue: number;
-      pricingType?: string;
-      productType?: string;
-      variant?: string;
-      condition?: string;
-      gradedCompany?: string;
-      gradedGrade?: string;
-      pricePaid?: number;
+      cards: Omit<AddCollectionCardInput, "collectionId">[];
     }) => {
-      // Check if this exact config already exists
-      const existing = db.getFirstSync<{ id: string }>(
-        `SELECT id FROM collection_cards
-         WHERE collection_id = ? AND card_id = ? AND pricing_type = ? AND variant = ? AND condition = ?
-         AND COALESCE(graded_company, '') = ? AND COALESCE(graded_grade, '') = ?`,
-        [collectionId, cardId, pricingType, variant, condition, gradedCompany ?? "", gradedGrade ?? ""],
-      );
-      if (existing) {
-        if (pricePaid !== undefined) {
-          db.runSync(
-            "UPDATE collection_cards SET quantity = quantity + 1, price_paid = ? WHERE id = ?",
-            [pricePaid, existing.id],
-          );
-        } else {
-          db.runSync(
-            "UPDATE collection_cards SET quantity = quantity + 1 WHERE id = ?",
-            [existing.id],
-          );
+      await db.withTransactionAsync(async () => {
+        for (const card of cards) {
+          await upsertCollectionCard(db, { collectionId, ...card });
         }
-      } else {
-        // Random suffix: batch-adding several cards calls this in the same
-        // millisecond, so a bare Date.now() id collides on the PRIMARY KEY and
-        // only one row survives. Keep it unique per insert.
-        const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-        db.runSync(
-          "INSERT INTO collection_cards (id, collection_id, card_id, card_name, card_number, set_name, card_image_url, card_value, pricing_type, product_type, variant, condition, graded_company, graded_grade, quantity, price_paid, card_value_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
-          [id, collectionId, cardId, cardName, cardNumber ?? null, setName ?? null, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany ?? null, gradedGrade ?? null, pricePaid ?? null, new Date().toISOString()],
-        );
-      }
-      return Promise.resolve();
+      });
     },
     onSuccess: (_data, { collectionId }) => {
       recordCollectionValueSnapshot();
@@ -353,6 +390,7 @@ export function useCollections() {
     deleteCollection,
     renameCollection,
     addCardToCollection,
+    addCardsToCollection,
     removeCardFromCollection,
     removeCardRows,
     incrementCardQuantity,
@@ -370,7 +408,12 @@ export function useCollectionDetail(id: string) {
         c.created_at,
         COALESCE(SUM(cc.quantity), 0) as card_count,
         COALESCE(SUM(cc.card_value * cc.quantity), 0) as total_value,
-        GROUP_CONCAT(cc.card_image_url) as card_images
+        (SELECT GROUP_CONCAT(card_image_url) FROM (
+          SELECT card_image_url FROM collection_cards
+          WHERE collection_id = c.id
+          ORDER BY card_value DESC
+          LIMIT 4
+        )) as card_images
       FROM collections c
       LEFT JOIN collection_cards cc ON cc.collection_id = c.id
       WHERE c.id = ?

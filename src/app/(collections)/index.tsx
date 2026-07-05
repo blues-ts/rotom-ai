@@ -47,14 +47,13 @@ export default function Collections() {
 				showsVerticalScrollIndicator={false}
 				refreshControl={
 					<RefreshControl
-						// The pill is the sole "updating" indicator — keep the native
-						// spinner from lingering behind it; pulling still refreshes.
+						// Spinner is only the pull affordance; refreshing stays false
+						// so it collapses on release and the pill carries the
+						// "updating" state from there. No title — spinner only.
 						refreshing={false}
 						onRefresh={() => refreshPrices.mutate(undefined)}
 						tintColor={t.text.secondary}
 						progressViewOffset={insets.top + 52}
-						title="Pull to refresh prices"
-						titleColor={t.text.secondary}
 					/>
 				}
 			>

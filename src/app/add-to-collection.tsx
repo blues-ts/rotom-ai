@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import CardPressable from "@/components/CardPressable";
 import * as Haptics from "expo-haptics";
@@ -47,7 +47,7 @@ export default function AddToCollection() {
       cardImages?: string;
     }>();
 
-  const { collections, addCardToCollection } = useCollections();
+  const { collections, addCardToCollection, addCardsToCollection } = useCollections();
   const refreshPrices = useRefreshCollectionPrices();
   // Batch adds come from the scanner library — clear those cards from the
   // session once they've landed in a collection.
@@ -68,61 +68,85 @@ export default function AddToCollection() {
   );
   const isBatch = batchIds.length > 0;
 
+  // Kick off the priced-batch lookup the moment the sheet opens, not on tap —
+  // the seconds the user spends picking a collection hide the network wait, so
+  // the tap itself only pays the (usually settled) await.
+  const batchFetchRef = useRef<ReturnType<typeof getPricedBatch> | null>(null);
+  useEffect(() => {
+    if (!isBatch || batchFetchRef.current) return;
+    // Pull the fully PRICED cards in one batch (same source the collection's
+    // price refresh uses) so each card's real default variant / condition /
+    // value resolves exactly like the search long-press quick-add does —
+    // storing "normal"/"NM" blindly meant holo/V cards never matched a price.
+    const fetch = getPricedBatch(api, {
+      cardIds: batchIds,
+      sealedIds: [],
+      // Scanner adds only need the NM price on the card response — skip the
+      // extra raw-USD price_history backfill so it's one GET per card.
+      skipRawBackfill: true,
+    });
+    batchFetchRef.current = fetch;
+    // Failures surface on the tap's await; this just keeps an untouched
+    // promise from raising an unhandled-rejection warning.
+    fetch.catch(() => {});
+  }, [api, batchIds, isBatch]);
+
   const handleSelectBatch = useCallback(
     async (collectionId: string) => {
       if (addedId || batchIds.length === 0) return;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setAddedId(collectionId);
       try {
-        // Pull the fully PRICED cards in one batch (same source the collection's
-        // price refresh uses), then resolve each card's real default variant /
-        // condition / value exactly like the search long-press quick-add does —
-        // storing "normal"/"NM" blindly meant holo/V cards never matched a price.
-        const { cards } = await getPricedBatch(api, {
-          cardIds: batchIds,
-          sealedIds: [],
-          // Scanner adds only need the NM price on the card response — skip the
-          // extra raw-USD price_history backfill so it's one GET per card.
-          skipRawBackfill: true,
-        });
+        const { cards } = await (batchFetchRef.current ??
+          getPricedBatch(api, {
+            cardIds: batchIds,
+            sealedIds: [],
+            skipRawBackfill: true,
+          }));
         const byId = new Map(cards.map((c) => [c.id, c]));
-        batchIds.forEach((id, i) => {
-          const card = byId.get(id);
-          const variant = card ? (getVariantNames(card)[0] ?? "normal") : "normal";
-          const condition = card
-            ? (getConditionOptions(card, variant)[0] ?? "NM")
-            : "NM";
-          const value = card
-            ? (selectPrice(card, variant, { kind: "raw", condition })?.value ?? 0)
-            : 0;
-          addCardToCollection.mutate({
-            collectionId,
-            cardId: id,
-            cardName: card ? getCardDisplayName(card) : id,
-            cardNumber: card ? getCardNumber(card) || undefined : undefined,
-            setName: card?.expansion
-              ? getExpansionDisplayName(card.expansion)
-              : undefined,
-            cardImageUrl:
-              (card && getCardImage(card, variant, "small")) ||
-              batchImages[i] ||
-              `https://images.scrydex.com/pokemon/${id}/small`,
-            cardValue: value,
-            pricingType: "Raw",
-            productType: "card",
-            variant,
-            condition,
-          });
+        // One transactional mutation for the whole batch — one snapshot and
+        // one refetch pass instead of a per-card storm.
+        await addCardsToCollection.mutateAsync({
+          collectionId,
+          cards: batchIds.map((id, i) => {
+            const card = byId.get(id);
+            const variant = card ? (getVariantNames(card)[0] ?? "normal") : "normal";
+            const condition = card
+              ? (getConditionOptions(card, variant)[0] ?? "NM")
+              : "NM";
+            const value = card
+              ? (selectPrice(card, variant, { kind: "raw", condition })?.value ?? 0)
+              : 0;
+            return {
+              cardId: id,
+              cardName: card ? getCardDisplayName(card) : id,
+              cardNumber: card ? getCardNumber(card) || undefined : undefined,
+              setName: card?.expansion
+                ? getExpansionDisplayName(card.expansion)
+                : undefined,
+              cardImageUrl:
+                (card && getCardImage(card, variant, "small")) ||
+                batchImages[i] ||
+                `https://images.scrydex.com/pokemon/${id}/small`,
+              cardValue: value,
+              pricingType: "Raw",
+              productType: "card",
+              variant,
+              condition,
+            };
+          }),
         });
         // They're filed away now — drop them from the scanning session.
         removeScans(batchIds);
-        setTimeout(() => router.back(), 700);
+        setTimeout(() => router.back(), 450);
       } catch {
+        // A failed prefetch shouldn't poison retries — refetch on next tap.
+        batchFetchRef.current = null;
         setAddedId(null);
         Alert.alert("Error", "Couldn't add the cards. Please try again.");
       }
     },
-    [api, addedId, batchIds, batchImages, addCardToCollection, removeScans],
+    [api, addedId, batchIds, batchImages, addCardsToCollection, removeScans],
   );
 
   const handleSelect = useCallback(
@@ -166,7 +190,7 @@ export default function AddToCollection() {
             // blocks the dismiss.
             const hasPrice = (parseFloat(cardValue ?? "0") || 0) > 0;
             if (!hasPrice) refreshPrices.mutate(collectionId);
-            setTimeout(() => router.back(), 700);
+            setTimeout(() => router.back(), 450);
           },
           onError: (error) => {
             // Duplicate configs increment quantity instead of erroring, so any
@@ -201,7 +225,10 @@ export default function AddToCollection() {
           <CardPressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push("/create-collection");
+              router.push({
+                pathname: "/create-collection",
+                params: { from: "add-to-collection" },
+              });
             }}
             style={[styles.createButton, { backgroundColor: t.accent }, t.buttonGlow]}
           >

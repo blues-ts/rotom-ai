@@ -780,13 +780,15 @@ export default function CollectionDetail() {
 						keyboardShouldPersistTaps="handled"
 						refreshControl={
 							<RefreshControl
-								// The pill is the sole "updating" indicator — keep the native
-								// spinner from lingering behind it; pulling still refreshes.
+								// Spinner is only the pull affordance; refreshing stays false
+								// so it collapses on release and the pill carries the
+								// "updating" state from there. No title — spinner only.
 								refreshing={false}
 								onRefresh={() => refreshPrices.mutate(id)}
 								tintColor={t.text.secondary}
-								title="Pull to refresh prices"
-								titleColor={t.text.secondary}
+								// Match the collections screen: drop the spinner below the
+								// transparent header instead of drawing underneath it.
+								progressViewOffset={topPadding}
 							/>
 						}
 					/>

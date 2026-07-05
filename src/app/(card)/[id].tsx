@@ -39,6 +39,7 @@ import { SymbolView } from "expo-symbols";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { useToast } from "@/context/ToastContext";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { LineChart } from "react-native-wagmi-charts";
 import { useApi } from "@/lib/axios";
@@ -72,7 +73,6 @@ import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { ProGate, ProUnlockPill, RedactBar } from "@/components/ProGate";
 import { LockedChartTeaser } from "@/components/LockedChartTeaser";
 import CardImage from "@/components/CardImage";
-import ErrorState from "@/components/ErrorState";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -660,6 +660,7 @@ export default function CardDetail() {
 		parseInt(initQuantity || "1", 10) || 1,
 	);
 	const api = useApi();
+	const toast = useToast();
 
 	// Selection lives in CardConfigContext so the configure formSheet (pushed
 	// over this screen) edits the same state and the price/chart/chips below
@@ -721,6 +722,14 @@ export default function CardDetail() {
 				: getCatalogCard(api, id).then(catalogCardToScrydex),
 		enabled: !!id,
 	});
+
+	// Load failure degrades in place (params still give us name + image, prices
+	// show "—") — a toast explains instead of a full-screen error.
+	useEffect(() => {
+		if (isError && !card) {
+			toast.show("Couldn't load card details — check your connection.");
+		}
+	}, [isError, card, toast]);
 
 	// If the user upgrades to Pro while on this screen, the cached data is the
 	// price-less catalog card, so prices stay "—". Refetch on the Pro transition
@@ -1206,7 +1215,7 @@ export default function CardDetail() {
 					style={StyleSheet.absoluteFill}
 				/>
 
-				{isLoading || card ? (
+				{isLoading || card || isError ? (
 					<ScrollView
 						ref={scrollRef}
 						style={styles.container}
@@ -2133,6 +2142,71 @@ export default function CardDetail() {
 									</Animated.View>
 								)}
 							</Animated.View>
+						) : isError ? (
+							// Degraded state: params already rendered the image + name
+							// above; the sheet just shows a placeholder value and a retry.
+							// The toast (fired from the query effect) explains why.
+							<Animated.View
+								key="card-error"
+								entering={FadeIn.duration(260)}
+								style={[
+									styles.sheet,
+									{
+										backgroundColor: t.glass.surfaceFill,
+										borderColor: t.glass.surfaceBorder,
+										marginBottom: -insets.bottom,
+										paddingBottom: 40 + insets.bottom,
+										// Sections normally carry their own padding — this
+										// sheet has none, so pad it directly.
+										paddingHorizontal: 20,
+										paddingTop: 24,
+									},
+								]}
+							>
+								<Text
+									style={[
+										styles.estimateLabel,
+										{ color: t.text.secondary },
+									]}
+								>
+									Market value
+								</Text>
+								<Text
+									style={[styles.heroPrice, { color: t.text.primary }]}
+								>
+									—
+								</Text>
+								<Pressable
+									onPress={() => {
+										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+										refetch();
+									}}
+									style={({ pressed }) => [
+										styles.retryPill,
+										{
+											backgroundColor: pressed
+												? t.glass.pressedFill
+												: t.glass.elevatedFill,
+											borderColor: t.glass.elevatedBorder,
+										},
+									]}
+								>
+									<SymbolView
+										name="arrow.clockwise"
+										size={14}
+										tintColor={t.text.primary}
+										weight="medium"
+									/>
+									<Text
+										style={[
+											styles.retryPillText,
+											{ color: t.text.primary },
+										]}
+									>
+										Try Again
+									</Text>
+								</Pressable>
+							</Animated.View>
 						) : (
 							<Animated.View
 								key="card-skeleton"
@@ -2147,16 +2221,9 @@ export default function CardDetail() {
 					</ScrollView>
 				) : (
 					<View style={[StyleSheet.absoluteFill, styles.centered]}>
-						{isError ? (
-							<ErrorState
-								title="Couldn't load card"
-								onRetry={() => refetch()}
-							/>
-						) : (
-							<Text style={{ color: t.text.secondary }}>
-								Card not found
-							</Text>
-						)}
+						<Text style={{ color: t.text.secondary }}>
+							Card not found
+						</Text>
 					</View>
 				)}
 			</View>
@@ -2321,6 +2388,21 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 	},
 
+	retryPill: {
+		flexDirection: "row",
+		alignItems: "center",
+		alignSelf: "flex-start",
+		gap: 6,
+		paddingHorizontal: 16,
+		paddingVertical: 10,
+		borderRadius: 999,
+		borderWidth: 1,
+		marginTop: 14,
+	},
+	retryPillText: {
+		fontSize: 15,
+		fontWeight: "600",
+	},
 	estimateLabel: {
 		...typeScale.overline,
 		marginBottom: 8,

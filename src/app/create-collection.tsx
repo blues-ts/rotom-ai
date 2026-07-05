@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 import * as Haptics from "expo-haptics";
-import { router, Stack } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 
 import { radius, typeScale, useRiverTheme } from "@/constants/theme";
 import { useCollections } from "@/hooks/useCollections";
@@ -9,6 +9,11 @@ import { SheetDoneButton } from "@/components/SheetDoneButton";
 
 export default function CreateCollection() {
 	const t = useRiverTheme();
+	// From the add-to-collection sheet, creating is a detour mid-add: land back
+	// on the picker (with the new collection listed) instead of opening the
+	// empty collection and abandoning the card being added.
+	const { from } = useLocalSearchParams<{ from?: string }>();
+	const returnToCaller = from === "add-to-collection";
 	const { createCollection } = useCollections();
 	const [name, setName] = useState("");
 	const canCreate = name.trim().length > 0;
@@ -22,15 +27,17 @@ export default function CreateCollection() {
 			// the freshly created (empty) collection so the user can start adding.
 			const id = await createCollection.mutateAsync(trimmed);
 			router.back();
-			router.push({
-				pathname: "/collection-detail",
-				params: { id, name: trimmed, totalValue: "0", cardCount: "0" },
-			});
+			if (!returnToCaller) {
+				router.push({
+					pathname: "/collection-detail",
+					params: { id, name: trimmed, totalValue: "0", cardCount: "0" },
+				});
+			}
 		} catch {
 			// onMutationError already surfaces the failure; just close the sheet.
 			router.back();
 		}
-	}, [name, createCollection]);
+	}, [name, createCollection, returnToCaller]);
 
 	return (
 		// The sheet fill comes from the route's contentStyle (root layout).
