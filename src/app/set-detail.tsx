@@ -318,14 +318,21 @@ export default function SetDetail() {
 			// so this number-order fallback only ever renders for non-pro users.
 			const priced = pricedCards?.items;
 			if (!priced) return base;
-			const sorted = priced
-				.slice()
-				.sort(
-					(a, b) =>
-						bestMarketPrice(b, sortCondition).value -
-						bestMarketPrice(a, sortCondition).value,
-				);
-			return sortBy === "valueAsc" ? sorted.reverse() : sorted;
+			// Keys computed once (not in the comparator), and UNPRICED cards
+			// always sink to the end in BOTH directions, keeping their number
+			// order there. Reversing them to the top made "low to high" lead
+			// with a wall of unpriced cards — and when a payload arrives with
+			// prices missing entirely (transient upstream gaps), a degenerate
+			// all-zero sort no longer masquerades as a ranking.
+			const keyed = priced.map((item) => ({
+				item,
+				key: bestMarketPrice(item, sortCondition).value,
+			}));
+			const withPrice = keyed.filter((k) => k.key > 0);
+			const unpriced = keyed.filter((k) => k.key === 0);
+			withPrice.sort((a, b) => b.key - a.key);
+			if (sortBy === "valueAsc") withPrice.reverse();
+			return [...withPrice, ...unpriced].map((k) => k.item);
 		}
 		if (sortBy === "nameAsc") {
 			return base.slice().sort((a, b) => {

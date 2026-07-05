@@ -15,6 +15,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import Animated, {
 	interpolate,
 	useAnimatedStyle,
+	useSharedValue,
+	withTiming,
 } from "react-native-reanimated";
 import {
 	KeyboardEvents,
@@ -82,22 +84,46 @@ export default function Home() {
 		return () => task.cancel();
 	}, []);
 
+	// RNKC's shared value can itself stick at keyboard height when a hide
+	// lands around a navigation (e.g. tapping a card image mid-stream and
+	// coming back left the input floating mid-screen). RN's own Keyboard
+	// observer is an INDEPENDENT native signal: while it says hidden, the
+	// avoidance clamps to zero no matter what the stuck value claims, so
+	// the screen self-heals on return.
+	const keyboardVisible = useSharedValue(0);
+	useEffect(() => {
+		const show = Keyboard.addListener("keyboardWillShow", () => {
+			keyboardVisible.value = 1;
+		});
+		const hide = Keyboard.addListener("keyboardWillHide", () => {
+			keyboardVisible.value = 0;
+		});
+		return () => {
+			show.remove();
+			hide.remove();
+		};
+	}, [keyboardVisible]);
+
 	const bottomSpacerStyle = useAnimatedStyle(() => ({
-		marginBottom: interpolate(
-			keyboardHeight.value,
-			[0, -1],
-			[bottom, 4],
-			"clamp",
-		),
+		marginBottom:
+			keyboardVisible.value === 0
+				? withTiming(bottom, { duration: 250 })
+				: interpolate(
+						keyboardHeight.value,
+						[0, -1],
+						[bottom, 4],
+						"clamp",
+					),
 	}));
 
 	// Keyboard avoidance driven straight off the shared value instead of
-	// RNKC's <KeyboardAvoidingView> — its internal state could stay stuck
-	// padded when a keyboard hide landed mid-navigation, leaving the input
-	// floating mid-screen after navigating back. The shared value always
-	// settles to 0, so this self-heals by construction.
+	// RNKC's <KeyboardAvoidingView>, gated by the independent visibility
+	// flag above.
 	const keyboardPadStyle = useAnimatedStyle(() => ({
-		paddingBottom: Math.max(0, -keyboardHeight.value),
+		paddingBottom:
+			keyboardVisible.value === 0
+				? withTiming(0, { duration: 250 })
+				: Math.max(0, -keyboardHeight.value),
 	}));
 
 	const {
@@ -120,6 +146,11 @@ export default function Home() {
 	const handleChatSend = useCallback(
 		async (text: string): Promise<boolean> => {
 			if (!isPro) {
+				// Dismiss BEFORE the paywall's native modal presents: a
+				// keyboard hide that happens underneath the modal never
+				// reaches the keyboard-controller's shared value, leaving
+				// the input stuck padded mid-screen after dismissal.
+				Keyboard.dismiss();
 				const result = await presentProPaywallIfNeeded();
 				if (!paywallResultUnlocked(result)) return false;
 			}

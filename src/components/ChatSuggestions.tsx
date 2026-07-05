@@ -18,12 +18,12 @@ type Suggestion = {
 	labelSuffix?: string;
 };
 
-// Shown until the user owns a card worth analyzing.
+// Shown until the user owns a card worth analyzing. No "Your top card"
+// overline — Bubble Mew isn't their card, it's just a demo prompt.
 const FALLBACK_ANALYZE: Suggestion = {
 	icon: "chart.line.uptrend.xyaxis",
 	label: "Analyze Bubble Mew",
 	prompt: "Do a market analysis on Bubble Mew from Paldean Fates",
-	overline: "Your top card",
 };
 
 export default function ChatSuggestions({

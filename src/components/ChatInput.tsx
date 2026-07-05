@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, TextInput, View } from "react-native";
+import {
+	Keyboard,
+	Pressable,
+	StyleSheet,
+	TextInput,
+	View,
+} from "react-native";
 
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "expo-symbols";
@@ -35,7 +41,12 @@ export default function ChatInput({
 		const trimmed = text.trim();
 		if (!trimmed || isStreaming) return;
 		const accepted = await onSend(trimmed);
-		if (accepted !== false) setText("");
+		if (accepted !== false) {
+			setText("");
+			// Drop the keyboard so the reply streams with the full screen —
+			// leaving it up kept the input floating mid-screen.
+			Keyboard.dismiss();
+		}
 	};
 
 	const handleStop = () => {
