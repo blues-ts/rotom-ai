@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "expo-symbols";
+import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { useRiverTheme } from "@/constants/theme";
 import type { LeadStore } from "@/hooks/useChat";
@@ -144,12 +145,27 @@ const ChatMessageList = forwardRef<ChatMessageListRef, ChatMessageListProps>(
 					data={data}
 					keyExtractor={(item) => item.id}
 					renderItem={({ item, index }) => (
-						<ChatMessage
-							message={item}
-							// Only the most recent message (index 0, inverted list)
-							// is retryable.
-							onRetry={index === 0 ? onRetry : undefined}
-						/>
+						// The just-sent bubble springs up from the input,
+						// iMessage-style. Only while it's still the NEWEST
+						// item — once the reply lands, windowing remounts
+						// render statically instead of replaying the pop.
+						<Animated.View
+							entering={
+								index === 0 && item.role === "user"
+									? FadeInDown.springify()
+											.mass(0.7)
+											.damping(15)
+											.stiffness(220)
+									: undefined
+							}
+						>
+							<ChatMessage
+								message={item}
+								// Only the most recent message (index 0,
+								// inverted list) is retryable.
+								onRetry={index === 0 ? onRetry : undefined}
+							/>
+						</Animated.View>
 					)}
 					ListHeaderComponent={headerComponent}
 					style={styles.list}

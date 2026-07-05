@@ -1,6 +1,7 @@
 import { useEffect } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet } from "react-native";
 import Animated, {
+	FadeIn,
 	useAnimatedStyle,
 	useSharedValue,
 	withDelay,
@@ -49,11 +50,14 @@ export default function TypingIndicator() {
 	const { colors } = useTheme();
 
 	return (
-		<View style={styles.container}>
+		<Animated.View
+			entering={FadeIn.duration(250)}
+			style={styles.container}
+		>
 			<Dot delay={0} color={colors.mutedForeground} />
 			<Dot delay={150} color={colors.mutedForeground} />
 			<Dot delay={300} color={colors.mutedForeground} />
-		</View>
+		</Animated.View>
 	);
 }
 
