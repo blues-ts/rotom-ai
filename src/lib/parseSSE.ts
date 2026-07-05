@@ -5,23 +5,43 @@ export type ParsedEvent =
 	| { type: "done"; content?: string };
 
 /**
- * Parse a raw SSE chunk into structured events.
- * Each SSE message is delimited by \n\n and prefixed with "data: ".
+ * Incremental SSE parser. Network chunks can split an event at any byte, so
+ * a stateless per-chunk parse silently drops the event that straddles the
+ * boundary (the old XHR path lost tokens this way). The parser carries the
+ * unfinished remainder between pushes and only emits complete `data:` events.
  */
-export function parseSSE(chunk: string): ParsedEvent[] {
-	const events: ParsedEvent[] = [];
-	const parts = chunk.split("\n\n");
+export function createSSEParser() {
+	let carry = "";
 
-	for (const part of parts) {
-		const line = part.trim();
-		if (!line.startsWith("data: ")) continue;
-
+	const parseEvent = (raw: string): ParsedEvent | null => {
+		const line = raw.trim();
+		if (!line.startsWith("data: ")) return null;
 		try {
-			events.push(JSON.parse(line.slice(6)));
+			return JSON.parse(line.slice(6)) as ParsedEvent;
 		} catch {
 			// Skip malformed JSON
+			return null;
 		}
-	}
+	};
 
-	return events;
+	return {
+		push(chunk: string): ParsedEvent[] {
+			carry += chunk;
+			const events: ParsedEvent[] = [];
+			let sep = carry.indexOf("\n\n");
+			while (sep !== -1) {
+				const event = parseEvent(carry.slice(0, sep));
+				carry = carry.slice(sep + 2);
+				if (event) events.push(event);
+				sep = carry.indexOf("\n\n");
+			}
+			return events;
+		},
+		/** Emit a trailing event that arrived without its final delimiter. */
+		flush(): ParsedEvent[] {
+			const event = parseEvent(carry);
+			carry = "";
+			return event ? [event] : [];
+		},
+	};
 }

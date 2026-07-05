@@ -98,9 +98,11 @@ export default function Home() {
 	const {
 		messages,
 		streamingContent,
+		streamingLeadStore,
 		isStreaming,
 		sendMessage,
 		retryLast,
+		stopStreaming,
 		startNewChat,
 	} = useChat();
 
@@ -225,6 +227,7 @@ export default function Home() {
 							ref={chatListRef}
 							messages={messages}
 							streamingContent={streamingContent}
+							streamingLeadStore={streamingLeadStore}
 							isStreaming={isStreaming}
 							onRetry={retryLast}
 						/>
@@ -234,7 +237,8 @@ export default function Home() {
 				{/* Chat Input */}
 				<ChatInput
 					onSend={sendMessage}
-					disabled={isStreaming}
+					onStop={stopStreaming}
+					isStreaming={isStreaming}
 					onFocus={handleInputFocus}
 				/>
 				<Animated.View style={bottomSpacerStyle} />

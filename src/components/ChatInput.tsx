@@ -1,33 +1,41 @@
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
+import * as Haptics from "expo-haptics";
 import { SymbolView } from "expo-symbols";
 import CardPressable from "@/components/CardPressable";
 import { radius, spacing, useRiverTheme } from "@/constants/theme";
 
 interface ChatInputProps {
 	onSend: (text: string) => void;
-	disabled?: boolean;
+	onStop?: () => void;
+	isStreaming?: boolean;
 	onFocus?: () => void;
 }
 
 export default function ChatInput({
 	onSend,
-	disabled,
+	onStop,
+	isStreaming,
 	onFocus,
 }: ChatInputProps) {
 	const t = useRiverTheme();
 	const [text, setText] = useState("");
 	const canSend = useMemo(
-		() => text.trim().length > 0 && !disabled,
-		[text, disabled],
+		() => text.trim().length > 0 && !isStreaming,
+		[text, isStreaming],
 	);
 
 	const handleSend = () => {
 		const trimmed = text.trim();
-		if (!trimmed || disabled) return;
+		if (!trimmed || isStreaming) return;
 		onSend(trimmed);
 		setText("");
+	};
+
+	const handleStop = () => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		onStop?.();
 	};
 
 	return (
@@ -53,7 +61,6 @@ export default function ChatInput({
 					returnKeyType="send"
 					blurOnSubmit={false}
 					maxLength={250}
-					editable={!disabled}
 					accessibilityLabel="Message input"
 					accessibilityHint="Type your message to River"
 				/>
@@ -71,24 +78,29 @@ export default function ChatInput({
 						/>
 					</Pressable>
 				)}
+				{/* While streaming, the send button becomes a ChatGPT-style
+				    stop button; typing stays enabled so the next question can
+				    be drafted while River answers. */}
 				<CardPressable
-					onPress={handleSend}
-					disabled={!canSend}
-					accessibilityLabel="Send message"
+					onPress={isStreaming ? handleStop : handleSend}
+					disabled={!isStreaming && !canSend}
+					accessibilityLabel={
+						isStreaming ? "Stop response" : "Send message"
+					}
 					accessibilityRole="button"
 					pressScale={0.95}
 					style={[
 						styles.sendButton,
 						{
 							backgroundColor: t.accent,
-							opacity: canSend ? 1 : 0.45,
+							opacity: isStreaming || canSend ? 1 : 0.45,
 						},
-						canSend ? t.buttonGlow : null,
+						isStreaming || canSend ? t.buttonGlow : null,
 					]}
 				>
 					<SymbolView
-						name="arrow.up"
-						size={18}
+						name={isStreaming ? "stop.fill" : "arrow.up"}
+						size={isStreaming ? 14 : 18}
 						tintColor="#FFFFFF"
 						weight="semibold"
 					/>

@@ -1,118 +1,29 @@
 import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useMarkdown } from "react-native-marked";
 
 import { useTheme } from "@/context/ThemeContext";
-import type { ThemeColors } from "@/constants/colors";
-import type { MarkedStyles } from "react-native-marked";
 import type { Message } from "@/types/chat";
 import { ColoredRenderer } from "./ColoredRenderer";
+import { MarkdownBlock } from "./MarkdownBlocks";
+import { splitMarkdownBlocks } from "./chatMarkdown";
 
 interface ChatMessageProps {
 	message: Message;
 	onRetry?: () => void;
 }
 
-function getMarkdownStyles(colors: ThemeColors): MarkedStyles {
-	return {
-		text: {
-			color: colors.foreground,
-			fontSize: 16,
-			lineHeight: 22,
-		},
-		h1: {
-			fontSize: 22,
-			fontWeight: "700",
-			color: colors.foreground,
-			marginTop: 20,
-			marginBottom: 8,
-		},
-		h2: {
-			fontSize: 20,
-			fontWeight: "700",
-			color: colors.foreground,
-			marginTop: 18,
-			marginBottom: 8,
-		},
-		h3: {
-			fontSize: 18,
-			fontWeight: "700",
-			color: colors.foreground,
-			marginTop: 16,
-			marginBottom: 6,
-		},
-		paragraph: {
-			marginTop: 4,
-			marginBottom: 4,
-		},
-		strong: {
-			fontWeight: "700",
-			color: colors.foreground,
-		},
-		em: {
-			fontStyle: "italic",
-			color: colors.foreground,
-		},
-		list: {
-			marginLeft: 4,
-		},
-		li: {
-			color: colors.foreground,
-			fontSize: 16,
-			lineHeight: 22,
-			marginVertical: 2,
-		},
-		codespan: {
-			backgroundColor: colors.card,
-			color: colors.foreground,
-			borderRadius: 4,
-			paddingHorizontal: 5,
-			paddingVertical: 2,
-			fontSize: 14,
-			fontFamily: "Menlo",
-		},
-		code: {
-			backgroundColor: colors.card,
-			borderRadius: 8,
-			padding: 12,
-			marginVertical: 8,
-			borderWidth: 0,
-		},
-		blockquote: {
-			borderLeftWidth: 3,
-			borderLeftColor: colors.primary,
-			paddingLeft: 12,
-			marginLeft: 0,
-			marginVertical: 8,
-			backgroundColor: "transparent",
-		},
-		hr: {
-			backgroundColor: colors.border,
-			height: 1,
-			marginVertical: 12,
-		},
-		link: {
-			color: colors.primary,
-			textDecorationLine: "none",
-		},
-		image: {
-			borderRadius: 10,
-			resizeMode: "contain" as const,
-		},
-	};
-}
-
 function ChatMessage({ message, onRetry }: ChatMessageProps) {
 	const { colors } = useTheme();
 	const isUser = message.role === "user";
 
-	const markdownStyles = useMemo(() => getMarkdownStyles(colors), [colors]);
 	const renderer = useMemo(() => new ColoredRenderer(), []);
 
-	const elements = useMarkdown(
-		isUser ? "" : message.content,
-		{ styles: markdownStyles, renderer },
+	// Same block-split + memoized-block path as StreamingMessage, so the
+	// instant a stream finalizes into a message nothing re-lays-out.
+	const blocks = useMemo(
+		() => (isUser ? [] : splitMarkdownBlocks(message.content)),
+		[isUser, message.content],
 	);
 
 	return (
@@ -140,7 +51,14 @@ function ChatMessage({ message, onRetry }: ChatMessageProps) {
 				</View>
 			) : (
 				<View style={styles.markdownContainer}>
-					{elements}
+					{blocks.map((block, i) => (
+						<MarkdownBlock
+							key={i}
+							text={block}
+							colors={colors}
+							renderer={renderer}
+						/>
+					))}
 					{message.status === "error" && onRetry ? (
 						<Pressable
 							style={[
