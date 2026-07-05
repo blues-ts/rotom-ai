@@ -8,8 +8,6 @@ import type { Message } from "@/types/chat";
 import { createSSEParser } from "@/lib/parseSSE";
 import type { ParsedEvent } from "@/lib/parseSSE";
 import { useCollectionSnapshot } from "@/hooks/useCollectionSnapshot";
-import { useRevenueCat } from "@/context/RevenueCatContext";
-import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -67,9 +65,10 @@ function errorCopy(error: Error): string {
 	return "Sorry, something went wrong. Please try again.";
 }
 
+// Pro gating happens BEFORE sendMessage (Home's handleChatSend): the
+// paywall shows in place of a send, and the drafted text stays in the input.
 export function useChat() {
 	const { getToken } = useAuth();
-	const { isPro } = useRevenueCat();
 	const { data: collectionSnapshot } = useCollectionSnapshot();
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [streamingContent, setStreamingContent] = useState("");
@@ -313,20 +312,6 @@ export function useChat() {
 		async (text: string) => {
 			if (isStreaming) return;
 
-			if (!isPro) {
-				const gateMessage: Message = {
-					id: Date.now().toString(),
-					role: "assistant",
-					content:
-						"Chat with River is a Pro feature. Unlock River AI Pro to keep going.",
-					createdAt: new Date().toISOString(),
-					status: "complete",
-				};
-				setMessages((prev) => [...prev, gateMessage]);
-				void presentProPaywallIfNeeded();
-				return;
-			}
-
 			const userMessage: Message = {
 				id: Date.now().toString(),
 				role: "user",
@@ -503,7 +488,6 @@ export function useChat() {
 		},
 		[
 			isStreaming,
-			isPro,
 			getToken,
 			handleEvent,
 			waitForDrain,

@@ -7,7 +7,12 @@ import CardPressable from "@/components/CardPressable";
 import { radius, spacing, useRiverTheme } from "@/constants/theme";
 
 interface ChatInputProps {
-	onSend: (text: string) => void;
+	/**
+	 * Returns (or resolves) false when the send was refused — e.g. the Pro
+	 * paywall was dismissed — in which case the drafted text stays in the
+	 * input instead of being cleared.
+	 */
+	onSend: (text: string) => void | boolean | Promise<void | boolean>;
 	onStop?: () => void;
 	isStreaming?: boolean;
 	onFocus?: () => void;
@@ -26,11 +31,11 @@ export default function ChatInput({
 		[text, isStreaming],
 	);
 
-	const handleSend = () => {
+	const handleSend = async () => {
 		const trimmed = text.trim();
 		if (!trimmed || isStreaming) return;
-		onSend(trimmed);
-		setText("");
+		const accepted = await onSend(trimmed);
+		if (accepted !== false) setText("");
 	};
 
 	const handleStop = () => {

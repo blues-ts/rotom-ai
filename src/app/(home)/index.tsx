@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	Alert,
 	InteractionManager,
@@ -29,7 +29,12 @@ import ChatMessageList, {
 import ChatSuggestions from "@/components/ChatSuggestions";
 import EmptyChat from "@/components/EmptyChat";
 import { useRiverTheme } from "@/constants/theme";
+import { useRevenueCat } from "@/context/RevenueCatContext";
 import { useChat } from "@/hooks/useChat";
+import {
+	paywallResultUnlocked,
+	presentProPaywallIfNeeded,
+} from "@/lib/revenuecat";
 import { warmScanner } from "@/lib/scannerWarmup";
 
 export default function Home() {
@@ -105,12 +110,30 @@ export default function Home() {
 		stopStreaming,
 		startNewChat,
 	} = useChat();
+	const { isPro } = useRevenueCat();
+
+	// Pro gate lives HERE, before the send: non-Pro users get the paywall
+	// instead of a send — nothing enters the transcript, and ChatInput
+	// keeps the drafted text when this returns false. Unlocking (purchase/
+	// restore, or the entitlement being active despite a stale local
+	// isPro) proceeds with the send immediately.
+	const handleChatSend = useCallback(
+		async (text: string): Promise<boolean> => {
+			if (!isPro) {
+				const result = await presentProPaywallIfNeeded();
+				if (!paywallResultUnlocked(result)) return false;
+			}
+			void sendMessage(text);
+			return true;
+		},
+		[isPro, sendMessage],
+	);
 
 	useEffect(() => {
 		if (!chatPrefill || isStreaming) return;
 		router.setParams({ chatPrefill: "" });
-		void sendMessage(chatPrefill);
-	}, [chatPrefill, isStreaming, sendMessage]);
+		void handleChatSend(chatPrefill);
+	}, [chatPrefill, isStreaming, handleChatSend]);
 
 	const handleNewChat = () => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -201,7 +224,9 @@ export default function Home() {
 						pointerEvents={keyboardShown ? "none" : "box-none"}
 					>
 						<EmptyChat />
-						<ChatSuggestions onSelect={sendMessage} />
+						<ChatSuggestions
+							onSelect={(text) => void handleChatSend(text)}
+						/>
 					</Animated.View>
 					{/* While typing, anywhere above the input dismisses. */}
 					{keyboardShown && (
@@ -236,7 +261,7 @@ export default function Home() {
 
 				{/* Chat Input */}
 				<ChatInput
-					onSend={sendMessage}
+					onSend={handleChatSend}
 					onStop={stopStreaming}
 					isStreaming={isStreaming}
 					onFocus={handleInputFocus}

@@ -4,7 +4,7 @@ import Purchases, {
   type CustomerInfo,
   type PurchasesOffering,
 } from "react-native-purchases";
-import RevenueCatUI, { type PAYWALL_RESULT } from "react-native-purchases-ui";
+import RevenueCatUI, { PAYWALL_RESULT } from "react-native-purchases-ui";
 
 export const PRO_ENTITLEMENT_ID = "River AI TCG Pro";
 
@@ -46,6 +46,17 @@ export async function presentProPaywallIfNeeded(): Promise<PAYWALL_RESULT | null
   return RevenueCatUI.presentPaywallIfNeeded({
     requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
   });
+}
+
+// Did the paywall interaction end with the entitlement active? PURCHASED and
+// RESTORED are self-evident; NOT_PRESENTED means the SDK saw the entitlement
+// already active (stale local isPro), so the gated action should proceed too.
+export function paywallResultUnlocked(result: PAYWALL_RESULT | null): boolean {
+  return (
+    result === PAYWALL_RESULT.PURCHASED ||
+    result === PAYWALL_RESULT.RESTORED ||
+    result === PAYWALL_RESULT.NOT_PRESENTED
+  );
 }
 
 export async function logInRevenueCat(appUserId: string): Promise<CustomerInfo> {
