@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import CardPressable from "@/components/CardPressable";
 import * as Haptics from "expo-haptics";
-import { typeScale, useRiverTheme } from "@/constants/theme";
+import { palette, typeScale, useRiverTheme } from "@/constants/theme";
 
 /**
  * Pill-style selection controls shared by the card-detail configure sheet (and
@@ -40,20 +40,19 @@ function Chip({
 		<CardPressable
 			hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
 			// Selection chip: brightens on the shared press curve, no scale.
+			// The fill is always driven by the animated color pair — if it were
+			// only in the static style, reanimated's last-applied backgroundColor
+			// would keep painting over it after an active/inactive flip.
 			pressScale={1}
-			baseColor={active ? undefined : t.glass.elevatedFill}
-			pressedColor={active ? undefined : t.glass.pressedFill}
+			baseColor={active ? t.accent : t.glass.elevatedFill}
+			pressedColor={active ? palette.accentDeep : t.glass.pressedFill}
 			style={[
 				styles.togglePill,
 				// Fixed basis, no grow: chips keep the same width even when a row
 				// isn't full (e.g. a card with only two grade options).
 				columns ? { flexBasis: `${100 / columns - 2}%` } : null,
-				active
-					? { backgroundColor: t.accent }
-					: {
-							borderWidth: 1,
-							borderColor: t.glass.elevatedBorder,
-						},
+				// Border is always 1px so the chip doesn't resize when selected.
+				{ borderColor: active ? "transparent" : t.glass.elevatedBorder },
 			]}
 			onPress={() => {
 				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -193,6 +192,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 14,
 		paddingVertical: 10,
 		borderRadius: 12,
+		borderWidth: 1,
 		minHeight: 36,
 		justifyContent: "center",
 		alignItems: "center",

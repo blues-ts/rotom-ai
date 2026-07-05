@@ -221,8 +221,6 @@ function CollectionValueChartInner() {
 									year: "numeric",
 									month: "numeric",
 									day: "numeric",
-									hour: "numeric",
-									minute: "2-digit",
 								}}
 								style={[
 									styles.chartHoverDate,

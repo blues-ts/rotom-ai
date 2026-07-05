@@ -1895,6 +1895,14 @@ export default function CardDetail() {
 															]}
 														/>
 														<LineChart.DatetimeText
+															// Daily points stamped at UTC midnight — format in
+															// UTC or the local date reads one day early.
+															options={{
+																year: "numeric",
+																month: "numeric",
+																day: "numeric",
+																timeZone: "UTC",
+															}}
 															style={[
 																styles.chartHoverDate,
 																{
