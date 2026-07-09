@@ -34,7 +34,7 @@ export const GOAL_OPTIONS: { id: GoalId; icon: IconName; label: string }[] = [
   { id: "grading", icon: "diamond-outline", label: "Figuring out what to grade" },
   { id: "just_pulled", icon: "sparkles-outline", label: "I just pulled something — is it worth anything?" },
   { id: "returning", icon: "refresh-outline", label: "Getting back into the hobby" },
-  { id: "new", icon: "rocket-outline", label: "Brand new to Pokemon TCG" },
+  { id: "new", icon: "rocket-outline", label: "Brand new to the TCG" },
 ];
 
 export type PainId =

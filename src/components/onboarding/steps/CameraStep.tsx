@@ -18,7 +18,7 @@ import { FlowStep } from "@/components/onboarding/FlowStep";
 import { useRiverTheme } from "@/constants/theme";
 
 const BULLETS: { icon: keyof typeof Ionicons.glyphMap; text: string }[] = [
-  { icon: "scan-outline", text: "River identifies any Pokemon card instantly" },
+  { icon: "scan-outline", text: "River identifies any card instantly" },
   { icon: "cash-outline", text: "Pulls live raw + graded prices on the spot" },
   { icon: "bulb-outline", text: "Gives you a take: hold, sell, or grade" },
 ];

@@ -7,7 +7,7 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OnboardingHeader } from "@/components/onboarding/OnboardingHeader";
-import { PrimaryCTA, TextLink } from "@/components/onboarding/PrimaryCTA";
+import { PrimaryCTA } from "@/components/onboarding/PrimaryCTA";
 import { BudgetStep } from "@/components/onboarding/steps/BudgetStep";
 import { CameraStep } from "@/components/onboarding/steps/CameraStep";
 import { ComparisonStep } from "@/components/onboarding/steps/ComparisonStep";
@@ -42,7 +42,7 @@ export default function Flow() {
   const [index, setIndex] = useState(0);
 
   const ctx = useOnboarding();
-  const { hasPermission, requestPermission } = useCameraPermission();
+  const { requestPermission } = useCameraPermission();
 
   const advance = useCallback(() => {
     if (index === STEPS.length - 1) {
@@ -76,7 +76,7 @@ export default function Flow() {
         return { title: "Continue", disabled: !ctx.budget, onPress: advance };
       case 7:
         return {
-          title: hasPermission ? "Camera's on — Continue" : "Enable Camera",
+          title: "Continue",
           disabled: false,
           onPress: async () => {
             const granted = await requestPermission();
@@ -87,11 +87,10 @@ export default function Flow() {
       default:
         return { title: "Continue", disabled: false, onPress: advance };
     }
-  }, [index, ctx, advance, hasPermission, requestPermission]);
+  }, [index, ctx, advance, requestPermission]);
 
   const current = STEPS[index];
   const StepComponent = current.Component;
-  const isCameraStep = index === STEPS.length - 1;
 
   return (
     <View style={[styles.container, { paddingTop: top }]}>
@@ -112,15 +111,6 @@ export default function Flow() {
       </Animated.View>
       <View style={[styles.footer, { paddingBottom: bottom + 16 }]}>
         <PrimaryCTA title={cta.title} disabled={cta.disabled} onPress={cta.onPress} />
-        {isCameraStep ? (
-          <TextLink
-            title="Not now"
-            onPress={() => {
-              ctx.setCameraGranted(false);
-              advance();
-            }}
-          />
-        ) : null}
       </View>
     </View>
   );

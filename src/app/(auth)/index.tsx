@@ -43,7 +43,7 @@ const Index = () => {
             { color: theme === "dark" ? "#ffffff" : colors.mutedForeground },
           ]}
         >
-          Your Pokemon TCG AI Assistant
+          Your TCG AI Assistant
         </Text>
       </View>
 

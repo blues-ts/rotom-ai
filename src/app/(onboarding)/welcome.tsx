@@ -25,7 +25,7 @@ export default function Welcome() {
         <Animated.View entering={FadeInUp.duration(500).delay(100)}>
           <Text style={[styles.title, { color: t.text.primary }]}>Meet River.</Text>
           <Text style={[styles.subtitle, { color: t.text.body, opacity: 0.85 }]}>
-            The AI that knows every Pokemon card.
+            The AI that knows every card in your binder.
           </Text>
         </Animated.View>
 

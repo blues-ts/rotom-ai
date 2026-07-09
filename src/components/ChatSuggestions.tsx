@@ -68,7 +68,7 @@ export default function ChatSuggestions({
 			{
 				icon: "sparkles",
 				label: "What should I invest in?",
-				prompt: "Which Pokémon cards are good investments right now?",
+				prompt: "Which cards are good investments right now?",
 			},
 			{
 				icon: "rosette",

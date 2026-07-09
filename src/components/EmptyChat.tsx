@@ -43,7 +43,7 @@ export default function EmptyChat() {
 				</LinearGradient>
 				<Text style={[styles.title, { color: t.text.primary }]}>River</Text>
 				<Text style={[styles.subtitle, { color: t.text.primary }]}>
-					Your Pokémon TCG AI assistant
+					Your TCG AI assistant
 				</Text>
 			</Animated.View>
 		</Pressable>

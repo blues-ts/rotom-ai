@@ -116,7 +116,7 @@ export const DEMO_CARDS: DemoCard[] = [
     pct30d: 3,
     responses: {
       grade:
-        "Iono SIR is a solid grade but not urgent. Raw $175 → PSA 10 $430 = $255 spread. Trainer SIRs are more prone to centering misses than Pokemon SIRs — if yours looks off-center, skip PSA, try CGC.",
+        "Iono SIR is a solid grade but not urgent. Raw $175 → PSA 10 $430 = $255 spread. Trainer SIRs are more prone to centering misses than character SIRs — if yours looks off-center, skip PSA, try CGC.",
       trend:
         "Up 3% over 30d, up 19% over 1yr. Trainer SIRs are a slow-burn category — Iono is a fan favorite so it'll keep climbing. Not a flip, a hold.",
       worth:
