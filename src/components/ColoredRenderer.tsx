@@ -1,5 +1,5 @@
 import React, { type ReactNode, useEffect, useState } from "react";
-import { type ImageStyle, Pressable, StyleSheet, Text, type TextStyle, View, type ViewStyle } from "react-native";
+import { type ImageStyle, Keyboard, Pressable, StyleSheet, Text, type TextStyle, View, type ViewStyle } from "react-native";
 import { Image } from "expo-image";
 import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withSpring, withTiming } from "react-native-reanimated";
 import { Renderer } from "react-native-marked";
@@ -24,6 +24,11 @@ function CardImagePressable({ cardId, name, image, children }: { cardId: string;
 			onPressOut={() => { scale.value = withTiming(1, { duration: 120 }); }}
 			onPress={() => {
 				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+				// Dismiss BEFORE the card modal presents — same reason as the
+				// paywall in (home)/index.tsx: a keyboard hide underneath a
+				// native modal can skip its willHide event, leaving the chat
+				// input's avoidance padding stuck at keyboard height.
+				Keyboard.dismiss();
 				// Pass the (already-cached) chat image as the `image` param so the detail
 				// screen's hero shows instantly instead of waiting for a cold card fetch
 				// on first open — same as navigating from the set/search grids.

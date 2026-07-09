@@ -8,7 +8,7 @@ import {
 	View,
 } from "react-native";
 
-import { router, Stack, useLocalSearchParams } from "expo-router";
+import { router, Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
@@ -103,6 +103,23 @@ export default function Home() {
 			hide.remove();
 		};
 	}, [keyboardVisible]);
+
+	// Self-heal on return: a native modal round-trip (card detail, paywall)
+	// can end with an unpaired willShow — iOS restores the still-first-responder
+	// input's keyboard during the dismiss transition, then cancels it without
+	// ever firing willHide (the notification only fires for a keyboard that
+	// actually appeared). Reconcile against the real keyboard state once the
+	// transition settles so the padding can't stay stuck at keyboard height.
+	useFocusEffect(
+		useCallback(() => {
+			const task = InteractionManager.runAfterInteractions(() => {
+				if (!Keyboard.isVisible()) {
+					keyboardVisible.value = 0;
+				}
+			});
+			return () => task.cancel();
+		}, [keyboardVisible]),
+	);
 
 	const bottomSpacerStyle = useAnimatedStyle(() => ({
 		marginBottom:
