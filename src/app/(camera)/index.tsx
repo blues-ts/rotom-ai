@@ -15,13 +15,15 @@ import Animated, {
 	Easing,
 	interpolate,
 	runOnJS,
+	useAnimatedProps,
 	useAnimatedStyle,
 	useSharedValue,
 	withTiming,
+	type SharedValue,
 } from "react-native-reanimated";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Defs, Mask, Rect } from "react-native-svg";
+import Svg, { Path, Rect } from "react-native-svg";
 import {
 	Button,
 	Host,
@@ -29,12 +31,13 @@ import {
 	Image as UIImage,
 	Spacer,
 	Text as UIText,
+	ZStack,
 } from "@expo/ui/swift-ui";
 import {
 	buttonStyle,
-	controlSize,
 	font,
 	foregroundStyle,
+	frame,
 	glassEffect,
 	padding,
 } from "@expo/ui/swift-ui/modifiers";
@@ -58,9 +61,11 @@ import {
 	resolveOcrTieBreak,
 } from "@/lib/scanMatching";
 import { analyzeCardsInFrame, type CardDetection } from "@/lib/binderScan";
-import BinderFrameOverlay, {
+import {
+	BINDER_CORNER_RADIUS,
 	binderHeight,
 	binderRegion,
+	binderWidth,
 	binderY,
 } from "@/components/scanner/BinderFrameOverlay";
 import BinderReviewOverlay from "@/components/scanner/BinderReviewOverlay";
@@ -155,10 +160,50 @@ const RETICLE_COLOR: Record<ScanState, string> = {
 	found: RIVER,
 };
 
-// The scrim/mask and the edge glow never change. Hoisted out of the screen and
-// memoized so the scan-state re-renders (~2Hz while scanning) only re-commit
-// the small reticle-outline Svg, not two full-screen SVG trees.
-const ViewfinderScrim = memo(function ViewfinderScrim() {
+// One viewfinder serves both modes: the hole morphs between card size and
+// binder-page size when the mode toggles. Both boxes share the same center
+// (width/2, height*CARD_CENTER_Y_RATIO) and the same aspect, so only the
+// width and corner radius interpolate.
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+const AnimatedRect = Animated.createAnimatedComponent(Rect);
+
+const viewfinderRect = (p: number) => {
+	"worklet";
+	const w = interpolate(p, [0, 1], [cardWidth, binderWidth]);
+	const h = w / CARD_ASPECT_RATIO;
+	return {
+		x: (width - w) / 2,
+		y: height * CARD_CENTER_Y_RATIO - h / 2,
+		w,
+		h,
+		r: interpolate(p, [0, 1], [CARD_CORNER_RADIUS, BINDER_CORNER_RADIUS]),
+	};
+};
+
+// Rounded-rect subpath: under the full-screen rect with fillRule="evenodd" it
+// punches the viewfinder hole — no <Mask> needed (react-native-svg can't
+// animate mask contents).
+const holePath = (x: number, y: number, w: number, h: number, r: number) => {
+	"worklet";
+	return (
+		`M${x + r} ${y}h${w - 2 * r}a${r} ${r} 0 0 1 ${r} ${r}v${h - 2 * r}` +
+		`a${r} ${r} 0 0 1 ${-r} ${r}h${-(w - 2 * r)}a${r} ${r} 0 0 1 ${-r} ${-r}` +
+		`v${-(h - 2 * r)}a${r} ${r} 0 0 1 ${r} ${-r}Z`
+	);
+};
+
+// The scrim only animates on mode toggle (props are a stable shared value, so
+// the memoized tree never re-commits from React) — scan-state re-renders only
+// touch the small outline Svg below, same split as before.
+const AnimatedScrim = memo(function AnimatedScrim({
+	progress,
+}: {
+	progress: SharedValue<number>;
+}) {
+	const animatedProps = useAnimatedProps(() => {
+		const { x, y, w, h, r } = viewfinderRect(progress.value);
+		return { d: `M0 0H${width}V${height}H0Z` + holePath(x, y, w, h, r) };
+	});
 	return (
 		<Svg
 			style={StyleSheet.absoluteFill}
@@ -166,25 +211,40 @@ const ViewfinderScrim = memo(function ViewfinderScrim() {
 			height={height}
 			pointerEvents="none"
 		>
-			<Defs>
-				<Mask id="holeMask">
-					<Rect width={width} height={height} fill="white" />
-					<Rect
-						x={cardX}
-						y={cardY}
-						width={cardWidth}
-						height={cardHeight}
-						rx={CARD_CORNER_RADIUS}
-						ry={CARD_CORNER_RADIUS}
-						fill="black"
-					/>
-				</Mask>
-			</Defs>
-			<Rect
-				width={width}
-				height={height}
+			<AnimatedPath
+				animatedProps={animatedProps}
 				fill={`rgba(0,0,0,${SCRIM_OPACITY})`}
-				mask="url(#holeMask)"
+				fillRule="evenodd"
+			/>
+		</Svg>
+	);
+});
+
+// Outline of the hole — colors through the scan state; its own small Svg so
+// color changes don't re-commit the scrim tree.
+const AnimatedOutline = memo(function AnimatedOutline({
+	progress,
+	color,
+}: {
+	progress: SharedValue<number>;
+	color: string;
+}) {
+	const animatedProps = useAnimatedProps(() => {
+		const { x, y, w, h, r } = viewfinderRect(progress.value);
+		return { x, y, width: w, height: h, rx: r, ry: r };
+	});
+	return (
+		<Svg
+			style={StyleSheet.absoluteFill}
+			width={width}
+			height={height}
+			pointerEvents="none"
+		>
+			<AnimatedRect
+				animatedProps={animatedProps}
+				fill="none"
+				stroke={color}
+				strokeWidth={3}
 			/>
 		</Svg>
 	);
@@ -239,6 +299,9 @@ export default function CameraScreen() {
 	const [binderPhase, setBinderPhase] = useState<
 		"idle" | "analyzing" | "review"
 	>("idle");
+	// Mirrored to a ref so the blur cleanup can decide whether binder work is
+	// in progress without re-subscribing the focus effect to phase changes.
+	const binderPhaseRef = useRef<"idle" | "analyzing" | "review">("idle");
 	const [binderPhoto, setBinderPhoto] = useState<string | null>(null);
 	const [binderCards, setBinderCards] = useState<CardDetection[] | null>(null);
 	// Bumped whenever the current binder capture is invalidated (retake, mode
@@ -261,6 +324,20 @@ export default function CameraScreen() {
 		key: number;
 	} | null>(null);
 	const fly = useSharedValue(0); // 0 = at reticle, 1 = landed in the library button
+	// 0 = single-card box, 1 = binder-page box; drives the viewfinder morph.
+	const modeProgress = useSharedValue(0);
+	const singleCaptionStyle = useAnimatedStyle(() => ({
+		opacity: 1 - modeProgress.value,
+	}));
+	const binderCaptionStyle = useAnimatedStyle(() => ({
+		opacity: modeProgress.value,
+	}));
+	// Shutter expands in with the viewfinder morph (and shrinks away on the way
+	// back to single mode).
+	const shutterStyle = useAnimatedStyle(() => ({
+		opacity: modeProgress.value,
+		transform: [{ scale: interpolate(modeProgress.value, [0, 1], [0.4, 1]) }],
+	}));
 
 	const onDeviceReadyRef = useRef(false);
 	const photoOutputRef = useRef(photoOutput);
@@ -468,6 +545,7 @@ export default function CameraScreen() {
 
 	const resetBinder = useCallback(() => {
 		binderGenRef.current++;
+		binderPhaseRef.current = "idle";
 		setBinderPhase("idle");
 		setBinderPhoto(null);
 		setBinderCards(null);
@@ -567,9 +645,10 @@ export default function CameraScreen() {
 				// Clear the result UI so swiping back doesn't flash "Got it!".
 				voteRef.current = [];
 				setScanState(onDeviceReadyRef.current ? "searching" : "preparing");
-				// Drop any in-flight binder capture so navigating back never
-				// resurrects a stale review over a live preview.
-				resetBinder();
+				// An unconfirmed review (or an analysis in flight) is the user's
+				// work — preserve it across navigation so visiting the library and
+				// coming back doesn't force a re-shutter. Idle has nothing to keep.
+				if (binderPhaseRef.current === "idle") resetBinder();
 			};
 		}, [ensureIndexLoaded, markReady, runLoop, setPaused, resetBinder]),
 	);
@@ -584,6 +663,10 @@ export default function CameraScreen() {
 		const next = modeRef.current === "single" ? "binder" : "single";
 		modeRef.current = next;
 		setMode(next);
+		modeProgress.value = withTiming(next === "binder" ? 1 : 0, {
+			duration: 340,
+			easing: Easing.inOut(Easing.cubic),
+		});
 		resetBinder();
 		// Entering either mode starts a fresh scan: clear the single-card voting
 		// window and the frame-averaging buffer.
@@ -599,6 +682,7 @@ export default function CameraScreen() {
 		binderBusyRef.current = true;
 		const gen = binderGenRef.current;
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+		binderPhaseRef.current = "analyzing";
 		setBinderPhase("analyzing");
 		try {
 			const file = await po.capturePhotoToFile(
@@ -619,10 +703,12 @@ export default function CameraScreen() {
 			setBinderCards(cards);
 			if (cards.length > 0)
 				Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+			binderPhaseRef.current = "review";
 			setBinderPhase("review");
 		} catch {
 			if (gen === binderGenRef.current) {
 				Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+				binderPhaseRef.current = "idle";
 				setBinderPhase("idle");
 				setBinderPhoto(null);
 				setBinderCards(null);
@@ -704,19 +790,6 @@ export default function CameraScreen() {
 				options={{
 					headerRight: () => (
 						<View style={styles.headerActions}>
-							{CardVision.isAvailable() && (
-								<Pressable
-									style={styles.headerButton}
-									onPress={handleToggleMode}
-								>
-									<SymbolView
-										name="square.grid.3x3"
-										size={21}
-										tintColor={mode === "binder" ? "#FFFFFF" : palette.accentSoft}
-										weight="medium"
-									/>
-								</Pressable>
-							)}
 							{mode === "single" && (
 								<Pressable
 									style={styles.headerButton}
@@ -760,61 +833,45 @@ export default function CameraScreen() {
 				enableNativeZoomGesture
 			/>
 
-			{mode === "single" ? (
-				<>
-					{/* Scrim + viewfinder reticle */}
-					<ViewfinderScrim />
-					{/* Outline of the hole — colors through the scan state. Its own small
-					    Svg so the color change doesn't re-commit the scrim/mask tree. */}
-					<Svg
-						style={StyleSheet.absoluteFill}
-						width={width}
-						height={height}
-						pointerEvents="none"
-					>
-						<Rect
-							x={cardX}
-							y={cardY}
-							width={cardWidth}
-							height={cardHeight}
-							rx={CARD_CORNER_RADIUS}
-							ry={CARD_CORNER_RADIUS}
-							fill="none"
-							stroke={reticle}
-							strokeWidth={3}
-						/>
-					</Svg>
+			{/* Scrim + viewfinder — one hole that morphs card ↔ binder page when
+			    the mode toggles. */}
+			<AnimatedScrim progress={modeProgress} />
+			<AnimatedOutline
+				progress={modeProgress}
+				color={
+					mode === "single"
+						? reticle
+						: binderPhase === "analyzing"
+							? AMBER
+							: REST
+				}
+			/>
 
-					{/* Caption below the viewfinder. */}
-					<Text
-						style={[styles.reticleCaption, { top: cardY + cardHeight + 14 }]}
-						pointerEvents="none"
-					>
-						Align the card inside the frame
-					</Text>
-				</>
-			) : (
-				<>
-					{/* Page-shaped guide box (no inner grid) — detection finds the
-					    cards wherever they sit inside it. */}
-					<BinderFrameOverlay
-						color={binderPhase === "analyzing" ? AMBER : REST}
-					/>
-					<Text
-						style={[
-							styles.reticleCaption,
-							{ top: binderY + binderHeight + 14 },
-						]}
-						pointerEvents="none"
-					>
-						Align your cards inside the frame
-					</Text>
-					{binderPhase === "analyzing" && (
-						<View style={styles.binderSpinner} pointerEvents="none">
-							<ActivityIndicator size="large" color="#fff" />
-						</View>
-					)}
-				</>
+			{/* Captions cross-fade during the morph, each pinned under its own box. */}
+			<Animated.Text
+				style={[
+					styles.reticleCaption,
+					{ top: cardY + cardHeight + 14 },
+					singleCaptionStyle,
+				]}
+				pointerEvents="none"
+			>
+				Align the card inside the frame
+			</Animated.Text>
+			<Animated.Text
+				style={[
+					styles.reticleCaption,
+					{ top: binderY + binderHeight + 14 },
+					binderCaptionStyle,
+				]}
+				pointerEvents="none"
+			>
+				Align your cards inside the frame
+			</Animated.Text>
+			{mode === "binder" && binderPhase === "analyzing" && (
+				<View style={styles.binderSpinner} pointerEvents="none">
+					<ActivityIndicator size="large" color="#fff" />
+				</View>
 			)}
 
 			{/* Blue glow framing the screen — concentric strokes keep corners seamless. */}
@@ -827,20 +884,9 @@ export default function CameraScreen() {
 				pointerEvents="box-none"
 			>
 				<Host style={styles.toolbarHost}>
-					<HStack>
-						<Button
-							onPress={handleOpenTips}
-							modifiers={[buttonStyle("glass"), controlSize("large")]}
-						>
-							<UIImage
-								systemName="info.circle"
-								size={20}
-								color={palette.accentSoft}
-							/>
-						</Button>
-						<Spacer />
-						{/* Status pill — 8px status dot + label in a glass capsule
-						    (accent while scanning, dimmed while paused). */}
+					<ZStack>
+						{/* Status pill on its own centered layer — ZStack centers it
+						    regardless of how many buttons flank it in the row above. */}
 						<HStack
 							spacing={7}
 							modifiers={[
@@ -876,10 +922,51 @@ export default function CameraScreen() {
 										: "Scanning..."}
 							</UIText>
 						</HStack>
+						<HStack>
+						{/* Icon buttons: plain button + glass drawn on a fixed square
+						    frame with an explicit circle shape. buttonStyle("glass")
+						    capsules follow the label's width, and SF Symbol glyphs vary
+						    in aspect — this is the only way they render as equal circles. */}
+						<Button onPress={handleOpenTips} modifiers={[buttonStyle("plain")]}>
+							<UIImage
+								systemName="info.circle"
+								size={20}
+								color={palette.accentSoft}
+								modifiers={[
+									frame({ width: 44, height: 44 }),
+									glassEffect({
+										shape: "circle",
+										glass: { variant: "regular", interactive: true },
+									}),
+								]}
+							/>
+						</Button>
 						<Spacer />
+						{/* Mode toggle lives with the other scan controls — toggling
+						    binder mode makes the shutter appear just above this bar, so
+						    the whole flow stays in the thumb zone. */}
+						{CardVision.isAvailable() && (
+							<Button
+								onPress={handleToggleMode}
+								modifiers={[buttonStyle("plain")]}
+							>
+								<UIImage
+									systemName="square.grid.3x3"
+									size={20}
+									color={mode === "binder" ? "#FFFFFF" : palette.accentSoft}
+									modifiers={[
+										frame({ width: 44, height: 44 }),
+										glassEffect({
+											shape: "circle",
+											glass: { variant: "regular", interactive: true },
+										}),
+									]}
+								/>
+							</Button>
+						)}
 						<Button
 							onPress={handleToggleTorch}
-							modifiers={[buttonStyle("glass"), controlSize("large")]}
+							modifiers={[buttonStyle("plain")]}
 						>
 							<UIImage
 								systemName={
@@ -887,20 +974,32 @@ export default function CameraScreen() {
 								}
 								size={20}
 								color={torchEnabled ? AMBER : palette.accentSoft}
+								modifiers={[
+									frame({ width: 44, height: 44 }),
+									glassEffect({
+										shape: "circle",
+										glass: { variant: "regular", interactive: true },
+									}),
+								]}
 							/>
 						</Button>
-					</HStack>
+						</HStack>
+					</ZStack>
 				</Host>
 			</View>
 
-			{/* Binder shutter — manual capture, one page per tap. */}
-			{mode === "binder" && binderPhase === "idle" && (
-				<Pressable
-					style={[styles.shutter, { bottom: insets.bottom + 84 }]}
-					onPress={handleBinderShutter}
+			{/* Binder shutter — manual capture, one page per tap. Stays mounted
+			    through the mode morph so it can scale/fade both ways; taps are
+			    disabled whenever it isn't fully the binder's turn. */}
+			{binderPhase === "idle" && (
+				<Animated.View
+					style={[styles.shutter, { bottom: insets.bottom + 84 }, shutterStyle]}
+					pointerEvents={mode === "binder" ? "auto" : "none"}
 				>
-					<View style={styles.shutterInner} />
-				</Pressable>
+					<Pressable style={styles.shutterPress} onPress={handleBinderShutter}>
+						<View style={styles.shutterInner} />
+					</Pressable>
+				</Animated.View>
 			)}
 
 			{/* Post-shutter review: toggle wrong matches off, then confirm.
@@ -1007,6 +1106,12 @@ const styles = StyleSheet.create({
 		borderRadius: 34,
 		borderWidth: 4,
 		borderColor: "#fff",
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	shutterPress: {
+		flex: 1,
+		alignSelf: "stretch",
 		alignItems: "center",
 		justifyContent: "center",
 	},
