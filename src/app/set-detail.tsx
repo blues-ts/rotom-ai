@@ -33,6 +33,7 @@ import {
 } from "@/lib/platform";
 import { LegacyToolbarMenu } from "@/components/LegacyToolbarMenu";
 import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
+import { useOwnedCardIds } from "@/hooks/useOwnedCardIds";
 import { searchCards, searchSealed } from "@/lib/api/pricing";
 import { getCatalogSet, catalogCardToScrydex } from "@/lib/api/catalog";
 import { useRevenueCat } from "@/context/RevenueCatContext";
@@ -144,15 +145,19 @@ function SkeletonCard({ color }: { color: string }) {
 }
 
 export default function SetDetail() {
-	const { id, name, mode, releaseDate, total, logo } = useLocalSearchParams<{
-		id: string;
-		name?: string;
-		mode?: string;
-		releaseDate?: string;
-		total?: string;
-		logo?: string;
-	}>();
+	const { id, name, mode, releaseDate, total, logo, owned } =
+		useLocalSearchParams<{
+			id: string;
+			name?: string;
+			mode?: string;
+			releaseDate?: string;
+			total?: string;
+			logo?: string;
+			owned?: string;
+		}>();
 	const isSealedMode = mode === "sealed";
+	// "Collected" view: same screen, grid filtered to cards the user owns.
+	const ownedOnly = owned === "1" && !isSealedMode;
 	const t = useRiverTheme();
 	const { isPro } = useRevenueCat();
 	const insets = useSafeAreaInsets();
@@ -294,7 +299,27 @@ export default function SetDetail() {
 
 	const sortCondition = isSealedMode ? "U" : "NM";
 
+	// Set completion: distinct owned card ids (all collections) intersected
+	// with this set's catalog cards. Denominator is the catalog card count so
+	// numerator and denominator share the same card universe as the grid.
+	const { data: ownedCardIds } = useOwnedCardIds(!isSealedMode);
+	const ownedIdSet = useMemo(
+		() => new Set(ownedCardIds ?? []),
+		[ownedCardIds],
+	);
+	const ownedInSet = useMemo(
+		() =>
+			(catalogSet?.cards ?? []).filter((c) => ownedIdSet.has(c.cardId)).length,
+		[catalogSet, ownedIdSet],
+	);
+	const setSize = catalogSet?.cards.length ?? 0;
+
 	const cards = useMemo(() => {
+		// Collected view keeps every sort/filter path; ownership is applied as
+		// the final step so the value-sort branch (separate priced dataset) is
+		// covered too.
+		const applyOwned = (items: SetItem[]) =>
+			ownedOnly ? items.filter((c) => ownedIdSet.has(c.id)) : items;
 		// Card mode: map the local catalog cards and filter client-side (the whole
 		// set is already local). Sealed mode: items come pre-filtered from the API.
 		let base: SetItem[];
@@ -317,7 +342,7 @@ export default function SetDetail() {
 			// While prices load the skeleton is shown (see `waitingForPriceSort`),
 			// so this number-order fallback only ever renders for non-pro users.
 			const priced = pricedCards?.items;
-			if (!priced) return base;
+			if (!priced) return applyOwned(base);
 			// Keys computed once (not in the comparator), and UNPRICED cards
 			// always sink to the end in BOTH directions, keeping their number
 			// order there. Reversing them to the top made "low to high" lead
@@ -332,17 +357,19 @@ export default function SetDetail() {
 			const unpriced = keyed.filter((k) => k.key === 0);
 			withPrice.sort((a, b) => b.key - a.key);
 			if (sortBy === "valueAsc") withPrice.reverse();
-			return [...withPrice, ...unpriced].map((k) => k.item);
+			return applyOwned([...withPrice, ...unpriced].map((k) => k.item));
 		}
 		if (sortBy === "nameAsc") {
-			return base.slice().sort((a, b) => {
-				const nameA = "number" in a ? getCardDisplayName(a) : a.name;
-				const nameB = "number" in b ? getCardDisplayName(b) : b.name;
-				return nameA.localeCompare(nameB);
-			});
+			return applyOwned(
+				base.slice().sort((a, b) => {
+					const nameA = "number" in a ? getCardDisplayName(a) : a.name;
+					const nameB = "number" in b ? getCardDisplayName(b) : b.name;
+					return nameA.localeCompare(nameB);
+				}),
+			);
 		}
 		// Catalog/API already return ascending number order; reverse for descending.
-		return sortBy === "numberDesc" ? base.slice().reverse() : base;
+		return applyOwned(sortBy === "numberDesc" ? base.slice().reverse() : base);
 	}, [
 		isSealedMode,
 		sealedSet,
@@ -352,6 +379,8 @@ export default function SetDetail() {
 		isValueSort,
 		sortBy,
 		sortCondition,
+		ownedOnly,
+		ownedIdSet,
 	]);
 
 	// The expansion's `total` is its card count; in sealed mode the product
@@ -366,45 +395,161 @@ export default function SetDetail() {
 	const releaseYear = releaseDate ? releaseDate.slice(0, 4) : "—";
 	const countValue = isSealedMode ? (sealedTotal ?? "—") : total || "—";
 
+	// Completion display: counts zero-padded like collector numbers (087/165),
+	// plus a whole-number percent.
+	const padWidth = Math.max(3, String(setSize).length);
+	const ownedPadded = String(ownedInSet).padStart(padWidth, "0");
+	const setSizePadded = String(setSize).padStart(padWidth, "0");
+	const completionPct =
+		setSize > 0 ? Math.round((ownedInSet / setSize) * 100) : 0;
+	// The guard also hides this while the catalog/ownership queries load, so
+	// it appears with real numbers instead of flashing "000 / 000".
+	const showCompletion = !isSealedMode && !!catalogSet && !!ownedCardIds;
+
 	// Rendered inside the FlatList so native header insets (translucent header
 	// + attached search bar) position it correctly instead of hiding it.
 	const summaryHeader = (
-		<View
-			style={[
-				styles.summaryRow,
-				{
-					backgroundColor: t.glass.surfaceFill,
-					borderColor: t.glass.surfaceBorder,
-				},
-				t.glass.shadow,
-			]}
-		>
-			<View style={styles.summarySide}>
-				<Text style={[styles.summaryLabel, { color: t.text.secondary }]}>
-					Released
-				</Text>
-				<Text style={[styles.summaryValue, { color: t.text.primary }]}>
-					{releaseYear}
-				</Text>
-			</View>
-			{!!logo && (
-				<Image
-					source={{ uri: logo }}
-					style={styles.summaryLogo}
-					contentFit="contain"
-					transition={150}
-					cachePolicy="memory-disk"
-				/>
+		<>
+			{/* Card mode replaces this info bar with the completion card below
+			    (which carries the logo); only sealed mode still shows it. */}
+			{isSealedMode && (
+				<View
+					style={[
+						styles.summaryRow,
+						{
+							backgroundColor: t.glass.surfaceFill,
+							borderColor: t.glass.surfaceBorder,
+						},
+						t.glass.shadow,
+					]}
+				>
+					<View style={styles.summarySide}>
+						<Text style={[styles.summaryLabel, { color: t.text.secondary }]}>
+							Released
+						</Text>
+						<Text style={[styles.summaryValue, { color: t.text.primary }]}>
+							{releaseYear}
+						</Text>
+					</View>
+					{!!logo && (
+						<Image
+							source={{ uri: logo }}
+							style={styles.summaryLogo}
+							contentFit="contain"
+							transition={150}
+							cachePolicy="memory-disk"
+						/>
+					)}
+					<View style={[styles.summarySide, styles.summaryRight]}>
+						<Text style={[styles.summaryLabel, { color: t.text.secondary }]}>
+							{isSealedMode ? "Products" : "Cards"}
+						</Text>
+						<Text style={[styles.summaryValue, { color: t.text.primary }]}>
+							{countValue}
+						</Text>
+					</View>
+				</View>
 			)}
-			<View style={[styles.summarySide, styles.summaryRight]}>
-				<Text style={[styles.summaryLabel, { color: t.text.secondary }]}>
-					{isSealedMode ? "Products" : "Cards"}
-				</Text>
-				<Text style={[styles.summaryValue, { color: t.text.primary }]}>
-					{countValue}
-				</Text>
-			</View>
-		</View>
+			{showCompletion && (
+				<Pressable
+					disabled={ownedOnly}
+					onPress={() => {
+						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+						router.push({
+							pathname: "/set-detail",
+							params: {
+								id,
+								owned: "1",
+								...(name ? { name } : {}),
+								...(releaseDate ? { releaseDate } : {}),
+								...(total ? { total } : {}),
+								...(logo ? { logo } : {}),
+							},
+						});
+					}}
+					style={[
+						styles.completionCard,
+						{
+							backgroundColor: t.glass.surfaceFill,
+							borderColor: t.glass.surfaceBorder,
+						},
+						t.glass.shadow,
+					]}
+				>
+					<View style={styles.completionTopRow}>
+						<View style={styles.summarySide}>
+							<Text style={[styles.summaryLabel, { color: t.text.secondary }]}>
+								Collected
+							</Text>
+							<Text
+								style={[
+									styles.summaryValue,
+									styles.completionCount,
+									{ color: t.text.primary },
+								]}
+							>
+								{ownedPadded} / {setSizePadded}
+							</Text>
+						</View>
+						{!!logo && (
+							<Image
+								source={{ uri: logo }}
+								style={styles.summaryLogo}
+								contentFit="contain"
+								transition={150}
+								cachePolicy="memory-disk"
+							/>
+						)}
+						<View style={styles.completionRight}>
+							<View style={styles.summaryRight}>
+								<Text
+									style={[styles.summaryLabel, { color: t.text.secondary }]}
+								>
+									Progress
+								</Text>
+								<Text
+									style={[
+										styles.summaryValue,
+										styles.completionCount,
+										{ color: t.text.primary },
+									]}
+								>
+									{completionPct}%
+								</Text>
+							</View>
+							{!ownedOnly && (
+								<SymbolView
+									name="chevron.right"
+									size={14}
+									tintColor={t.text.tertiary}
+									weight="semibold"
+								/>
+							)}
+						</View>
+					</View>
+					<View
+						style={[
+							styles.completionTrack,
+							{ backgroundColor: t.glass.elevatedFill },
+						]}
+					>
+						<View
+							style={[
+								styles.completionFill,
+								{
+									backgroundColor: t.accent,
+									width: `${
+										setSize > 0
+											? Math.min((ownedInSet / setSize) * 100, 100)
+											: 0
+									}%`,
+								},
+							]}
+						/>
+					</View>
+				</Pressable>
+			)}
+		</>
 	);
 
 	// One-time "Tap and hold me!" nudge on the first card.
@@ -605,7 +750,7 @@ export default function SetDetail() {
 		<>
 			<Stack.Screen
 				options={{
-					headerTitle: name ?? "Set",
+					headerTitle: ownedOnly ? "Collected" : (name ?? "Set"),
 					headerLeft: () => (
 						<Pressable
 							hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -681,13 +826,19 @@ export default function SetDetail() {
 				) : cards.length === 0 ? (
 					<View style={styles.emptyState}>
 						<SymbolView
-							name="magnifyingglass"
+							name={
+								ownedOnly && !debouncedFilter
+									? "square.stack.3d.up.slash"
+									: "magnifyingglass"
+							}
 							size={44}
 							tintColor={t.text.tertiary}
 							weight="regular"
 						/>
 						<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
-							No matching cards
+							{ownedOnly && !debouncedFilter
+								? "No cards collected yet"
+								: "No matching cards"}
 						</Text>
 					</View>
 				) : (
@@ -757,6 +908,41 @@ const styles = StyleSheet.create({
 	summaryValue: {
 		fontSize: 20,
 		fontWeight: "800",
+	},
+	// Set completion — glass card: COLLECTED count / PROGRESS % / fill bar.
+	completionCard: {
+		borderRadius: 20,
+		borderWidth: 1,
+		paddingHorizontal: 14,
+		paddingVertical: 12,
+		marginBottom: 20,
+		gap: 10,
+	},
+	completionTopRow: {
+		flexDirection: "row",
+		justifyContent: "space-between",
+		alignItems: "center",
+	},
+	// Sides flex so the centered logo balances, like the info bar this
+	// card replaces in card mode.
+	completionRight: {
+		flex: 1,
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "flex-end",
+		gap: 8,
+	},
+	completionCount: {
+		fontVariant: ["tabular-nums"],
+	},
+	completionTrack: {
+		height: 4,
+		borderRadius: 2,
+		overflow: "hidden",
+	},
+	completionFill: {
+		height: "100%",
+		borderRadius: 2,
 	},
 	grid: {
 		padding: PADDING,
