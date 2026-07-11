@@ -2819,7 +2819,7 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
-  CardVision: 04b0e7ddafeee1a2124cba5af00ea18f4c08d82e
+  CardVision: 7fa004684572f43d3dcf5f1645b2fca566541a75
   EXApplication: e6040c92edc5522accd62852342e6b14742d42c0
   EXConstants: 1c400bb9969f4c9e5ab324553138b74ae47b9efe
   Expo: c82930e1c8b6f2e26308e364499773d3de12d55d

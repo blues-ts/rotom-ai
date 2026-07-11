@@ -50,7 +50,13 @@ import { palette } from "@/constants/theme";
 import * as CardVision from "../../../modules/card-vision";
 import { useScanSession } from "@/context/ScanSessionContext";
 import { playCaptureFeedback } from "@/lib/captureSound";
-import { OCR_FLOOR, OCR_MARGIN, resolveOcrTieBreak } from "@/lib/scanMatching";
+import {
+	MODEL_LOCK_MARGIN,
+	MODEL_LOCK_SCORE,
+	OCR_FLOOR,
+	OCR_MARGIN,
+	resolveOcrTieBreak,
+} from "@/lib/scanMatching";
 import { analyzeCardsInFrame, type CardDetection } from "@/lib/binderScan";
 import BinderFrameOverlay, {
 	binderHeight,
@@ -402,6 +408,14 @@ export default function CameraScreen() {
 				captureCard(top.id, top.score);
 				return;
 			}
+			// A single fat-margin frame is decisive (see scanMatching.ts) — lock
+			// without waiting out the vote window. Real scores live below
+			// INSTANT_LOCK (~0.73–0.81), so without this rule every scan pays the
+			// full multi-frame vote.
+			if (top && top.score >= MODEL_LOCK_SCORE && margin >= MODEL_LOCK_MARGIN) {
+				captureCard(top.id, top.score);
+				return;
+			}
 			// Tight near-twin cluster (classic holo case): the artwork found the
 			// right look, but can't pick between siblings. Read the printed number
 			// and lock the one candidate it confirms — gated by a visual floor so
@@ -486,12 +500,18 @@ export default function CameraScreen() {
 		// The launch warm-up usually has the index loaded already — use it as-is
 		// instead of reloading 66 MB from disk again.
 		if (CardVision.isLoaded()) {
+			console.log(
+				`[scan] index already loaded: rev=${CardVision.loadedRev()} count=${CardVision.loadedCount()}`,
+			);
 			markReady();
 			return true;
 		}
 		try {
 			const local = await CardVision.loadBestLocal();
 			if (local.count > 0) {
+				console.log(
+					`[scan] index loaded: rev=${local.rev} count=${local.count} source=${local.source}`,
+				);
 				markReady();
 				return true;
 			}
@@ -502,7 +522,11 @@ export default function CameraScreen() {
 	useFocusEffect(
 		useCallback(() => {
 			pausedRef.current = false;
-			lastCapturedIdRef.current = null;
+			// Scanning resumes the moment the screen is focused — no tap-to-play.
+			// The dedupe (lastCapturedIdRef) deliberately survives navigation: the
+			// card just scanned is still blocked until it leaves the reticle, so
+			// returning from reviewing a scan can't instantly re-capture it.
+			setPaused(false);
 			voteRef.current = [];
 			if (CardVision.isAvailable()) CardVision.resetSmoothing();
 			// Keep the camera live (cancel any pending deactivate from a prior blur)
@@ -515,6 +539,9 @@ export default function CameraScreen() {
 			(async () => {
 				await ensureIndexLoaded();
 				if (cancelled || !SCAN_INDEX_BASE) return;
+				// No-op while the server serves the legacy FeaturePrint index (the
+				// native side refuses rev < 1000 before downloading anything); starts
+				// updating automatically once it serves a trained-model index.
 				try {
 					const r = await CardVision.refreshFromServer(
 						`${SCAN_INDEX_BASE}/version`,
@@ -535,10 +562,6 @@ export default function CameraScreen() {
 				// so a back-swipe shows a live preview through the transition (not a
 				// frozen frame or black). Free the camera if they linger off-screen.
 				loopRunningRef.current = false;
-				// Auto-pause when navigating away — returning shows a paused scanner so
-				// it never grabs a card while the user is mid-navigation; they tap play
-				// to resume.
-				setPaused(true);
 				if (deactivateTimer.current) clearTimeout(deactivateTimer.current);
 				deactivateTimer.current = setTimeout(() => setIsActive(false), 20000);
 				// Clear the result UI so swiping back doesn't flash "Got it!".

@@ -1,5 +1,11 @@
 import * as CardVision from "../../modules/card-vision";
-import { OCR_FLOOR, OCR_MARGIN, resolveOcrTieBreak } from "@/lib/scanMatching";
+import {
+	MODEL_LOCK_MARGIN,
+	MODEL_LOCK_SCORE,
+	OCR_FLOOR,
+	OCR_MARGIN,
+	resolveOcrTieBreak,
+} from "@/lib/scanMatching";
 
 // Multi-card frame scan (binder pages, table spreads): one photo, every
 // card-shaped rectangle in the frame detected and identified — no grid to
@@ -80,7 +86,11 @@ export async function analyzeCardsInFrame(
 			if (!top || top.score < BINDER_SHOW) return null;
 
 			const margin = matches[1] ? top.score - matches[1].score : top.score;
-			if (top.score >= BINDER_INSTANT && margin >= OCR_MARGIN) {
+			// A fat margin is decisive on its own (see scanMatching.ts) — real
+			// scores never reach BINDER_INSTANT.
+			const modelInstant =
+				top.score >= MODEL_LOCK_SCORE && margin >= MODEL_LOCK_MARGIN;
+			if (modelInstant || (top.score >= BINDER_INSTANT && margin >= OCR_MARGIN)) {
 				return { rect, id: top.id, score: top.score, viaOcr: false, confident: true };
 			}
 

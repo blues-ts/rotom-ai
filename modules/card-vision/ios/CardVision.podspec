@@ -1,8 +1,8 @@
 Pod::Spec.new do |s|
   s.name           = 'CardVision'
   s.version        = '0.1.0'
-  s.summary        = 'On-device Pokémon card recognition via Apple Vision FeaturePrint (spike).'
-  s.description    = 'Embeds a card image with VNGenerateImageFeaturePrintRequest and matches it against an in-memory reference index.'
+  s.summary        = 'On-device Pokémon card recognition via a trained Core ML embedding model.'
+  s.description    = 'Embeds a card image with a bundled Core ML model (CardEmbedder.mlmodelc) and matches it against an in-memory reference index.'
   s.author         = ''
   s.homepage       = 'https://example.com'
   s.platforms      = { :ios => '13.4' }

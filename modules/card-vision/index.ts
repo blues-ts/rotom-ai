@@ -1,6 +1,6 @@
 import { requireOptionalNativeModule } from "expo-modules-core";
 
-// Spike: on-device card recognition via Apple Vision FeaturePrint (iOS only).
+// On-device card recognition via a trained Core ML embedding model (iOS only).
 // Optional so a stale JS bundle on an old binary doesn't crash at import — the
 // module is only present after a native rebuild (`expo run:ios`).
 const CardVision = requireOptionalNativeModule("CardVision");
@@ -24,14 +24,18 @@ export interface CardMatch {
   score: number; // cosine similarity, 0..1 (higher = closer)
 }
 
-/** Vision FeaturePrint revision on this device. Must equal the index's `rev`. */
-export function visionRevision(): number {
-  return mod().visionRevision();
-}
-
 /** Whether a reference index has been loaded. */
 export function isLoaded(): boolean {
   return mod().isLoaded();
+}
+
+/**
+ * Model revision of the currently loaded index (-1 when none). Bumped on
+ * retrain; the native module refuses indexes whose rev doesn't pair with the
+ * bundled CardEmbedder model family (legacy FeaturePrint revs < 1000).
+ */
+export function loadedRev(): number {
+  return mod().loadedRev();
 }
 
 /** Number of cards in the loaded index. */

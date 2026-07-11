@@ -1,19 +1,28 @@
 import ExpoModulesCore
 import Vision
+import CoreML
 import CoreImage
 import ImageIO
 import Accelerate
 
-// On-device card recognition. Mirrors scripts/build-card-index (the Mac CLI that
-// builds the reference index) so accuracy transfers 1:1 — same crop+scale option,
-// same L2-normalised vectors, same cosine (dot product) matching.
+// On-device card recognition: a trained Core ML embedding model
+// (assets/CardEmbedder.mlmodelc, built by playground/rotom-ai-model) turns a
+// card crop into an L2-normalised vector, matched by cosine against a
+// precomputed index of the whole catalog (~45k cards) kept in one flat Float
+// buffer — a tight vDSP loop. Only {id, score} crosses the bridge.
 //
-// Reference vectors are kept in one flat Float buffer (count * dim) so the whole
-// catalog (~45k cards) stays compact and matching is a tight vDSP loop. Only
-// {id, score} crosses the bridge.
+// The index MUST be built by the same model (rev below): vectors from
+// different embedders are not comparable, so mismatched indexes are refused
+// at load rather than silently producing garbage matches.
 
-// Must match the CLI's `cropAndScaleOption`, or distances are meaningless.
+// Query resize must match the training pipeline's squash-resize (and the
+// index builder's), or distances are meaningless.
 private let cropAndScaleOption: VNImageCropAndScaleOption = .scaleFill
+
+// Manifest `rev` semantics: >= 1000 is a trained embedding model revision
+// (bumped on retrain; index + .mlmodelc always ship as a matched pair). Revs
+// < 1000 were Apple Vision FeaturePrint (removed) — those indexes are refused.
+private let customModelRevFloor = 1000
 
 private struct VisionError: Error, CustomStringConvertible {
   let description: String
@@ -38,16 +47,22 @@ public class CardVisionModule: Module {
   // The binder grid renders up to 9 crops per shutter; per-call contexts waste
   // hundreds of ms.
   private let ciContext = CIContext()
+  // Trained embedder, loaded once on demand (rev >= customModelRevFloor
+  // indexes). MLModel prediction is thread-safe, so binder-mode's
+  // concurrentPerform shares this instance; the lock only guards creation.
+  private var coreMLModel: VNCoreMLModel?
+  private let coreMLLock = NSLock()
 
   public func definition() -> ModuleDefinition {
     Name("CardVision")
 
-    Function("visionRevision") { () -> Int in
-      VNGenerateImageFeaturePrintRequest.currentRevision
-    }
-
     Function("isLoaded") { () -> Bool in
       self.count > 0
+    }
+
+    // Model revision of the loaded index (-1 when none).
+    Function("loadedRev") { () -> Int in
+      self.loadedRev
     }
 
     Function("loadedCount") { () -> Int in
@@ -68,19 +83,26 @@ public class CardVisionModule: Module {
     AsyncFunction("loadBestLocal") { () -> [String: Any] in
       let bundled = self.bundledIndexPaths()
       let cached = self.cachedIndexPaths()
-      let bv = bundled.flatMap { self.versionAt(manifestPath: $0.manifest) }
-      let cv = cached.flatMap { self.versionAt(manifestPath: $0.manifest) }
+      // Indexes from the removed FeaturePrint era (rev < 1000) are unusable —
+      // treat them as absent (a stale cached download from an old app version).
+      let usable = { (v: (rev: Int, count: Int)?) in
+        v.flatMap { $0.rev >= customModelRevFloor ? $0 : nil }
+      }
+      let bv = usable(bundled.flatMap { self.versionAt(manifestPath: $0.manifest) })
+      let cv = usable(cached.flatMap { self.versionAt(manifestPath: $0.manifest) })
 
-      // Prefer the larger catalog (more cards = newer set coverage).
+      // Prefer the larger catalog (more cards = newer set coverage); on a tie,
+      // the higher model rev (a fresher retrain).
       let useCached: Bool
-      if let c = cv, let b = bv { useCached = c.count >= b.count }
-      else { useCached = cv != nil }
+      if let c = cv, let b = bv {
+        useCached = c.count != b.count ? c.count > b.count : c.rev >= b.rev
+      } else { useCached = cv != nil }
 
-      if useCached, let c = cached {
+      if useCached, cv != nil, let c = cached {
         let n = try self.loadFromDisk(manifestPath: c.manifest, f16Path: c.f16)
         return ["count": n, "rev": self.loadedRev, "source": "cached"]
       }
-      if let b = bundled {
+      if bv != nil, let b = bundled {
         let n = try self.loadFromDisk(manifestPath: b.manifest, f16Path: b.f16)
         return ["count": n, "rev": self.loadedRev, "source": "bundled"]
       }
@@ -98,6 +120,13 @@ public class CardVisionModule: Module {
       let remote = (try? JSONSerialization.jsonObject(with: vdata)) as? [String: Any] ?? [:]
       let rev = (remote["rev"] as? Int) ?? -1
       let count = (remote["count"] as? Int) ?? -1
+
+      // The server still serves the legacy FeaturePrint index (rev < 1000),
+      // which this build can't use — no-op (cheap version poll only) until it
+      // serves a trained-model index. Refreshing becomes automatic then.
+      if rev < customModelRevFloor {
+        return ["count": self.count, "rev": self.loadedRev, "updated": false]
+      }
 
       if rev == self.loadedRev && count == self.count {
         return ["count": self.count, "rev": self.loadedRev, "updated": false]
@@ -478,6 +507,13 @@ public class CardVisionModule: Module {
       throw VisionError(description: "Manifest not found at \(manifestPath)")
     }
     let manifest = try JSONDecoder().decode(Manifest.self, from: mdata)
+    guard manifest.rev >= customModelRevFloor else {
+      throw VisionError(description:
+        "Index rev \(manifest.rev) is a legacy FeaturePrint index — this build requires a trained-model index (rev >= \(customModelRevFloor))")
+    }
+    // An index is useless without its embedder — fail the load rather than
+    // silently producing garbage matches.
+    _ = try self.loadCoreMLModel()
     guard let vdata = FileManager.default.contents(atPath: f16Path) else {
       throw VisionError(description: "Vectors not found at \(f16Path)")
     }
@@ -576,17 +612,6 @@ public class CardVisionModule: Module {
 
   // MARK: - Embedding
 
-  private func rawVector(_ obs: VNFeaturePrintObservation) -> [Float] {
-    let n = obs.elementCount
-    let data = obs.data
-    switch data.count / max(n, 1) {
-    case 4: return data.withUnsafeBytes { Array($0.bindMemory(to: Float.self).prefix(n)) }
-    case 8: return data.withUnsafeBytes { $0.bindMemory(to: Double.self).prefix(n).map { Float($0) } }
-    case 2: return data.withUnsafeBytes { $0.bindMemory(to: Float16.self).prefix(n).map { Float($0) } }
-    default: return []
-    }
-  }
-
   private func normalised(_ v: [Float]) -> [Float] {
     var sum: Float = 0
     for x in v { sum += x * x }
@@ -602,12 +627,46 @@ public class CardVisionModule: Module {
   private func embedCGImage(_ cgIn: CGImage, crop: Bool) -> [Float]? {
     var cg = cgIn
     if crop, let cropped = detectAndCrop(cg) { cg = cropped }
-    let req = VNGenerateImageFeaturePrintRequest()
+    return embedCoreML(cg)
+  }
+
+  /// Locate + load the bundled trained embedder (compiled .mlmodelc shipped in
+  /// assets/ via the CardVisionAssets resource bundle, same lookup as the
+  /// bundled index). Cached after the first call.
+  private func loadCoreMLModel() throws -> VNCoreMLModel {
+    coreMLLock.lock()
+    defer { coreMLLock.unlock() }
+    if let m = coreMLModel { return m }
+    var bundles: [Bundle] = [Bundle(for: type(of: self)), Bundle.main]
+    if let url = Bundle(for: type(of: self)).url(forResource: "CardVisionAssets", withExtension: "bundle"),
+       let rb = Bundle(url: url) {
+      bundles.insert(rb, at: 0)
+    }
+    for b in bundles {
+      if let url = b.url(forResource: "CardEmbedder", withExtension: "mlmodelc") {
+        let m = try VNCoreMLModel(for: MLModel(contentsOf: url))
+        coreMLModel = m
+        return m
+      }
+    }
+    throw VisionError(description: "CardEmbedder.mlmodelc missing from app bundle")
+  }
+
+  /// Embed with the trained model. The model takes a 224×224 RGB image and
+  /// returns an L2-normalised embedding; VNCoreMLRequest handles the resize
+  /// with the SAME scaleFill squash the training pipeline used, so query
+  /// preprocessing matches the index exactly. Re-normalising is belt-and-
+  /// braces against FP16 rounding.
+  private func embedCoreML(_ cg: CGImage) -> [Float]? {
+    guard let model = try? loadCoreMLModel() else { return nil }
+    let req = VNCoreMLRequest(model: model)
     req.imageCropAndScaleOption = cropAndScaleOption
     let handler = VNImageRequestHandler(cgImage: cg, orientation: .up, options: [:])
     do { try handler.perform([req]) } catch { return nil }
-    guard let obs = req.results?.first as? VNFeaturePrintObservation else { return nil }
-    let v = rawVector(obs)
+    guard let obs = req.results?.first as? VNCoreMLFeatureValueObservation,
+          let arr = obs.featureValue.multiArrayValue else { return nil }
+    var v = [Float](repeating: 0, count: arr.count)
+    for i in 0..<arr.count { v[i] = arr[i].floatValue }
     return v.isEmpty ? nil : normalised(v)
   }
 

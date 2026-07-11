@@ -1,7 +1,7 @@
 import * as CardVision from "../../modules/card-vision";
 
 // Warm the on-device scanner index at app launch instead of lazily when the
-// camera first opens. Loading the ~66 MB FeaturePrint index into memory takes a
+// camera first opens. Loading the ~23 MB embedding index into memory takes a
 // beat, so doing it in the background up front means the camera is ready the
 // moment the user taps it — no "Getting the scanner ready" wait.
 //
@@ -32,13 +32,19 @@ export function warmScanner(): Promise<void> {
 		// in-memory matrix, and a couple of those peaks OOM-kills the app.
 		if (!CardVision.isLoaded()) {
 			try {
-				await CardVision.loadBestLocal();
+				const local = await CardVision.loadBestLocal();
+				console.log(
+					`[scan] warmup index: rev=${local.rev} count=${local.count} source=${local.source}`,
+				);
 			} catch {
 				// Nothing local yet (download-only build) — the refresh handles it.
 			}
 		}
 		// Step 2 (best-effort, non-blocking for the caller's await): refresh from
-		// the server only when it has a newer {rev,count}.
+		// the server only when it has a newer {rev,count}. While the server still
+		// serves the legacy FeaturePrint index this is a cheap no-op — the native
+		// side refuses rev < 1000 before downloading anything — and it starts
+		// working automatically once the server serves a trained-model index.
 		if (SCAN_INDEX_BASE) {
 			CardVision.refreshFromServer(
 				`${SCAN_INDEX_BASE}/version`,

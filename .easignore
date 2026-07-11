@@ -36,7 +36,9 @@ ios/GoogleService-Info.plist
 
 expo-env.d.ts
 
-# Belt-and-suspenders: make sure the scanner index ships, regardless of how
-# nested ignores are handled.
+# Belt-and-suspenders: make sure the scanner index + trained embedding model
+# ship, regardless of how nested ignores are handled.
 !modules/card-vision/ios/assets/index.f16
 !modules/card-vision/ios/assets/index.manifest.json
+!modules/card-vision/ios/assets/CardEmbedder.mlmodelc/
+!modules/card-vision/ios/assets/CardEmbedder.mlmodelc/**

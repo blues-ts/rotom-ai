@@ -11,6 +11,14 @@ export const OCR_TIE_BAND = 0.06; // a lettered number breaks ties within this b
 export const PHOTO_FINISH = 0.008; // a bare number may confirm only a leader/co-leader this close to #1
 export const NUM_VISUAL_FLOOR = 0.55; // and never trusts a candidate below this absolute score
 
+// Margin lock rule. Learned embeddings separate right-from-wrong by MARGIN,
+// not absolute score: on-device logs show correct cards at score ~0.73–0.81
+// with margin 0.22–0.35 while junk/no-card frames sit ~0.37 with margin
+// ≤ 0.03 — nothing in between. So one frame with a fat margin is decisive on
+// its own.
+export const MODEL_LOCK_SCORE = 0.6; // and the top match must look like a card at all
+export const MODEL_LOCK_MARGIN = 0.12; // runner-up this far behind = unambiguous
+
 // Normalise a collector number for comparison: uppercase, drop a letter prefix's
 // leading zeros. "TG02" → "TG2", "010" → "10", "123" → "123".
 export function normNum(raw: string): string | null {
