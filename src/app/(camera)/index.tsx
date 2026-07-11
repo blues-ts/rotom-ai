@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router, Stack, useFocusEffect } from "expo-router";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
+	ActivityIndicator,
 	Dimensions,
 	Linking,
 	Pressable,
@@ -49,6 +50,14 @@ import { palette } from "@/constants/theme";
 import * as CardVision from "../../../modules/card-vision";
 import { useScanSession } from "@/context/ScanSessionContext";
 import { playCaptureFeedback } from "@/lib/captureSound";
+import { OCR_FLOOR, OCR_MARGIN, resolveOcrTieBreak } from "@/lib/scanMatching";
+import { analyzeCardsInFrame, type CardDetection } from "@/lib/binderScan";
+import BinderFrameOverlay, {
+	binderHeight,
+	binderRegion,
+	binderY,
+} from "@/components/scanner/BinderFrameOverlay";
+import BinderReviewOverlay from "@/components/scanner/BinderReviewOverlay";
 
 const cardImageUrl = (id: string) =>
 	`https://images.scrydex.com/pokemon/${id}/small`;
@@ -126,61 +135,10 @@ const scanRegion = {
 	h: Math.min(1, (cardHeight / height) * (1 + 2 * REGION_PAD)),
 };
 
-// Collector-number re-rank. When the visual match is a tight near-twin cluster
-// (holos), OCR the printed number and use it to break the tie — but only as a
-// reinforcement of the artwork, never an override (a candidate must clear
-// NUM_VISUAL_FLOOR to be eligible, so a misread number can't pull in a card the
-// camera never really saw).
-const OCR_FLOOR = 0.55; // below this the frame isn't a confident card — skip OCR
-const OCR_MARGIN = 0.06; // only OCR when the top two are this close (ambiguous)
-const OCR_TIE_BAND = 0.06; // a lettered number breaks ties within this band of #1
-const PHOTO_FINISH = 0.008; // a bare number may confirm only a leader/co-leader this close to #1
-const NUM_VISUAL_FLOOR = 0.55; // and never trusts a candidate below this absolute score
+// Collector-number re-rank thresholds + tie-break logic live in
+// @/lib/scanMatching (shared with binder scan).
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-// Normalise a collector number for comparison: uppercase, drop a letter prefix's
-// leading zeros. "TG02" → "TG2", "010" → "10", "123" → "123".
-function normNum(raw: string): string | null {
-  const m = String(raw).toUpperCase().match(/([A-Z]{0,4})0*(\d{1,3})/);
-  return m ? m[1] + m[2] : null;
-}
-
-// The printed number is the Scrydex id's suffix after the LAST dash (set codes
-// themselves contain dashes, e.g. `tcgp-A4a-4`). `swsh10tg-TG02` → "TG2".
-function idNumber(id: string): string | null {
-  const i = id.lastIndexOf("-");
-  return i < 0 ? null : normNum(id.slice(i + 1));
-}
-
-// Collector numbers parsed from OCR lines, split by how trustworthy they are:
-//  - high: a LETTERED number ("XY133", "TG02", "SWSH165"). Those numbering schemes
-//    are set-bound, so the token alone identifies the card — safe to break a tie.
-//  - low: a bare 1–3 digit number ("21", "6"). Shared across thousands of cards
-//    (and "021/028"→"21" is no better — the set total is what's specific, and we
-//    don't have it), so a bare number may only CONFIRM the artwork's own pick.
-function parseNumbers(lines: string[]): { high: Set<string>; low: Set<string> } {
-  const high = new Set<string>();
-  const low = new Set<string>();
-  const token = /([A-Z]{0,4})0*(\d{1,3})/g;
-  for (const line of lines) {
-    const up = line.toUpperCase();
-    let m: RegExpExecArray | null;
-    token.lastIndex = 0;
-    while ((m = token.exec(up))) {
-      const t = m[1] + m[2];
-      if (m[1]) high.add(t); // letter prefix → set-specific
-      else low.add(t); // bare digits → common, confirm-only
-    }
-  }
-  return { high, low };
-}
-
-// Hiragana, katakana, or CJK present → this is the Japanese print of the card.
-// EN cards have no such characters, so absence is treated as English.
-function hasJapanese(lines: string[]): boolean {
-  return lines.some((l) => /[぀-ヿ㐀-鿿]/.test(l));
-}
 
 type ScanState = "preparing" | "searching" | "locking" | "found";
 
@@ -266,6 +224,21 @@ export default function CameraScreen() {
 	const [torchEnabled, setTorchEnabled] = useState(false);
 	const [indexReady, setIndexReady] = useState(false);
 	const [scanState, setScanState] = useState<ScanState>("preparing");
+	// Binder mode: one manual shutter → every card in the frame detected +
+	// identified → review. No alignment needed — detection finds the cards
+	// wherever they sit. The live auto-capture loop idles (but keeps ticking)
+	// while mode !== "single".
+	const [mode, setMode] = useState<"single" | "binder">("single");
+	const modeRef = useRef<"single" | "binder">("single");
+	const [binderPhase, setBinderPhase] = useState<
+		"idle" | "analyzing" | "review"
+	>("idle");
+	const [binderPhoto, setBinderPhoto] = useState<string | null>(null);
+	const [binderCards, setBinderCards] = useState<CardDetection[] | null>(null);
+	// Bumped whenever the current binder capture is invalidated (retake, mode
+	// switch, blur) so an in-flight analysis can't resurrect a stale review.
+	const binderGenRef = useRef(0);
+	const binderBusyRef = useRef(false);
 	// User-controlled scanning pause (the play/pause button). The loop idles while
 	// paused but the camera preview stays live. Mirrored to a ref so the async
 	// scan loop can read it without re-subscribing.
@@ -446,52 +419,10 @@ export default function CameraScreen() {
 						width / height,
 					);
 					if (pausedRef.current) return;
-					const { high, low } = parseNumbers(text.bottom);
-					if (high.size || low.size) {
-						const ja = hasJapanese([...text.top, ...text.bottom]);
-						// (1) A LETTERED number may break a tie within the top cluster —
-						// candidates the artwork already scored within OCR_TIE_BAND of #1.
-						const cut = Math.max(NUM_VISUAL_FLOOR, top.score - OCR_TIE_BAND);
-						let hits = matches.filter((m) => {
-							const n = idNumber(m.id);
-							return m.score >= cut && n != null && high.has(n);
-						});
-						// EN/JA twin (same art + number): split on the script OCR read.
-						if (hits.length > 1) {
-							const byLang = hits.filter((m) => m.id.includes("_ja") === ja);
-							if (byLang.length) hits = byLang;
-						}
-						// (2) A bare number may only CONFIRM a visual leader / co-leader
-						// (a true photo-finish with #1) — never promote a lower card that
-						// merely shares the very common collector number.
-						const leaders = matches.filter(
-							(m) => m.score >= top.score - PHOTO_FINISH,
-						);
-						const confirmed = leaders.filter((m) => {
-							const n = idNumber(m.id);
-							return n != null && (high.has(n) || low.has(n));
-						});
-						if (__DEV__) {
-							console.log(
-								"[scan] ocr",
-								`hi:${[...high].join(",") || "-"} lo:${[...low].join(",") || "-"}`,
-								ja ? "(ja)" : "(en)",
-								"→",
-								hits.length === 1
-									? hits[0].id
-									: confirmed.length === 1
-										? `${confirmed[0].id} (confirms #1)`
-										: "(no eligible match)",
-							);
-						}
-						if (hits.length === 1) {
-							captureCard(hits[0].id, hits[0].score);
-							return;
-						}
-						if (confirmed.length === 1) {
-							captureCard(confirmed[0].id, confirmed[0].score);
-							return;
-						}
+					const resolved = resolveOcrTieBreak(matches, text);
+					if (resolved) {
+						captureCard(resolved.id, resolved.score);
+						return;
 					}
 				} catch {}
 			}
@@ -521,6 +452,13 @@ export default function CameraScreen() {
 		[captureCard],
 	);
 
+	const resetBinder = useCallback(() => {
+		binderGenRef.current++;
+		setBinderPhase("idle");
+		setBinderPhoto(null);
+		setBinderCards(null);
+	}, []);
+
 	const runLoop = useCallback(async () => {
 		if (loopRunningRef.current) return;
 		loopRunningRef.current = true;
@@ -528,7 +466,8 @@ export default function CameraScreen() {
 			if (
 				!onDeviceReadyRef.current ||
 				pausedRef.current ||
-				scanningPausedRef.current
+				scanningPausedRef.current ||
+				modeRef.current !== "single"
 			) {
 				await delay(pausedRef.current || scanningPausedRef.current ? 120 : 300);
 				continue;
@@ -605,14 +544,86 @@ export default function CameraScreen() {
 				// Clear the result UI so swiping back doesn't flash "Got it!".
 				voteRef.current = [];
 				setScanState(onDeviceReadyRef.current ? "searching" : "preparing");
+				// Drop any in-flight binder capture so navigating back never
+				// resurrects a stale review over a live preview.
+				resetBinder();
 			};
-		}, [ensureIndexLoaded, markReady, runLoop, setPaused]),
+		}, [ensureIndexLoaded, markReady, runLoop, setPaused, resetBinder]),
 	);
 
 	const handleTogglePause = useCallback(() => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 		setPaused(!scanningPausedRef.current);
 	}, [setPaused]);
+
+	const handleToggleMode = useCallback(() => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+		const next = modeRef.current === "single" ? "binder" : "single";
+		modeRef.current = next;
+		setMode(next);
+		resetBinder();
+		// Entering either mode starts a fresh scan: clear the single-card voting
+		// window and the frame-averaging buffer.
+		voteRef.current = [];
+		lastCapturedIdRef.current = null;
+		if (CardVision.isAvailable()) CardVision.resetSmoothing();
+	}, [resetBinder]);
+
+	const handleBinderShutter = useCallback(async () => {
+		if (!onDeviceReadyRef.current || binderBusyRef.current) return;
+		const po = photoOutputRef.current;
+		if (!po) return;
+		binderBusyRef.current = true;
+		const gen = binderGenRef.current;
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+		setBinderPhase("analyzing");
+		try {
+			const file = await po.capturePhotoToFile(
+				{ flashMode: "off", enableShutterSound: false },
+				{},
+			);
+			if (!file?.filePath) throw new Error("capture failed");
+			if (gen !== binderGenRef.current) return; // invalidated mid-capture
+			// The review shows the native's upright frame JPEG, never the raw
+			// capture — raw orientation metadata is unreliable off the sensor.
+			const { photoUri, cards } = await analyzeCardsInFrame(
+				file.filePath,
+				binderRegion,
+				width / height,
+			);
+			if (gen !== binderGenRef.current) return;
+			setBinderPhoto(photoUri);
+			setBinderCards(cards);
+			if (cards.length > 0)
+				Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+			setBinderPhase("review");
+		} catch {
+			if (gen === binderGenRef.current) {
+				Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+				setBinderPhase("idle");
+				setBinderPhoto(null);
+				setBinderCards(null);
+			}
+		} finally {
+			binderBusyRef.current = false;
+		}
+	}, []);
+
+	const handleBinderConfirm = useCallback(
+		(picked: { id: string; score: number }[]) => {
+			playCaptureFeedback();
+			for (const p of picked) {
+				addScan({ id: p.id, image: cardImageUrl(p.id), score: p.score });
+			}
+			// One representative flight into the library badge (the badge count
+			// jumping by N carries the rest).
+			if (picked[0]) {
+				setFlyingCard({ image: cardImageUrl(picked[0].id), key: Date.now() });
+			}
+			resetBinder();
+		},
+		[addScan, resetBinder],
+	);
 
 	const handleToggleTorch = useCallback(() => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -670,14 +681,32 @@ export default function CameraScreen() {
 				options={{
 					headerRight: () => (
 						<View style={styles.headerActions}>
-							<Pressable style={styles.headerButton} onPress={handleTogglePause}>
-								<SymbolView
-									name={scanningPaused ? "play" : "pause"}
-									size={21}
-									tintColor={scanningPaused ? "#FFFFFF" : palette.accentSoft}
-									weight="medium"
-								/>
-							</Pressable>
+							{CardVision.isAvailable() && (
+								<Pressable
+									style={styles.headerButton}
+									onPress={handleToggleMode}
+								>
+									<SymbolView
+										name="square.grid.3x3"
+										size={21}
+										tintColor={mode === "binder" ? "#FFFFFF" : palette.accentSoft}
+										weight="medium"
+									/>
+								</Pressable>
+							)}
+							{mode === "single" && (
+								<Pressable
+									style={styles.headerButton}
+									onPress={handleTogglePause}
+								>
+									<SymbolView
+										name={scanningPaused ? "play" : "pause"}
+										size={21}
+										tintColor={scanningPaused ? "#FFFFFF" : palette.accentSoft}
+										weight="medium"
+									/>
+								</Pressable>
+							)}
 							<Pressable style={styles.headerButton} onPress={goToLibrary}>
 								<SymbolView
 									name="square.stack"
@@ -708,36 +737,62 @@ export default function CameraScreen() {
 				enableNativeZoomGesture
 			/>
 
-			{/* Scrim + viewfinder reticle */}
-			<ViewfinderScrim />
-			{/* Outline of the hole — colors through the scan state. Its own small
-			    Svg so the color change doesn't re-commit the scrim/mask tree. */}
-			<Svg
-				style={StyleSheet.absoluteFill}
-				width={width}
-				height={height}
-				pointerEvents="none"
-			>
-				<Rect
-					x={cardX}
-					y={cardY}
-					width={cardWidth}
-					height={cardHeight}
-					rx={CARD_CORNER_RADIUS}
-					ry={CARD_CORNER_RADIUS}
-					fill="none"
-					stroke={reticle}
-					strokeWidth={3}
-				/>
-			</Svg>
+			{mode === "single" ? (
+				<>
+					{/* Scrim + viewfinder reticle */}
+					<ViewfinderScrim />
+					{/* Outline of the hole — colors through the scan state. Its own small
+					    Svg so the color change doesn't re-commit the scrim/mask tree. */}
+					<Svg
+						style={StyleSheet.absoluteFill}
+						width={width}
+						height={height}
+						pointerEvents="none"
+					>
+						<Rect
+							x={cardX}
+							y={cardY}
+							width={cardWidth}
+							height={cardHeight}
+							rx={CARD_CORNER_RADIUS}
+							ry={CARD_CORNER_RADIUS}
+							fill="none"
+							stroke={reticle}
+							strokeWidth={3}
+						/>
+					</Svg>
 
-			{/* Caption below the viewfinder. */}
-			<Text
-				style={[styles.reticleCaption, { top: cardY + cardHeight + 14 }]}
-				pointerEvents="none"
-			>
-				Align the card inside the frame
-			</Text>
+					{/* Caption below the viewfinder. */}
+					<Text
+						style={[styles.reticleCaption, { top: cardY + cardHeight + 14 }]}
+						pointerEvents="none"
+					>
+						Align the card inside the frame
+					</Text>
+				</>
+			) : (
+				<>
+					{/* Page-shaped guide box (no inner grid) — detection finds the
+					    cards wherever they sit inside it. */}
+					<BinderFrameOverlay
+						color={binderPhase === "analyzing" ? AMBER : REST}
+					/>
+					<Text
+						style={[
+							styles.reticleCaption,
+							{ top: binderY + binderHeight + 14 },
+						]}
+						pointerEvents="none"
+					>
+						Align your cards inside the frame
+					</Text>
+					{binderPhase === "analyzing" && (
+						<View style={styles.binderSpinner} pointerEvents="none">
+							<ActivityIndicator size="large" color="#fff" />
+						</View>
+					)}
+				</>
+			)}
 
 			{/* Blue glow framing the screen — concentric strokes keep corners seamless. */}
 			<EdgeGlow />
@@ -774,9 +829,13 @@ export default function CameraScreen() {
 								systemName="circle.fill"
 								size={8}
 								color={
-									scanningPaused
-										? "rgba(255,255,255,0.45)"
-										: palette.accent
+									mode === "binder"
+										? binderPhase === "analyzing"
+											? AMBER
+											: palette.accent
+										: scanningPaused
+											? "rgba(255,255,255,0.45)"
+											: palette.accent
 								}
 							/>
 							<UIText
@@ -785,7 +844,13 @@ export default function CameraScreen() {
 									foregroundStyle("#fff"),
 								]}
 							>
-								{scanningPaused ? "Scanner paused" : "Scanning..."}
+								{mode === "binder"
+									? binderPhase === "analyzing"
+										? "Analyzing..."
+										: "Binder scan"
+									: scanningPaused
+										? "Scanner paused"
+										: "Scanning..."}
 							</UIText>
 						</HStack>
 						<Spacer />
@@ -804,6 +869,31 @@ export default function CameraScreen() {
 					</HStack>
 				</Host>
 			</View>
+
+			{/* Binder shutter — manual capture, one page per tap. */}
+			{mode === "binder" && binderPhase === "idle" && (
+				<Pressable
+					style={[styles.shutter, { bottom: insets.bottom + 84 }]}
+					onPress={handleBinderShutter}
+				>
+					<View style={styles.shutterInner} />
+				</Pressable>
+			)}
+
+			{/* Post-shutter review: toggle wrong matches off, then confirm.
+			    binderPhoto may be "" (frame JPEG write failed) — the overlay
+			    then shows tiles over the dark backdrop, still usable. */}
+			{mode === "binder" && binderPhase === "review" && binderCards && (
+				<BinderReviewOverlay
+					photoUri={binderPhoto ?? ""}
+					detections={binderCards}
+					onConfirm={handleBinderConfirm}
+					onRetake={() => {
+						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+						resetBinder();
+					}}
+				/>
+			)}
 
 			{/* The captured card flies from the reticle into the library button. */}
 			{flyingCard && (
@@ -876,6 +966,32 @@ const styles = StyleSheet.create({
 		fontSize: 13,
 		fontWeight: "500",
 		color: "rgba(255,255,255,0.65)",
+	},
+	binderSpinner: {
+		position: "absolute",
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	shutter: {
+		position: "absolute",
+		alignSelf: "center",
+		width: 68,
+		height: 68,
+		borderRadius: 34,
+		borderWidth: 4,
+		borderColor: "#fff",
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	shutterInner: {
+		width: 52,
+		height: 52,
+		borderRadius: 26,
+		backgroundColor: "#fff",
 	},
 	flyCard: {
 		position: "absolute",

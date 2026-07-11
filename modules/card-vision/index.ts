@@ -153,6 +153,50 @@ export function resetSmoothing(): void {
   mod().resetSmoothing();
 }
 
+/** One detected card in a multi-card frame, in row-major reading order. */
+export interface DetectedCardResult {
+  /** Card bounds normalized to the analyzed frame (0..1, origin top-left). */
+  rect: { x: number; y: number; w: number; h: number };
+  matches: CardMatch[]; // spurious quads still return (low-scoring) matches
+}
+
+export interface CardsInFrameResult {
+  /**
+   * Temp JPEG of the exact (upright, region-cropped) frame that was analyzed
+   * — display THIS, not the raw capture, so orientation and the detection
+   * rects always line up. Empty string if the write failed.
+   */
+  photoUri: string;
+  cards: DetectedCardResult[];
+}
+
+/**
+ * Detect every card-shaped rectangle inside a preview region and identify
+ * each — no grid assumption, cards can sit anywhere within the region
+ * (binder pockets, a table spread). `region` is in preview fractions like
+ * {@link identifyInRegion}. Each detected quad is perspective-corrected,
+ * embedded, and matched concurrently. Thresholding (match / unsure /
+ * discard) is the caller's job — see src/lib/binderScan.ts.
+ */
+export function identifyCardsInFrame(
+  uri: string,
+  region: { x: number; y: number; w: number; h: number },
+  previewAspect: number,
+  maxCards = 12,
+  topN = 12,
+): Promise<CardsInFrameResult> {
+  return mod().identifyCardsInFrame(
+    uri,
+    region.x,
+    region.y,
+    region.w,
+    region.h,
+    previewAspect,
+    maxCards,
+    topN,
+  );
+}
+
 /** Raw OCR lines from a card, split by region. Parsed/normalised in JS. */
 export interface CardText {
   bottom: string[]; // collector number lives here (e.g. "123/198", "TG02")

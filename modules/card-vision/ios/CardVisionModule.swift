@@ -34,6 +34,10 @@ public class CardVisionModule: Module {
   private var loadedRev: Int = -1
   // Rolling buffer of recent query embeddings for holo-glare smoothing.
   private var recent: [[Float]] = []
+  // One shared context — creation is expensive and CIContext is thread-safe.
+  // The binder grid renders up to 9 crops per shutter; per-call contexts waste
+  // hundreds of ms.
+  private let ciContext = CIContext()
 
   public func definition() -> ModuleDefinition {
     Name("CardVision")
@@ -147,7 +151,8 @@ public class CardVisionModule: Module {
       (uri: String, x: Double, y: Double, w: Double, h: Double,
        previewAspect: Double, topN: Int) -> [[String: Any]] in
       guard self.count > 0 else { throw VisionError(description: "Index not loaded") }
-      guard let cg = self.loadUpright(self.stripScheme(uri)) else {
+      guard let cg = self.loadUprightForPreview(self.stripScheme(uri),
+                                                previewAspect: previewAspect) else {
         throw VisionError(description: "Failed to load image")
       }
       let region = self.cropToPreviewRegion(
@@ -169,7 +174,8 @@ public class CardVisionModule: Module {
       (uri: String, x: Double, y: Double, w: Double, h: Double,
        previewAspect: Double, topN: Int, window: Int) -> [[String: Any]] in
       guard self.count > 0 else { throw VisionError(description: "Index not loaded") }
-      guard let cg = self.loadUpright(self.stripScheme(uri)) else {
+      guard let cg = self.loadUprightForPreview(self.stripScheme(uri),
+                                                previewAspect: previewAspect) else {
         throw VisionError(description: "Failed to load image")
       }
       let region = self.cropToPreviewRegion(
@@ -210,7 +216,8 @@ public class CardVisionModule: Module {
     AsyncFunction("readCardText") {
       (uri: String, x: Double, y: Double, w: Double, h: Double,
        previewAspect: Double) -> [String: Any] in
-      guard let cg = self.loadUpright(self.stripScheme(uri)) else {
+      guard let cg = self.loadUprightForPreview(self.stripScheme(uri),
+                                                previewAspect: previewAspect) else {
         throw VisionError(description: "Failed to load image")
       }
       let region = self.cropToPreviewRegion(
@@ -225,6 +232,138 @@ public class CardVisionModule: Module {
         "bottom": self.ocrStrip(card, yFrac: 0.80, hFrac: 0.20, languages: ["en-US"]),
         "top": self.ocrStrip(card, yFrac: 0.0, hFrac: 0.18, languages: ["ja", "en-US"]),
       ]
+    }
+
+    // Detect every card-shaped rectangle in the frame and identify each — no
+    // grid assumption, so cards can sit anywhere (binder pockets, a table
+    // spread, a fanned hand). Region args are preview fractions like
+    // identifyInRegion. Returns one entry per detected card in row-major
+    // reading order: {rect: {x,y,w,h} normalized to the analyzed frame with
+    // origin TOP-left (so JS can place review tiles over the photo), matches:
+    // [{id, score}]}. Spurious quads embed background and score near zero —
+    // thresholding/filtering is JS's job so tuning needs no native rebuild.
+    AsyncFunction("identifyCardsInFrame") {
+      (uri: String, x: Double, y: Double, w: Double, h: Double,
+       previewAspect: Double, maxCards: Int, topN: Int) -> [String: Any] in
+      guard self.count > 0 else { throw VisionError(description: "Index not loaded") }
+      guard let cg = self.loadUprightForPreview(self.stripScheme(uri),
+                                                previewAspect: previewAspect) else {
+        throw VisionError(description: "Failed to load image")
+      }
+      let frame = self.cropToPreviewRegion(
+        cg, nx: x, ny: y, nw: w, nh: h, previewAspect: previewAspect) ?? cg
+
+      // One detection candidate: the observation, the image it was detected in
+      // (for the perspective crop), and its bounds normalized to the FRAME
+      // (Vision bottom-left coords) for dedupe/ordering/reporting.
+      struct Cand {
+        let source: CGImage
+        let obs: VNRectangleObservation
+        let rect: CGRect
+      }
+
+      // MULTI-PASS detection. VNDetectRectanglesRequest is tuned to find THE
+      // document in a scene — regardless of maximumObservations its internal
+      // suppression returns only the few most prominent rectangles, so a full
+      // 9-card page loses most of its cards (~4 was the practical ceiling).
+      // Detecting on the whole frame PLUS overlapping sub-tiles (four corners
+      // + center, each ~58% of the frame) keeps every pass in the ~4-cards
+      // regime where the detector performs; overlaps are deduped below.
+      var cands: [Cand] = []
+      for obs in self.detectQuads(frame, minSize: 0.15, maxObs: max(1, maxCards)) {
+        cands.append(Cand(source: frame, obs: obs, rect: obs.boundingBox))
+      }
+      let fw = Double(frame.width), fh = Double(frame.height)
+      let t = 0.58 // tile side as a fraction of the frame
+      let tileOrigins: [(Double, Double)] = [
+        (0, 0), (1 - t, 0), (0, 1 - t), (1 - t, 1 - t),
+        ((1 - t) / 2, (1 - t) / 2),
+      ]
+      for (ox, oy) in tileOrigins {
+        // ox/oy are top-left normalized; CGImage cropping is top-left too.
+        let px = CGRect(x: ox * fw, y: oy * fh, width: t * fw, height: t * fh)
+          .integral
+          .intersection(CGRect(x: 0, y: 0, width: fw, height: fh))
+        guard !px.isNull, let tile = frame.cropping(to: px) else { continue }
+        let tw = Double(px.width), th = Double(px.height)
+        // A card fills a large share of a tile — a higher floor cuts junk.
+        for obs in self.detectQuads(tile, minSize: 0.25, maxObs: 6) {
+          let bb = obs.boundingBox
+          // Tile-normalized (bottom-left) → frame-normalized (bottom-left).
+          // The tile's bottom edge in bottom-left frame coords:
+          let tileBottom = (fh - (Double(px.minY) + th)) / fh
+          let rect = CGRect(
+            x: (Double(px.minX) + bb.minX * tw) / fw,
+            y: tileBottom + bb.minY * (th / fh),
+            width: bb.width * (tw / fw),
+            height: bb.height * (th / fh)
+          )
+          cands.append(Cand(source: tile, obs: obs, rect: rect))
+        }
+      }
+
+      // The same card found by several passes (and a sleeve edge around the
+      // card edge inside it) produce heavily-overlapping quads — keep only the
+      // highest-confidence one of any overlapping cluster.
+      cands.sort { $0.obs.confidence > $1.obs.confidence }
+      var kept: [Cand] = []
+      for c in cands {
+        let dup = kept.contains { k in
+          let i = k.rect.intersection(c.rect)
+          guard !i.isNull else { return false }
+          let inter = i.width * i.height
+          let union = k.rect.width * k.rect.height
+            + c.rect.width * c.rect.height - inter
+          return union > 0 && inter / union > 0.45
+        }
+        if !dup { kept.append(c) }
+      }
+      if kept.count > maxCards { kept = Array(kept.prefix(maxCards)) }
+
+      // Row-major reading order. Vision's origin is bottom-left; flip to
+      // top-left. Two cards share a row when their centers are within half the
+      // tallest card's height.
+      let rowTol = (kept.map { $0.rect.height }.max() ?? 0.2) * 0.5
+      kept.sort {
+        let ay = 1 - $0.rect.midY, by = 1 - $1.rect.midY
+        if abs(ay - by) > rowTol { return ay < by }
+        return $0.rect.midX < $1.rect.midX
+      }
+
+      // Detections are independent: perspective-correct + embed + match each
+      // in parallel (bounded by core count). Sources/`matrix`/`ids` are
+      // read-only here and Vision handlers are per-call; the lock covers the
+      // only shared write.
+      var results = [[String: Any]](repeating: [:], count: kept.count)
+      let lock = NSLock()
+      DispatchQueue.concurrentPerform(iterations: kept.count) { i in
+        let c = kept[i]
+        var matches: [[String: Any]] = []
+        // The quad IS the card — no second detection pass inside the crop.
+        // Corners are normalized to `source`, so cropping from `source` is
+        // exact even for tile detections.
+        if let card = self.perspectiveCrop(c.source, quad: c.obs),
+           let v = self.embedCGImage(card, crop: false) {
+          matches = self.topMatches(query: v, k: topN).map {
+            ["id": $0.id, "score": Double($0.score)]
+          }
+        }
+        let bb = c.rect
+        lock.lock()
+        results[i] = [
+          "rect": [
+            "x": Double(bb.minX), "y": Double(1 - bb.maxY),
+            "w": Double(bb.width), "h": Double(bb.height),
+          ],
+          "matches": matches,
+        ]
+        lock.unlock()
+      }
+      // Hand back the exact frame that was analyzed so the review overlay can
+      // display it — the raw capture's orientation metadata never enters the
+      // UI path.
+      let photoUri = self.writeTempJPEG(frame).map { "file://" + $0 } ?? ""
+      return ["photoUri": photoUri, "cards": results]
     }
   }
 
@@ -269,7 +408,7 @@ public class CardVisionModule: Module {
     f.setValue(scale, forKey: kCIInputScaleKey)
     f.setValue(1.0, forKey: kCIInputAspectRatioKey)
     guard let out = f.outputImage else { return cg }
-    return CIContext().createCGImage(out, from: out.extent)
+    return ciContext.createCGImage(out, from: out.extent)
   }
 
   private func averageVectors(_ vs: [[Float]]) -> [Float] {
@@ -368,20 +507,60 @@ public class CardVisionModule: Module {
     let orientation = CGImagePropertyOrientation(rawValue: raw) ?? .up
     if orientation == .up { return cg }
     let ci = CIImage(cgImage: cg).oriented(orientation)
-    return CIContext().createCGImage(ci, from: ci.extent) ?? cg
+    return ciContext.createCGImage(ci, from: ci.extent) ?? cg
   }
 
-  private func detectAndCrop(_ cg: CGImage) -> CGImage? {
+  /// Load upright for a preview-region call. Camera sensors capture landscape
+  /// pixels plus a rotation flag; when that flag is missing/unapplied the
+  /// pixels arrive sideways, every preview-coordinate mapping is wrong, and
+  /// the rectangle detector rejects the (now-landscape) cards. If the caller's
+  /// preview is portrait but the image is landscape, rotate 90° CW (the iPhone
+  /// back-camera sensor default). No-op when EXIF already made it upright.
+  private func loadUprightForPreview(_ path: String, previewAspect: Double) -> CGImage? {
+    guard let cg = loadUpright(path) else { return nil }
+    if previewAspect < 1, cg.width > cg.height {
+      let ci = CIImage(cgImage: cg).oriented(.right)
+      return ciContext.createCGImage(ci, from: ci.extent) ?? cg
+    }
+    return cg
+  }
+
+  /// Write a CGImage to a temp JPEG for the JS side to display — guarantees
+  /// the review overlay shows exactly the (upright, cropped) frame that was
+  /// analyzed, independent of the raw capture's orientation metadata.
+  private func writeTempJPEG(_ cg: CGImage) -> String? {
+    let path = NSTemporaryDirectory()
+      + "cardframe-\(UInt64(Date().timeIntervalSince1970 * 1000)).jpg"
+    let url = URL(fileURLWithPath: path)
+    guard let dest = CGImageDestinationCreateWithURL(
+      url as CFURL, "public.jpeg" as CFString, 1, nil) else { return nil }
+    CGImageDestinationAddImage(
+      dest, cg, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
+    return CGImageDestinationFinalize(dest) ? path : nil
+  }
+
+  /// Card-shaped rectangle detection (portrait 2.5" × 3.5" aspect band).
+  private func detectQuads(
+    _ cg: CGImage, minSize: Float, maxObs: Int
+  ) -> [VNRectangleObservation] {
     let req = VNDetectRectanglesRequest()
     req.minimumAspectRatio = 0.55   // card ≈ 0.717 (2.5" / 3.5")
     req.maximumAspectRatio = 0.95
-    req.minimumSize = 0.20
-    req.maximumObservations = 1
+    req.minimumSize = minSize
+    req.maximumObservations = maxObs
     req.quadratureTolerance = 30
     let handler = VNImageRequestHandler(cgImage: cg, orientation: .up, options: [:])
     try? handler.perform([req])
-    guard let r = req.results?.first else { return nil }
+    return req.results ?? []
+  }
 
+  private func detectAndCrop(_ cg: CGImage) -> CGImage? {
+    guard let r = detectQuads(cg, minSize: 0.20, maxObs: 1).first else { return nil }
+    return perspectiveCrop(cg, quad: r)
+  }
+
+  /// Perspective-correct a detected card quad out of the image.
+  private func perspectiveCrop(_ cg: CGImage, quad r: VNRectangleObservation) -> CGImage? {
     let ci = CIImage(cgImage: cg)
     let w = ci.extent.width, h = ci.extent.height
     func denorm(_ p: CGPoint) -> CIVector { CIVector(x: p.x * w, y: p.y * h) }
@@ -392,7 +571,7 @@ public class CardVisionModule: Module {
     f.setValue(denorm(r.bottomLeft), forKey: "inputBottomLeft")
     f.setValue(denorm(r.bottomRight), forKey: "inputBottomRight")
     guard let out = f.outputImage else { return nil }
-    return CIContext().createCGImage(out, from: out.extent)
+    return ciContext.createCGImage(out, from: out.extent)
   }
 
   // MARK: - Embedding
