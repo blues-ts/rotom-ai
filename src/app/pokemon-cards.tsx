@@ -193,11 +193,12 @@ export default function PokemonCards() {
 	}, []);
 
 	// Waterfall entrance once per card — recycled cells don't replay it.
-	// Cleared when the dataset changes so a fresh result set animates again.
+	// Cleared on a new filter here (sort changes clear it in the handler,
+	// which lands BEFORE the keyed remount, unlike an effect).
 	const animatedIdsRef = useRef<Set<string>>(new Set());
 	useEffect(() => {
 		animatedIdsRef.current = new Set();
-	}, [debouncedFilter, sortBy]);
+	}, [debouncedFilter]);
 
 	// The Pokémon's whole card list in one cached query (~2 round trips via
 	// concurrent pages). Drives the grid, the client-side filter, AND the
@@ -415,8 +416,12 @@ export default function PokemonCards() {
 			const bestVariant = isValueSort ? priceInfo.variant : undefined;
 			const variant = priceInfo.variant ?? getVariantNames(item)[0] ?? "normal";
 			const condition = getConditionOptions(item, variant)[0] ?? "NM";
-			const firstAppearance = !animatedIdsRef.current.has(item.id);
-			if (firstAppearance) animatedIdsRef.current.add(item.id);
+			// Guard keyed per SORT — a sort change (which also remounts the
+			// keyed list) makes every key fresh, so the waterfall replays;
+			// recycled cells within one sort never do.
+			const guardKey = `${sortBy}-${item.id}`;
+			const firstAppearance = !animatedIdsRef.current.has(guardKey);
+			if (firstAppearance) animatedIdsRef.current.add(guardKey);
 			return (
 				<Animated.View
 					entering={firstAppearance ? cardWaterfall(index) : undefined}
@@ -507,16 +512,13 @@ export default function PokemonCards() {
 				</Animated.View>
 			);
 		},
-		[t, failedImages, prefetchDetail, isValueSort],
+		[t, failedImages, prefetchDetail, isValueSort, sortBy],
 	);
 
 	const showSkeleton = isLoading || !transitionDone || waitingForPriceSort;
 
-	// One list drives both the iOS 26 toolbar menu and the legacy FAB sheet.
-	const sortActions = (Object.keys(SORT_LABELS) as SortOption[]).map((o) => ({
-		label: SORT_LABELS[o],
-		isOn: sortBy === o,
-		onPress: () => {
+	const handleSortChange = useCallback(
+		(o: SortOption) => {
 			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 			// Value sorts need prices — a Pro feature.
 			if ((o === "valueDesc" || o === "valueAsc") && !isPro) {
@@ -525,6 +527,14 @@ export default function PokemonCards() {
 			}
 			setSortBy(o);
 		},
+		[isPro],
+	);
+
+	// One list drives the sort form sheet.
+	const sortActions = (Object.keys(SORT_LABELS) as SortOption[]).map((o) => ({
+		label: SORT_LABELS[o],
+		isOn: sortBy === o,
+		onPress: () => handleSortChange(o),
 	}));
 
 	return (

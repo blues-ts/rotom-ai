@@ -12,10 +12,19 @@ import Animated, {
 	Easing,
 	FadeIn,
 	FadeOut,
+	runOnJS,
+	runOnUI,
 	SlideInDown,
 	SlideOutDown,
 	useAnimatedStyle,
+	useSharedValue,
+	withSpring,
 } from "react-native-reanimated";
+import {
+	Gesture,
+	GestureDetector,
+	GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import { BlurView } from "expo-blur";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import * as Haptics from "expo-haptics";
@@ -71,9 +80,16 @@ export default function FloatingSearchBar({
 	// unmounts (Modal kills exiting animations otherwise).
 	const [modalVisible, setModalVisible] = useState(false);
 	const [sheetShown, setSheetShown] = useState(false);
+	// Drag-to-dismiss: the sheet follows a downward drag; past the threshold
+	// (or on a flick) it dismisses, otherwise it springs back. UI-thread
+	// owned, so resets go through runOnUI.
+	const sheetDragY = useSharedValue(0);
 	const openMenu = () => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 		Keyboard.dismiss();
+		runOnUI(() => {
+			sheetDragY.value = 0;
+		})();
 		setModalVisible(true);
 		setSheetShown(true);
 	};
@@ -81,6 +97,26 @@ export default function FloatingSearchBar({
 		setSheetShown(false);
 		setTimeout(() => setModalVisible(false), 240);
 	};
+	const sheetPan = Gesture.Pan()
+		// Vertical-only intent, downward — option taps stay taps.
+		.activeOffsetY(10)
+		.onUpdate((e) => {
+			sheetDragY.value = Math.max(0, e.translationY);
+		})
+		.onEnd((e) => {
+			if (e.translationY > 80 || e.velocityY > 800) {
+				runOnJS(closeMenu)();
+			} else {
+				sheetDragY.value = withSpring(0, {
+					stiffness: 380,
+					damping: 30,
+					mass: 0.7,
+				});
+			}
+		});
+	const sheetDragStyle = useAnimatedStyle(() => ({
+		transform: [{ translateY: sheetDragY.value }],
+	}));
 
 	return (
 		<Animated.View
@@ -158,6 +194,8 @@ export default function FloatingSearchBar({
 				animationType="none"
 				onRequestClose={closeMenu}
 			>
+				{/* Gesture handlers need their own root inside an RN Modal. */}
+				<GestureHandlerRootView style={styles.modalRoot}>
 				{sheetShown && (
 					<>
 						<Animated.View
@@ -167,6 +205,7 @@ export default function FloatingSearchBar({
 						>
 							<Pressable style={StyleSheet.absoluteFill} onPress={closeMenu} />
 						</Animated.View>
+						<GestureDetector gesture={sheetPan}>
 						<Animated.View
 							entering={SlideInDown.duration(320).easing(
 								Easing.out(Easing.cubic),
@@ -176,6 +215,7 @@ export default function FloatingSearchBar({
 							)}
 							style={[
 								styles.sheet,
+								sheetDragStyle,
 								{
 									backgroundColor: t.glass.sheetFill,
 									borderColor: t.glass.surfaceBorder,
@@ -196,8 +236,12 @@ export default function FloatingSearchBar({
 									]}
 									onPress={() => {
 										Haptics.selectionAsync();
-										a.onPress();
+										// Dismiss FIRST, apply AFTER the slide-out: sort
+										// changes can remount a heavy grid, and doing that
+										// synchronously starved the exit animation (laggy
+										// slide, or a hard cut past the modal-hide timeout).
 										closeMenu();
+										setTimeout(() => a.onPress(), 260);
 									}}
 								>
 									<Text
@@ -222,8 +266,10 @@ export default function FloatingSearchBar({
 								</Pressable>
 							))}
 						</Animated.View>
+						</GestureDetector>
 					</>
 				)}
+				</GestureHandlerRootView>
 			</Modal>
 		</Animated.View>
 	);
@@ -261,6 +307,9 @@ const styles = StyleSheet.create({
 	},
 	menuButton: {
 		paddingLeft: 2,
+	},
+	modalRoot: {
+		flex: 1,
 	},
 	backdrop: {
 		position: "absolute",

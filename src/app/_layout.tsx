@@ -5,6 +5,7 @@ import { usePrefetchExpansions } from "@/hooks/usePrefetchExpansions";
 import { queryClient } from "@/config/queryClient";
 import {
 	createQueryPersister,
+	HEAVY_QUERY_KEYS,
 	QUERY_CACHE_BUSTER,
 	QUERY_CACHE_MAX_AGE,
 } from "@/config/storage";
@@ -435,6 +436,15 @@ export default function RootLayout() {
 									persister,
 									maxAge: QUERY_CACHE_MAX_AGE,
 									buster: QUERY_CACHE_BUSTER,
+									dehydrateOptions: {
+										// Whole-card-list payloads (up to ~1000 full card
+										// objects each) are cheap to refetch but expensive
+										// to deserialize on EVERY cold start — keep them
+										// in-memory only.
+										shouldDehydrateQuery: (query) =>
+											query.state.status === "success" &&
+											!HEAVY_QUERY_KEYS.has(String(query.queryKey[0])),
+									},
 								}}
 							>
 								{tree}

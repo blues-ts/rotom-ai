@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	Dimensions,
 	FlatList,
 	Keyboard,
-	type NativeScrollEvent,
-	type NativeSyntheticEvent,
 	Pressable,
 	StyleSheet,
 	Text,
@@ -15,6 +13,9 @@ import Animated, {
 	FadeIn,
 	FadeOut,
 	runOnJS,
+	runOnUI,
+	type ScrollHandlerProcessed,
+	useAnimatedScrollHandler,
 	useAnimatedStyle,
 	useSharedValue,
 	withRepeat,
@@ -109,8 +110,10 @@ const PADDING = 12;
 // of the compact iOS 26 offsets.
 const LEGACY_TOP_GRID = 108; // 96 header+search, plus the grid gap
 // The visible chip bar (browse/language or search-scope toggles) sits between
-// the header and the content; grids pad down past it.
-const CHIP_BAR_H = 44;
+// the header and the content; grids pad down past it. The chips themselves
+// are ~36pt tall — this is intentionally snug (the first era/generation
+// header carries its own 16pt top margin).
+const CHIP_BAR_H = 36;
 const screenWidth = Dimensions.get("window").width;
 const imageWidth = (screenWidth - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 const imageHeight = imageWidth * 1.4;
@@ -215,7 +218,9 @@ function LoadingSpinner({ color }: { color: string }) {
 	);
 }
 
-function SetsBrowser({
+// memo: the search screen re-renders on every keystroke / chip flip / scroll
+// fade — this skips the whole browser pass when its props didn't change.
+const SetsBrowser = memo(function SetsBrowser({
 	mode,
 	language,
 	topPadding,
@@ -224,7 +229,7 @@ function SetsBrowser({
 	mode: SearchMode;
 	language: SetsLanguage;
 	topPadding: number;
-	onScroll?: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
+	onScroll?: ScrollHandlerProcessed<Record<string, unknown>>;
 }) {
 	const t = useRiverTheme();
 	const api = useApi();
@@ -423,25 +428,29 @@ function SetsBrowser({
 
 	if (filtered.length === 0) {
 		return (
-			<Text
-				style={[
-					styles.empty,
-					{ color: t.text.secondary, marginTop: topPadding - 36 },
-				]}
-			>
-				No sets found
-			</Text>
+			<View style={styles.emptyState}>
+				<SymbolView
+					name="magnifyingglass"
+					size={44}
+					tintColor={t.text.tertiary}
+					weight="regular"
+				/>
+				<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
+					No sets found
+				</Text>
+			</View>
 		);
 	}
 
 	return (
-		<FlatList
+		<Animated.FlatList
 			key={language}
 			data={listData}
 			keyExtractor={(item) => item.key}
 			renderItem={renderSet}
+			// Animated handler — the chip-bar fade math runs on the UI thread.
 			onScroll={onScroll}
-			scrollEventThrottle={32}
+			scrollEventThrottle={16}
 			onViewableItemsChanged={onViewableItemsChanged}
 			viewabilityConfig={viewabilityConfig}
 			contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}
@@ -454,7 +463,7 @@ function SetsBrowser({
 			windowSize={7}
 		/>
 	);
-}
+});
 
 export default function Search() {
 	const t = useRiverTheme();
@@ -575,6 +584,14 @@ export default function Search() {
 	const [isClearing, setIsClearing] = useState(false);
 	const clearOpacity = useSharedValue(1);
 
+	// Results waterfall in once per RESULT SET — cleared on a new search or a
+	// Cards ⇄ Sealed scope switch so each fresh set cascades in (same feel as
+	// the sets/Pokédex/set-detail grids); recycled cells never replay.
+	const animatedIdsRef = useRef<Set<string>>(new Set());
+	useEffect(() => {
+		animatedIdsRef.current = new Set();
+	}, [debouncedQuery, mode]);
+
 	useEffect(() => {
 		if (cards.length > 0) {
 			setDisplayCards(cards);
@@ -589,10 +606,13 @@ export default function Search() {
 					runOnJS(setIsClearing)(false);
 				}
 			});
-		} else if (!isClearing) {
+		} else if (!isClearing && !isLoading) {
+			// Empty AND settled — a real no-results state. While a scope/mode
+			// swap is merely LOADING, the previous results stay on screen and
+			// swap in place, instead of unmounting into a skeleton flash.
 			setDisplayCards([]);
 		}
-	}, [cards, searchQuery]);
+	}, [cards, searchQuery, isLoading]);
 
 	const clearAnimatedStyle = useAnimatedStyle(() => ({
 		opacity: clearOpacity.value,
@@ -612,8 +632,12 @@ export default function Search() {
 	const renderItem = useCallback(
 		({ item, index }: { item: CardResult; index: number }) => {
 			const showPlaceholder = !item.image || failedImages.has(item.id);
+			const firstAppearance = !animatedIdsRef.current.has(item.id);
+			if (firstAppearance) animatedIdsRef.current.add(item.id);
 			return (
-				<View>
+				<Animated.View
+					entering={firstAppearance ? cardWaterfall(index) : undefined}
+				>
 					<CardContextMenu
 						card={{
 							cardId: item.id,
@@ -709,7 +733,7 @@ export default function Search() {
 							onDismiss={dismissTapHint}
 						/>
 					)}
-				</View>
+				</Animated.View>
 			);
 		},
 		[
@@ -757,35 +781,41 @@ export default function Search() {
 		insets.top + (HAS_BOTTOM_SEARCH_BAR ? 54 : LEGACY_TOP_GRID - 40);
 
 	// Safari-style: the chip bar fades out on scroll-down and returns on any
-	// scroll-up (or near the top), so switching modes is one flick away.
+	// scroll-up (or near the top), so switching modes is one flick away. The
+	// direction math and opacity run entirely on the UI thread (animated
+	// scroll handler + shared values); JS only hears about the rare
+	// hide ⇄ show flips, for pointerEvents.
 	const [chipsScrolledAway, setChipsScrolledAway] = useState(false);
-	const lastScrollYRef = useRef(0);
-	const handleBrowseScroll = useCallback(
-		(e: NativeSyntheticEvent<NativeScrollEvent>) => {
-			const y = e.nativeEvent.contentOffset.y;
-			const dy = y - lastScrollYRef.current;
-			lastScrollYRef.current = y;
-			if (y <= 20) {
-				setChipsScrolledAway(false);
-				return;
-			}
-			if (dy > 4) setChipsScrolledAway(true);
-			else if (dy < -4) setChipsScrolledAway(false);
-		},
-		[],
-	);
-	// Fresh list contexts reset the fade — from the event handlers that cause
-	// them (mode switch, typing), not an effect.
-	const resetChipsFade = useCallback(() => {
-		lastScrollYRef.current = 0;
-		setChipsScrolledAway(false);
-	}, []);
+	const lastScrollY = useSharedValue(0);
+	const chipsAway = useSharedValue(0);
 	const chipsScrollOpacity = useSharedValue(1);
-	useEffect(() => {
-		chipsScrollOpacity.value = withTiming(chipsScrolledAway ? 0 : 1, {
-			duration: 180,
-		});
-	}, [chipsScrolledAway, chipsScrollOpacity]);
+	const browseScrollHandler = useAnimatedScrollHandler((e) => {
+		const y = e.contentOffset.y;
+		const dy = y - lastScrollY.value;
+		lastScrollY.value = y;
+		let next: 0 | 1 | null = null;
+		if (y <= 20) next = 0;
+		else if (dy > 4) next = 1;
+		else if (dy < -4) next = 0;
+		if (next !== null && next !== chipsAway.value) {
+			chipsAway.value = next;
+			chipsScrollOpacity.value = withTiming(next === 1 ? 0 : 1, {
+				duration: 180,
+			});
+			runOnJS(setChipsScrolledAway)(next === 1);
+		}
+	});
+	// Fresh list contexts (mode switch, typing) reset the fade. The shared
+	// values are UI-thread-owned (the scroll worklet writes them), so the
+	// reset happens there too via runOnUI.
+	const resetChipsFade = useCallback(() => {
+		setChipsScrolledAway(false);
+		runOnUI(() => {
+			lastScrollY.value = 0;
+			chipsAway.value = 0;
+			chipsScrollOpacity.value = withTiming(1, { duration: 180 });
+		})();
+	}, [lastScrollY, chipsAway, chipsScrollOpacity]);
 	const chipBarFadeStyle = useAnimatedStyle(() => ({
 		opacity: chipsScrollOpacity.value,
 	}));
@@ -793,8 +823,10 @@ export default function Search() {
 	// results sit exactly where the browse grids do.
 	const gridTop =
 		insets.top + (HAS_BOTTOM_SEARCH_BAR ? 56 : LEGACY_TOP_GRID) + CHIP_BAR_H;
-	const resultsTop = gridTop;
-	const textTop = gridTop + 12;
+	// Results have no section header — add the same 16pt the sets grid's
+	// first era header carries, so both start the same distance below the
+	// chip bar.
+	const resultsTop = gridTop + 16;
 	const isSearching = !dexBrowsing && debouncedQuery.trim().length > 0;
 	const showHint =
 		dexBrowsing ||
@@ -878,14 +910,14 @@ export default function Search() {
 								filteringTopPadding={gridTop}
 								language={setsLanguage}
 								filter={searchQuery}
-								onScroll={handleBrowseScroll}
+								onScroll={browseScrollHandler}
 							/>
 						) : (
 							<SetsBrowser
 								mode={mode}
 								language={setsLanguage}
 								topPadding={gridTop}
-								onScroll={handleBrowseScroll}
+								onScroll={browseScrollHandler}
 							/>
 						)}
 					</Animated.View>
@@ -907,18 +939,21 @@ export default function Search() {
 					</Animated.View>
 				)}
 				{showNoResults && (
-					<Text
-						style={[
-							styles.empty,
-							{ color: t.text.secondary, marginTop: textTop },
-						]}
-					>
-						{mode === "sealed" ? "No products found" : "No cards found"}
-					</Text>
+					<View style={styles.emptyState}>
+						<SymbolView
+							name="magnifyingglass"
+							size={44}
+							tintColor={t.text.tertiary}
+							weight="regular"
+						/>
+						<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
+							{mode === "sealed" ? "No products found" : "No cards found"}
+						</Text>
+					</View>
 				)}
 				{!dexBrowsing && displayCards.length > 0 && (
 					<Animated.View style={[{ flex: 1 }, clearAnimatedStyle]}>
-						<FlatList
+						<Animated.FlatList
 							data={displayCards}
 							keyExtractor={(item) => item.id}
 							numColumns={COLUMNS}
@@ -932,8 +967,8 @@ export default function Search() {
 							initialNumToRender={15}
 							maxToRenderPerBatch={9}
 							windowSize={7}
-							onScroll={handleBrowseScroll}
-							scrollEventThrottle={32}
+							onScroll={browseScrollHandler}
+							scrollEventThrottle={16}
 							onEndReached={handleEndReached}
 							onEndReachedThreshold={0.5}
 							ListFooterComponent={
@@ -1087,10 +1122,21 @@ const styles = StyleSheet.create({
 		fontSize: 16,
 		textAlign: "center",
 	},
-	empty: {
-		textAlign: "center",
-		marginTop: 40,
-		fontSize: 16,
+	// Icon + centered title — the same empty-state language as set-detail's
+	// "No cards collected yet". (Replaces the old bare-text `empty` style.)
+	emptyState: {
+		flex: 1,
+		justifyContent: "center",
+		alignItems: "center",
+		paddingHorizontal: 32,
+		gap: 10,
+		// Optical centering between the chip bar and the floating search bar.
+		paddingBottom: 120,
+	},
+	emptyTitle: {
+		fontSize: 20,
+		fontWeight: "700",
+		marginTop: 8,
 	},
 	grid: {
 		padding: PADDING,

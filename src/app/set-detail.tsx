@@ -249,9 +249,8 @@ export default function SetDetail() {
 			}
 			if (m === "sealed") setSealedVisited(true);
 			setProductMode(m);
-			// Replay the waterfall for the incoming mode: clear the entrance
-			// guard and remount that list via its generation key.
-			animatedIdsRef.current = new Set();
+			// Replay the waterfall for the incoming mode: bumping the gen
+			// remounts that list AND invalidates its entrance-guard keys.
 			if (m === "sealed") setSealedGen((g) => g + 1);
 			else setCardGen((g) => g + 1);
 		},
@@ -268,6 +267,10 @@ export default function SetDetail() {
 			}
 			if (isSealedMode) setSealedSort(o);
 			else setCardSort(o);
+			// Replay the waterfall for the newly-ordered list, same as a mode
+			// toggle: the gen bump remounts it and invalidates its guard keys.
+			if (isSealedMode) setSealedGen((g) => g + 1);
+			else setCardGen((g) => g + 1);
 		},
 		[isPro, isSealedMode],
 	);
@@ -385,18 +388,31 @@ export default function SetDetail() {
 	const refetch = isSealedMode ? refetchSealed : refetchCatalog;
 
 	// Prices are needed ONLY to sort by value — fetched on demand from the live
-	// pricing path the first time the user picks a value sort, then cached.
+	// pricing path the first time a value sort is picked, then cached. One
+	// query PER KIND (each list keeps its own sort), so neither dataset ever
+	// depends on which mode is visible.
+	const cardSortIsValue = cardSort === "valueDesc" || cardSort === "valueAsc";
+	const sealedSortIsValue =
+		sealedSort === "valueDesc" || sealedSort === "valueAsc";
 	const { data: pricedCards } = useQuery({
-		queryKey: ["setCardsPriced", id, isSealedMode, debouncedFilter],
-		queryFn: () => fetchWholeSet(true, isSealedMode ? "sealed" : "cards"),
-		enabled: !!id && isValueSort && isPro,
+		queryKey: ["setCardsPriced", id, "cards", debouncedFilter],
+		queryFn: () => fetchWholeSet(true, "cards"),
+		enabled: !!id && cardSortIsValue && isPro,
+		staleTime: 5 * 60 * 1000,
+	});
+	const { data: pricedSealed } = useQuery({
+		queryKey: ["setCardsPriced", id, "sealed", debouncedFilter],
+		queryFn: () => fetchWholeSet(true, "sealed"),
+		enabled: !!id && sealedSortIsValue && isPro,
 		staleTime: 5 * 60 * 1000,
 	});
 
 	// A value sort is meaningless until prices arrive — show the skeleton while
 	// fetching rather than briefly displaying the default (number) order. Cached
 	// prices (staleTime) make this instant on repeat selections.
-	const waitingForPriceSort = isValueSort && isPro && !pricedCards;
+	const waitingForPriceSort =
+		isPro &&
+		(isSealedMode ? sealedSortIsValue && !pricedSealed : cardSortIsValue && !pricedCards);
 
 	// Per-list skeletons: cold load, the push transition settling (so the
 	// heavy grid mounts after the slide-in, not during it), or the active
@@ -430,50 +446,38 @@ export default function SetDetail() {
 		[ownedOnly, ownedIdSet],
 	);
 
-	// One dataset per mounted list — each keyed to its OWN sort, so a mode
-	// toggle recomputes nothing (the hidden list's data is untouched).
+	// The catalog → Scrydex mapping allocates ~250 objects; hoisted so it runs
+	// once per catalog payload, not per filter keystroke or sort change.
+	const allCatalogCards = useMemo(
+		() => (catalogSet?.cards ?? []).map(catalogCardToScrydex),
+		[catalogSet],
+	);
+
+	// One dataset per mounted list — each keyed to its OWN sort and its own
+	// priced query, so a mode toggle recomputes NOTHING (no dep on the
+	// visible mode).
 	const cardItems = useMemo(() => {
-		// Map the local catalog cards and filter client-side (the whole set is
-		// already local).
-		const all = (catalogSet?.cards ?? []).map(catalogCardToScrydex);
 		const f = debouncedFilter.trim().toLowerCase();
 		const base = f
-			? all.filter(
+			? allCatalogCards.filter(
 					(c) =>
 						getCardDisplayName(c).toLowerCase().includes(f) ||
 						c.name.toLowerCase().includes(f) ||
 						getCardNumber(c).toLowerCase().includes(f),
 				)
-			: all;
+			: allCatalogCards;
 		return applyOwned(
-			sortSetItems(
-				base,
-				cardSort,
-				!isSealedMode ? pricedCards?.items : undefined,
-				"NM",
-			),
+			sortSetItems(base, cardSort, pricedCards?.items, "NM"),
 		);
-	}, [
-		catalogSet,
-		debouncedFilter,
-		cardSort,
-		isSealedMode,
-		pricedCards,
-		applyOwned,
-	]);
+	}, [allCatalogCards, debouncedFilter, cardSort, pricedCards, applyOwned]);
 
 	const sealedItems = useMemo(() => {
 		// Sealed items come pre-filtered from the API.
 		const base = sealedSet?.items ?? [];
 		return applyOwned(
-			sortSetItems(
-				base,
-				sealedSort,
-				isSealedMode ? pricedCards?.items : undefined,
-				"U",
-			),
+			sortSetItems(base, sealedSort, pricedSealed?.items, "U"),
 		);
-	}, [sealedSet, sealedSort, isSealedMode, pricedCards, applyOwned]);
+	}, [sealedSet, sealedSort, pricedSealed, applyOwned]);
 
 	const cards = isSealedMode ? sealedItems : cardItems;
 
@@ -697,10 +701,12 @@ export default function SetDetail() {
 				"number" in item
 					? (getConditionOptions(item, quickVariant)[0] ?? "NM")
 					: "NM";
-			// Animate in only on a card's first appearance; recycled cells get no
-			// `entering`, so scrolling back never replays the fade (the old jank).
-			const firstAppearance = !animatedIdsRef.current.has(item.id);
-			if (firstAppearance) animatedIdsRef.current.add(item.id);
+			// Animate in only on a card's first appearance PER GENERATION —
+			// recycled cells never replay the fade, while a sort/mode change
+			// (gen bump) makes every key fresh so the waterfall replays.
+			const guardKey = `${isSealedItem ? sealedGen : cardGen}-${item.id}`;
+			const firstAppearance = !animatedIdsRef.current.has(guardKey);
+			if (firstAppearance) animatedIdsRef.current.add(guardKey);
 			return (
 				<Animated.View
 					entering={
@@ -830,6 +836,8 @@ export default function SetDetail() {
 			name,
 			failedImages,
 			isValueSort,
+			cardGen,
+			sealedGen,
 			prefetchDetail,
 			showHint,
 			dismissHint,
@@ -921,22 +929,28 @@ export default function SetDetail() {
 									scrollEnabled={false}
 								/>
 							) : cardItems.length === 0 ? (
-								<View style={styles.emptyState}>
-									<SymbolView
-										name={
-											ownedOnly && !debouncedFilter
-												? "square.stack.3d.up.slash"
-												: "magnifyingglass"
-										}
-										size={44}
-										tintColor={t.text.tertiary}
-										weight="regular"
-									/>
-									<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
-										{ownedOnly && !debouncedFilter
-											? "No cards collected yet"
-											: "No matching cards"}
-									</Text>
+								// The header (mode picker + summary) must survive the
+								// empty state, or a no-match filter strands the user
+								// with no way to toggle modes.
+								<View style={[styles.grid, styles.emptyContainer, { paddingTop: topPadding }]}>
+									{summaryHeader}
+									<View style={styles.emptyState}>
+										<SymbolView
+											name={
+												ownedOnly && !debouncedFilter
+													? "square.stack.3d.up.slash"
+													: "magnifyingglass"
+											}
+											size={44}
+											tintColor={t.text.tertiary}
+											weight="regular"
+										/>
+										<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
+											{ownedOnly && !debouncedFilter
+												? "No cards collected yet"
+												: "No matching cards"}
+										</Text>
+									</View>
 								</View>
 							) : (
 								<FlatList
@@ -989,18 +1003,23 @@ export default function SetDetail() {
 										scrollEnabled={false}
 									/>
 								) : sealedItems.length === 0 ? (
-									<View style={styles.emptyState}>
-										<SymbolView
-											name="magnifyingglass"
-											size={44}
-											tintColor={t.text.tertiary}
-											weight="regular"
-										/>
-										<Text
-											style={[styles.emptyTitle, { color: t.text.primary }]}
-										>
-											No matching products
-										</Text>
+									// Header survives the empty state here too — losing the
+									// picker in sealed mode stranded the user entirely.
+									<View style={[styles.grid, styles.emptyContainer, { paddingTop: topPadding }]}>
+										{summaryHeader}
+										<View style={styles.emptyState}>
+											<SymbolView
+												name="magnifyingglass"
+												size={44}
+												tintColor={t.text.tertiary}
+												weight="regular"
+											/>
+											<Text
+												style={[styles.emptyTitle, { color: t.text.primary }]}
+											>
+												No matching products
+											</Text>
+										</View>
 									</View>
 								) : (
 									<FlatList
@@ -1178,6 +1197,11 @@ const styles = StyleSheet.create({
 	},
 	placeholderNumber: {
 		fontSize: 10,
+	},
+	// Wraps header + empty state so the mode picker stays reachable.
+	emptyContainer: {
+		flex: 1,
+		paddingBottom: 0,
 	},
 	emptyState: {
 		flex: 1,

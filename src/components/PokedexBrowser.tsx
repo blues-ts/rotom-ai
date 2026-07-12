@@ -3,14 +3,15 @@ import {
 	Dimensions,
 	FlatList,
 	Keyboard,
-	type NativeScrollEvent,
-	type NativeSyntheticEvent,
 	StyleSheet,
 	Text,
 	View,
 } from "react-native";
-import Animated from "react-native-reanimated";
+import Animated, {
+	type ScrollHandlerProcessed,
+} from "react-native-reanimated";
 import { Image } from "expo-image";
+import { SymbolView } from "expo-symbols";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -161,7 +162,9 @@ const DexTile = memo(function DexTile({
 	);
 });
 
-export default function PokedexBrowser({
+// memo: the search screen re-renders on every keystroke / chip flip / scroll
+// fade — this skips the whole browser pass when its props didn't change.
+const PokedexBrowser = memo(function PokedexBrowser({
 	topPadding,
 	filteringTopPadding,
 	language,
@@ -178,8 +181,8 @@ export default function PokedexBrowser({
 	language: "EN" | "JA";
 	/** Search-bar text — filters the dex by name/number, flat grid (no gens). */
 	filter: string;
-	/** Scroll events bubble up so the chip bar can fade on scroll. */
-	onScroll?: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
+	/** Animated scroll handler — the chip bar's fade runs on the UI thread. */
+	onScroll?: ScrollHandlerProcessed<Record<string, unknown>>;
 }) {
 	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
@@ -283,17 +286,25 @@ export default function PokedexBrowser({
 	// snap-back at the very bottom. Rows are uniform fixed-height, so
 	// self-measurement is exact and cheap (same as the sets grid).
 	return (
-		<FlatList
+		<Animated.FlatList
 			ref={listRef}
 			data={listData}
 			keyExtractor={(item) => item.key}
 			renderItem={renderItem}
 			onScroll={onScroll}
-			scrollEventThrottle={32}
+			scrollEventThrottle={16}
 			ListEmptyComponent={
-				<Text style={[styles.emptyText, { color: t.text.secondary }]}>
-					No Pokémon found
-				</Text>
+				<View style={styles.emptyState}>
+					<SymbolView
+						name="magnifyingglass"
+						size={44}
+						tintColor={t.text.tertiary}
+						weight="regular"
+					/>
+					<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
+						No Pokémon found
+					</Text>
+				</View>
 			}
 			contentContainerStyle={[
 				styles.grid,
@@ -304,6 +315,8 @@ export default function PokedexBrowser({
 					paddingTop: filtering ? filteringTopPadding : topPadding,
 					paddingBottom: insets.bottom + 90,
 				},
+				// Lets the empty state center itself vertically.
+				listData.length === 0 && { flexGrow: 1 },
 			]}
 			showsVerticalScrollIndicator={false}
 			keyboardDismissMode="on-drag"
@@ -318,7 +331,9 @@ export default function PokedexBrowser({
 			windowSize={5}
 		/>
 	);
-}
+});
+
+export default PokedexBrowser;
 
 const styles = StyleSheet.create({
 	grid: {
@@ -369,10 +384,17 @@ const styles = StyleSheet.create({
 		fontVariant: ["tabular-nums"],
 		marginTop: 1,
 	},
-	emptyText: {
-		textAlign: "center",
-		fontSize: 15,
-		fontWeight: "500",
-		marginTop: 60,
+	// Icon + centered title — the shared search-path empty-state language.
+	emptyState: {
+		flex: 1,
+		justifyContent: "center",
+		alignItems: "center",
+		paddingHorizontal: 32,
+		gap: 10,
+	},
+	emptyTitle: {
+		fontSize: 20,
+		fontWeight: "700",
+		marginTop: 8,
 	},
 });
