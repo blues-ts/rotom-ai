@@ -39,10 +39,6 @@ import ErrorState from "@/components/ErrorState";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { formatCurrency } from "@/lib/format";
-import {
-	HAS_BOTTOM_SEARCH_BAR,
-	HEADER_SEARCH_BAR_HEIGHT,
-} from "@/lib/platform";
 import FloatingSearchBar from "@/components/FloatingSearchBar";
 import { CONDITION_LABELS, formatVariantLabel } from "@/lib/scrydex";
 import type { CollectionCard } from "@/types/collection";
@@ -143,10 +139,9 @@ export default function CollectionDetail() {
 	const prefetchDetail = usePrefetchDetail();
 	// Explicit header offset: contentInsetAdjustmentBehavior applies its inset
 	// a frame after mount, which made the summary jump down on remounts.
-	// Pre-26 iOS puts the search bar under the header (no bottom slot), so the
-	// content clears that extra strip too.
-	const headerHeight =
-		52 + (HAS_BOTTOM_SEARCH_BAR ? 0 : HEADER_SEARCH_BAR_HEIGHT);
+	// Same on every iOS version — the search field is the FloatingSearchBar,
+	// so no header-attached strip to clear anymore.
+	const headerHeight = 52;
 	const topPadding = insets.top + headerHeight;
 	const { renameCollection, deleteCollection, removeCardRows } =
 		useCollections();

@@ -3,6 +3,7 @@ import { Redirect, router, Stack } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "expo-symbols";
 import { useRiverTheme } from "@/constants/theme";
+import { legacyHeaderBlur } from "@/lib/platform";
 import { useAuth } from "@clerk/clerk-expo";
 
 export default function SealedLayout() {
@@ -21,6 +22,7 @@ export default function SealedLayout() {
 				headerShadowVisible: false,
 				headerTransparent: true,
 				headerStyle: { backgroundColor: "transparent" },
+				...legacyHeaderBlur(t.isDark),
 				// Native chrome tinted with the accent per the design system.
 				headerTintColor: t.accentOn,
 				contentStyle: { backgroundColor: "transparent" },

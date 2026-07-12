@@ -30,7 +30,6 @@ import * as Haptics from "expo-haptics";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacing, useRiverTheme } from "@/constants/theme";
-import { HAS_BOTTOM_SEARCH_BAR } from "@/lib/platform";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { useApi } from "@/lib/axios";
@@ -105,10 +104,6 @@ const SKELETON_DATA = Array.from({ length: 15 }, (_, i) => ({
 const COLUMNS = 3;
 const GAP = 8;
 const PADDING = 12;
-// Pre-26 iOS has no bottom search slot: the nav bar + pinned header search
-// bar occupy ~96pt below the safe area, so content starts below that instead
-// of the compact iOS 26 offsets.
-const LEGACY_TOP_GRID = 108; // 96 header+search, plus the grid gap
 // The visible chip bar (browse/language or search-scope toggles) sits between
 // the header and the content; grids pad down past it. The chips themselves
 // are ~36pt tall — this is intentionally snug (the first era/generation
@@ -777,8 +772,9 @@ export default function Search() {
 	// Static: the floating X/camera row persists through search (that's the
 	// point of it), so the header collapse no longer frees the space the bar
 	// used to glide into.
-	const chipBarTop =
-		insets.top + (HAS_BOTTOM_SEARCH_BAR ? 54 : LEGACY_TOP_GRID - 40);
+	// Same offset on every iOS version — the search field is the
+	// FloatingSearchBar, so there's no header-attached bar to clear.
+	const chipBarTop = insets.top + 54;
 
 	// Safari-style: the chip bar fades out on scroll-down and returns on any
 	// scroll-up (or near the top), so switching modes is one flick away. The
@@ -821,8 +817,7 @@ export default function Search() {
 	}));
 	// One offset for every state now — with the button row persistent, search
 	// results sit exactly where the browse grids do.
-	const gridTop =
-		insets.top + (HAS_BOTTOM_SEARCH_BAR ? 56 : LEGACY_TOP_GRID) + CHIP_BAR_H;
+	const gridTop = insets.top + 56 + CHIP_BAR_H;
 	// Results have no section header — add the same 16pt the sets grid's
 	// first era header carries, so both start the same distance below the
 	// chip bar.

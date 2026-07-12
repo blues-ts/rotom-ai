@@ -1,5 +1,6 @@
 import { Pressable } from "react-native";
 import { palette, useRiverTheme } from "@/constants/theme";
+import { legacyHeaderBlur } from "@/lib/platform";
 import { useAuth } from "@clerk/clerk-expo";
 import { Redirect, router, Stack } from "expo-router";
 import { SymbolView } from "expo-symbols";
@@ -21,6 +22,8 @@ export default function CameraLayout() {
 				headerShadowVisible: false,
 				headerTransparent: true,
 				headerStyle: { backgroundColor: "transparent" },
+				// Always the dark material — the scanner stays dark in light mode.
+				...legacyHeaderBlur(true),
 				headerTintColor: t.accentOn,
 				headerTitle: "",
 				contentStyle: { backgroundColor: "transparent" },

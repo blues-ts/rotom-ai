@@ -40,6 +40,7 @@ import EmptyChat from "@/components/EmptyChat";
 import { useRiverTheme } from "@/constants/theme";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { useChat } from "@/hooks/useChat";
+import { IOS_MAJOR_VERSION } from "@/lib/platform";
 import {
 	paywallResultUnlocked,
 	presentProPaywallIfNeeded,
@@ -49,6 +50,16 @@ import { warmScanner } from "@/lib/scannerWarmup";
 export default function Home() {
 	const t = useRiverTheme();
 	const { top, bottom } = useSafeAreaInsets();
+	// glassEffect is a no-op below iOS 26, which left these buttons as bare
+	// icons over the chat — paint the circle/capsule there instead. sheetFill
+	// (near-opaque), not elevatedFill: without real blur behind it, a thin
+	// glass tint leaves chat text readable through the buttons.
+	const legacyGlass = IOS_MAJOR_VERSION < 26 && {
+		backgroundColor: t.glass.sheetFill,
+		borderWidth: 1,
+		borderColor: t.glass.elevatedBorder,
+		borderRadius: 22,
+	};
 	// No nav bar — the floating glass buttons form the top chrome row, starting
 	// just under the status bar.
 	const chromeTop = top + 8;
@@ -299,7 +310,7 @@ export default function Home() {
 				style={[styles.newChatButton, { top: chromeTop }]}
 				pointerEvents="box-none"
 			>
-				<Host style={styles.newChatHost}>
+				<Host style={[styles.newChatHost, legacyGlass]}>
 					<Button onPress={handleNewChat} modifiers={[buttonStyle("plain")]}>
 						<UIImage
 							systemName="square.and.pencil"
@@ -320,7 +331,7 @@ export default function Home() {
 				style={[styles.navColumn, { top: chromeTop }]}
 				pointerEvents="box-none"
 			>
-				<Host style={styles.navColumnHost}>
+				<Host style={[styles.navColumnHost, legacyGlass]}>
 					{/* One capsule of glass around the whole stack (Maps-style
 					    grouped controls) — the buttons inside are plain. */}
 					<VStack

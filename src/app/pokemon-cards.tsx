@@ -26,10 +26,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { spacing, useRiverTheme } from "@/constants/theme";
 import { useApi } from "@/lib/axios";
-import {
-	HAS_BOTTOM_SEARCH_BAR,
-	HEADER_SEARCH_BAR_HEIGHT,
-} from "@/lib/platform";
 import FloatingSearchBar from "@/components/FloatingSearchBar";
 import { cardWaterfall } from "@/lib/waterfall";
 import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
@@ -170,10 +166,9 @@ export default function PokemonCards() {
 	// "Collected" view: same screen, grid filtered to cards the user owns.
 	const ownedOnly = owned === "1";
 
-	// Same explicit header offset as set-detail: pre-26 iOS puts the search
-	// bar under the header, so clear that extra strip too.
-	const topPadding =
-		insets.top + 20 + (HAS_BOTTOM_SEARCH_BAR ? 0 : HEADER_SEARCH_BAR_HEIGHT);
+	// Same explicit header offset as set-detail (the FloatingSearchBar means
+	// no header-attached strip to clear on any iOS version).
+	const topPadding = insets.top + 20;
 
 	useEffect(() => {
 		const timer = setTimeout(() => {

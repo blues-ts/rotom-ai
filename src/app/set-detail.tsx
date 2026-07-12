@@ -28,10 +28,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacing, useRiverTheme } from "@/constants/theme";
 import { useApi } from "@/lib/axios";
-import {
-	HAS_BOTTOM_SEARCH_BAR,
-	HEADER_SEARCH_BAR_HEIGHT,
-} from "@/lib/platform";
 import FloatingSearchBar from "@/components/FloatingSearchBar";
 import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
 import { useOwnedCardIds } from "@/hooks/useOwnedCardIds";
@@ -206,10 +202,9 @@ export default function SetDetail() {
 	const prefetchDetail = usePrefetchDetail();
 	// Explicit header offset: contentInsetAdjustmentBehavior applies its inset
 	// a frame after mount, which made the summary jump down on every list
-	// remount (initial load, sort changes). Pre-26 iOS puts the search bar
-	// under the header (no bottom slot), so clear that extra strip too.
-	const topPadding =
-		insets.top + 20 + (HAS_BOTTOM_SEARCH_BAR ? 0 : HEADER_SEARCH_BAR_HEIGHT);
+	// remount (initial load, sort changes). Same on every iOS version — the
+	// search field is the FloatingSearchBar, no header-attached strip to clear.
+	const topPadding = insets.top + 20;
 	const [filterQuery, setFilterQuery] = useState("");
 	const [debouncedFilter, setDebouncedFilter] = useState("");
 	// DUAL-MOUNTED lists: cards and sealed each keep their own FlatList,
