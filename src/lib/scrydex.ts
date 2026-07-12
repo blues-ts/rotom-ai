@@ -161,6 +161,44 @@ export function buildSetCardsQ(expansionId: string, filter: string): string {
 }
 
 /**
+ * Cards for one Pokémon (the Pokédex browse). The dex name is a quoted phrase
+ * on the printed name — `name:"mr mime"` keyword matching — with the usual
+ * online-only exclusion and optional language filter.
+ */
+export function buildPokemonCardsQ(
+  name: string,
+  language?: "en" | "ja",
+): string {
+  // Dex names use the typographic apostrophe (Farfetch’d); cards print '.
+  const clean = name.replace(/’/g, "'");
+  const clauses = [`name:"${clean}"`];
+  if (language) clauses.push(`language_code:${language}`);
+  clauses.push(ONLINE_ONLY_EXCLUSION);
+  return clauses.join(" ");
+}
+
+/**
+ * Fieldless fallback when the name query finds nothing — `name:` only matches
+ * printed names, so this is what surfaces Japanese prints (リザードン) via
+ * their English translation. Terms stay unquoted (quoted fieldless phrases
+ * are unsupported) and punctuation is dropped.
+ */
+export function buildPokemonCardsFallbackQ(
+  name: string,
+  language?: "en" | "ja",
+): string {
+  const terms = name
+    .replace(/[’'".:]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!terms) return "";
+  const clauses = [terms];
+  if (language) clauses.push(`language_code:${language}`);
+  clauses.push(ONLINE_ONLY_EXCLUSION);
+  return clauses.join(" ");
+}
+
+/**
  * Fieldless fallback for when the structured prefix query finds nothing.
  * Fieldless terms match English translations of Japanese cards (`name:` only
  * matches printed names), so "mew" can still surface ミュウ prints. Terms

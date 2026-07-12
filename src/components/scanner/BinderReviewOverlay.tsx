@@ -23,8 +23,10 @@ import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { darkTheme, palette, radius, typeScale } from "@/constants/theme";
-import { useApi } from "@/lib/axios";
-import { getCatalogCard } from "@/lib/api/catalog";
+import {
+	scanPriceLabel,
+	useScanPrices,
+} from "@/components/scanner/useScanPrices";
 import type { CardDetection } from "@/lib/binderScan";
 import { binderRegion } from "@/components/scanner/BinderFrameOverlay";
 
@@ -69,7 +71,6 @@ export default function BinderReviewOverlay({
 	onConfirm: (picked: Picked[]) => void;
 	onRetake: () => void;
 }) {
-	const api = useApi();
 	const insets = useSafeAreaInsets();
 	const trayRef = useRef<ScrollView>(null);
 
@@ -78,27 +79,10 @@ export default function BinderReviewOverlay({
 	const [excluded, setExcluded] = useState<Set<number>>(
 		() => new Set(detections.flatMap((d, i) => (d.confident ? [] : [i]))),
 	);
-	const [names, setNames] = useState<Record<string, string>>({});
 
-	// Resolve display names; thumbnails render immediately from the image CDN.
-	useEffect(() => {
-		let cancelled = false;
-		const ids = [...new Set(detections.map((d) => d.id))];
-		Promise.allSettled(ids.map((id) => getCatalogCard(api, id))).then(
-			(settled) => {
-				if (cancelled) return;
-				const next: Record<string, string> = {};
-				settled.forEach((s, i) => {
-					if (s.status === "fulfilled")
-						next[ids[i]] = s.value.nameEn ?? s.value.name;
-				});
-				setNames(next);
-			},
-		);
-		return () => {
-			cancelled = true;
-		};
-	}, [api, detections]);
+	// Ballpark prices under each match; thumbnails render immediately from the
+	// image CDN while these resolve.
+	const prices = useScanPrices(detections);
 
 	// ── Photo geometry: settle from the capture position into an inset card
 	// above the tray. Same aspect, so one uniform scale + translate.
@@ -173,8 +157,6 @@ export default function BinderReviewOverlay({
 	}, [detections]);
 
 	const included = detections.filter((_, i) => !excluded.has(i));
-	const includedIds = included.map((d) => d.id);
-	const hasDuplicates = new Set(includedIds).size < includedIds.length;
 	const hasGuesses = detections.some((d) => !d.confident);
 
 	const toggle = (index: number) => {
@@ -305,16 +287,11 @@ export default function BinderReviewOverlay({
 								style={styles.trayCard}
 								onPress={() => toggle(index)}
 							>
-								<View
-									style={[
-										styles.thumbFrame,
-										on && { borderColor: accent },
-									]}
-								>
+								<View style={styles.thumbFrame}>
 									<Image
 										source={{ uri: cardImageUrl(d.id) }}
 										style={[styles.thumb, !on && styles.thumbOff]}
-										contentFit="cover"
+										contentFit="contain"
 									/>
 									<View
 										style={[
@@ -335,20 +312,14 @@ export default function BinderReviewOverlay({
 										<Text style={styles.thumbNumberText}>{index + 1}</Text>
 									</View>
 								</View>
-								<Text style={styles.trayName} numberOfLines={1}>
-									{names[d.id] ?? "…"}
-								</Text>
-								<Text style={styles.trayCollector} numberOfLines={1}>
-									#{d.id.slice(d.id.lastIndexOf("-") + 1)}
+								<Text style={styles.trayPrice} numberOfLines={1}>
+									{scanPriceLabel(prices[d.id])}
 								</Text>
 							</Pressable>
 						);
 					})}
 				</ScrollView>
 
-				{hasDuplicates && (
-					<Text style={styles.dupeNote}>Duplicates are added once</Text>
-				)}
 				<View style={styles.footerButtons}>
 					<Pressable
 						style={styles.retakeButton}
@@ -488,14 +459,11 @@ const styles = StyleSheet.create({
 	trayCard: {
 		width: TRAY_CARD_W,
 	},
+	// No container radius/clip — like the card detail screen, the artwork's own
+	// printed corners do the rounding (Scrydex images carry them).
 	thumbFrame: {
 		width: TRAY_CARD_W,
 		height: TRAY_CARD_W / (2.5 / 3.5), // real card aspect — never squashed
-		borderRadius: radius.thumb + 2,
-		borderWidth: 2,
-		borderColor: "transparent",
-		overflow: "hidden",
-		backgroundColor: "rgba(210, 235, 255, 0.06)",
 	},
 	thumb: {
 		flex: 1,
@@ -535,24 +503,13 @@ const styles = StyleSheet.create({
 		fontSize: 10,
 		fontWeight: "700",
 	},
-	trayName: {
+	trayPrice: {
 		color: t.text.body,
-		fontSize: 12,
+		fontSize: 15,
 		fontWeight: "600",
-		marginTop: 6,
-	},
-	trayCollector: {
-		color: t.text.tertiary,
-		fontSize: 10,
-		fontWeight: "500",
 		fontVariant: ["tabular-nums"],
-		marginTop: 1,
-	},
-	dupeNote: {
-		...typeScale.caption,
 		textAlign: "center",
-		color: t.text.tertiary,
-		paddingTop: 8,
+		marginTop: 6,
 	},
 	footerButtons: {
 		flexDirection: "row",

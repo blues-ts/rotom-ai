@@ -10,6 +10,7 @@ import {
 	View,
 } from "react-native";
 import Animated, {
+	FadeIn,
 	useAnimatedStyle,
 	useSharedValue,
 	withRepeat,
@@ -21,6 +22,7 @@ import { SymbolView } from "expo-symbols";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import { router, Stack, useLocalSearchParams } from "expo-router";
+import SegmentedChips from "@/components/SegmentedChips";
 import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,9 +31,8 @@ import { useApi } from "@/lib/axios";
 import {
 	HAS_BOTTOM_SEARCH_BAR,
 	HEADER_SEARCH_BAR_HEIGHT,
-	legacySearchBarStyle,
 } from "@/lib/platform";
-import { LegacyToolbarMenu } from "@/components/LegacyToolbarMenu";
+import FloatingSearchBar from "@/components/FloatingSearchBar";
 import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
 import { useOwnedCardIds } from "@/hooks/useOwnedCardIds";
 import { searchCards, searchSealed } from "@/lib/api/pricing";
@@ -120,6 +121,41 @@ function bestMarketPrice(
 		: { value: bestOther, variant: bestOtherVariant };
 }
 
+/**
+ * Order one mode's items. Value sorts rank the PRICED dataset — unpriced
+ * items sink to the end in BOTH directions (reversing them to the top made
+ * "low to high" lead with a wall of unpriced cards); while prices load the
+ * caller shows a skeleton, so the base-order fallback only ever renders for
+ * non-pro users. Number order is the API's natural ascending order.
+ */
+function sortSetItems(
+	base: SetItem[],
+	sort: SortOption,
+	priced: SetItem[] | undefined,
+	condition: "NM" | "U",
+): SetItem[] {
+	if (sort === "valueDesc" || sort === "valueAsc") {
+		if (!priced) return base;
+		const keyed = priced.map((item) => ({
+			item,
+			key: bestMarketPrice(item, condition).value,
+		}));
+		const withPrice = keyed.filter((k) => k.key > 0);
+		const unpriced = keyed.filter((k) => k.key === 0);
+		withPrice.sort((a, b) => b.key - a.key);
+		if (sort === "valueAsc") withPrice.reverse();
+		return [...withPrice, ...unpriced].map((k) => k.item);
+	}
+	if (sort === "nameAsc") {
+		return base.slice().sort((a, b) => {
+			const nameA = "number" in a ? getCardDisplayName(a) : a.name;
+			const nameB = "number" in b ? getCardDisplayName(b) : b.name;
+			return nameA.localeCompare(nameB);
+		});
+	}
+	return sort === "numberDesc" ? base.slice().reverse() : base;
+}
+
 function SkeletonCard({ color }: { color: string }) {
 	const opacity = useSharedValue(0.3);
 
@@ -155,7 +191,12 @@ export default function SetDetail() {
 			logo?: string;
 			owned?: string;
 		}>();
-	const isSealedMode = mode === "sealed";
+	// Cards ⇄ Sealed is a toggle ON the screen (segmented control in the
+	// header) — the route param only seeds the initial mode.
+	const [productMode, setProductMode] = useState<"cards" | "sealed">(
+		mode === "sealed" ? "sealed" : "cards",
+	);
+	const isSealedMode = productMode === "sealed";
 	// "Collected" view: same screen, grid filtered to cards the user owns.
 	const ownedOnly = owned === "1" && !isSealedMode;
 	const t = useRiverTheme();
@@ -171,21 +212,80 @@ export default function SetDetail() {
 		insets.top + 20 + (HAS_BOTTOM_SEARCH_BAR ? 0 : HEADER_SEARCH_BAR_HEIGHT);
 	const [filterQuery, setFilterQuery] = useState("");
 	const [debouncedFilter, setDebouncedFilter] = useState("");
-	const [sortBy, setSortBy] = useState<SortOption>(
-		isSealedMode ? "nameAsc" : "number",
-	);
+	// DUAL-MOUNTED lists: cards and sealed each keep their own FlatList,
+	// sort, and scroll position; the mode toggle is just a visibility flip.
+	// Rebuilding the cards grid on every toggle (native context-menu host per
+	// cell) is what made Sealed → Cards slow. Each mode's sort persists.
+	const [cardSort, setCardSort] = useState<SortOption>("number");
+	const [sealedSort, setSealedSort] = useState<SortOption>("nameAsc");
+	const sortBy = isSealedMode ? sealedSort : cardSort;
+	// The sealed list mounts (and its query fires) on first visit only.
+	const [sealedVisited, setSealedVisited] = useState(isSealedMode);
+	// Bumped when a mode becomes visible: remounts THAT list so its tiles
+	// waterfall in on every toggle (the Sets ⇄ Pokédex feel) — the hidden
+	// list is never remounted.
+	const [cardGen, setCardGen] = useState(0);
+	const [sealedGen, setSealedGen] = useState(0);
 	const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
 	// Tracks cards that have already played their entrance animation. FlatList
 	// recycles cells (unmount/remount) constantly while scrolling, and an
 	// `entering` animation re-fires on every mount — so without this guard the
 	// fade-in would replay on every scroll-back and jank the list. We let each
-	// card animate exactly once, on its genuine first appearance. Cleared when
-	// the dataset changes (sort/filter) so a fresh list animates in again.
+	// card animate exactly once per LIST GENERATION: the guard is cleared when
+	// the filter changes and on Cards ⇄ Sealed toggles (the mode handler also
+	// bumps that list's generation key), so each arrival waterfalls in fresh.
 	const animatedIdsRef = useRef<Set<string>>(new Set());
+
+	// (SegmentedChips fires the tap haptic itself.)
+	const cardListRef = useRef<FlatList<SetItem>>(null);
+	const sealedListRef = useRef<FlatList<SetItem>>(null);
+	const handleProductModeChange = useCallback(
+		(m: "cards" | "sealed") => {
+			// Sealed pricing is a Pro feature (no free catalog data for it).
+			if (m === "sealed" && !isPro) {
+				void presentProPaywallIfNeeded();
+				return;
+			}
+			if (m === "sealed") setSealedVisited(true);
+			setProductMode(m);
+			// Replay the waterfall for the incoming mode: clear the entrance
+			// guard and remount that list via its generation key.
+			animatedIdsRef.current = new Set();
+			if (m === "sealed") setSealedGen((g) => g + 1);
+			else setCardGen((g) => g + 1);
+		},
+		[isPro],
+	);
+
+	const handleSortChange = useCallback(
+		(o: SortOption) => {
+			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+			// Value sorts need prices — a Pro feature.
+			if ((o === "valueDesc" || o === "valueAsc") && !isPro) {
+				void presentProPaywallIfNeeded();
+				return;
+			}
+			if (isSealedMode) setSealedSort(o);
+			else setCardSort(o);
+		},
+		[isPro, isSealedMode],
+	);
+
+	// The lists are never remounted — a sort change reorders in place, and
+	// this snaps that list back to the top so the new order is seen from its
+	// beginning. (Mode toggles keep each list's scroll position.)
+	useEffect(() => {
+		cardListRef.current?.scrollToOffset({ offset: 0, animated: false });
+	}, [cardSort]);
+	useEffect(() => {
+		sealedListRef.current?.scrollToOffset({ offset: 0, animated: false });
+	}, [sealedSort]);
+
+	// A filter change is a genuinely new result set — waterfall it in fresh.
 	useEffect(() => {
 		animatedIdsRef.current = new Set();
-	}, [sortBy, debouncedFilter, isSealedMode]);
+	}, [debouncedFilter]);
 
 	// Defer the heavy card grid (animated image cells) until the navigation
 	// transition finishes, so pushing this screen is instant instead of waiting
@@ -208,14 +308,18 @@ export default function SetDetail() {
 	const isValueSort = sortBy === "valueDesc" || sortBy === "valueAsc";
 
 	// Whole-set fetch, paginated *concurrently* so wall-clock load is ~2 round
-	// trips regardless of set size. Prices are optional (see below).
+	// trips regardless of set size. Prices are optional (see below). The kind
+	// is an explicit parameter — both queries can be live at once now (dual
+	// mounted lists), so closing over the active mode would let a background
+	// refetch fill the sealed cache with card data.
 	const fetchWholeSet = useCallback(
 		async (
 			includePrices: boolean,
+			kind: "cards" | "sealed",
 		): Promise<{ items: SetItem[]; totalCount: number }> => {
 			const q = buildSetCardsQ(id, debouncedFilter);
-			const search = isSealedMode ? searchSealed : searchCards;
-			const orderBy = isSealedMode ? undefined : "number";
+			const search = kind === "sealed" ? searchSealed : searchCards;
+			const orderBy = kind === "sealed" ? undefined : "number";
 			const first = await search(api, {
 				q,
 				pageSize: 100,
@@ -242,7 +346,7 @@ export default function SetDetail() {
 			}
 			return { items, totalCount: first.total_count };
 		},
-		[api, id, isSealedMode, debouncedFilter],
+		[api, id, debouncedFilter],
 	);
 
 	// Card list comes from the LOCAL catalog — no Scrydex call. It's the same
@@ -257,7 +361,8 @@ export default function SetDetail() {
 	} = useQuery({
 		queryKey: ["catalog-set", id],
 		queryFn: () => getCatalogSet(api, id),
-		enabled: !!id && !isSealedMode,
+		// Always on: the cards list stays mounted even while sealed is shown.
+		enabled: !!id,
 		staleTime: 24 * 60 * 60 * 1000,
 	});
 
@@ -269,12 +374,13 @@ export default function SetDetail() {
 		refetch: refetchSealed,
 	} = useQuery({
 		queryKey: ["setSealed", id, debouncedFilter],
-		queryFn: () => fetchWholeSet(false),
-		enabled: !!id && isSealedMode,
+		queryFn: () => fetchWholeSet(false, "sealed"),
+		// Lazily enabled on the first Sealed visit, then stays live so the
+		// mounted-but-hidden list keeps its data.
+		enabled: !!id && sealedVisited,
 		staleTime: 5 * 60 * 1000,
 	});
 
-	const isLoading = isSealedMode ? sealedLoading : catalogLoading;
 	const isError = isSealedMode ? sealedError : catalogError;
 	const refetch = isSealedMode ? refetchSealed : refetchCatalog;
 
@@ -282,7 +388,7 @@ export default function SetDetail() {
 	// pricing path the first time the user picks a value sort, then cached.
 	const { data: pricedCards } = useQuery({
 		queryKey: ["setCardsPriced", id, isSealedMode, debouncedFilter],
-		queryFn: () => fetchWholeSet(true),
+		queryFn: () => fetchWholeSet(true, isSealedMode ? "sealed" : "cards"),
 		enabled: !!id && isValueSort && isPro,
 		staleTime: 5 * 60 * 1000,
 	});
@@ -292,12 +398,13 @@ export default function SetDetail() {
 	// prices (staleTime) make this instant on repeat selections.
 	const waitingForPriceSort = isValueSort && isPro && !pricedCards;
 
-	// Skeleton during a cold load OR until the push transition settles (so the
-	// heavy grid mounts after the slide-in, not during it), OR while a value
-	// sort waits on its pricing fetch.
-	const showSkeleton = isLoading || !transitionDone || waitingForPriceSort;
-
-	const sortCondition = isSealedMode ? "U" : "NM";
+	// Per-list skeletons: cold load, the push transition settling (so the
+	// heavy grid mounts after the slide-in, not during it), or the active
+	// mode's value sort waiting on its pricing fetch.
+	const showCardsSkeleton =
+		catalogLoading || !transitionDone || (!isSealedMode && waitingForPriceSort);
+	const showSealedSkeleton =
+		sealedLoading || !transitionDone || (isSealedMode && waitingForPriceSort);
 
 	// Set completion: distinct owned card ids (all collections) intersected
 	// with this set's catalog cards. Denominator is the catalog card count so
@@ -314,74 +421,61 @@ export default function SetDetail() {
 	);
 	const setSize = catalogSet?.cards.length ?? 0;
 
-	const cards = useMemo(() => {
-		// Collected view keeps every sort/filter path; ownership is applied as
-		// the final step so the value-sort branch (separate priced dataset) is
-		// covered too.
-		const applyOwned = (items: SetItem[]) =>
-			ownedOnly ? items.filter((c) => ownedIdSet.has(c.id)) : items;
-		// Card mode: map the local catalog cards and filter client-side (the whole
-		// set is already local). Sealed mode: items come pre-filtered from the API.
-		let base: SetItem[];
-		if (isSealedMode) {
-			base = sealedSet?.items ?? [];
-		} else {
-			const all = (catalogSet?.cards ?? []).map(catalogCardToScrydex);
-			const f = debouncedFilter.trim().toLowerCase();
-			base = f
-				? all.filter(
-						(c) =>
-							getCardDisplayName(c).toLowerCase().includes(f) ||
-							c.name.toLowerCase().includes(f) ||
-							getCardNumber(c).toLowerCase().includes(f),
-					)
-				: all;
-		}
+	// Collected view keeps every sort/filter path; ownership is applied as
+	// the final step so the value-sort branch (separate priced dataset) is
+	// covered too.
+	const applyOwned = useCallback(
+		(items: SetItem[]) =>
+			ownedOnly ? items.filter((c) => ownedIdSet.has(c.id)) : items,
+		[ownedOnly, ownedIdSet],
+	);
 
-		if (isValueSort) {
-			// While prices load the skeleton is shown (see `waitingForPriceSort`),
-			// so this number-order fallback only ever renders for non-pro users.
-			const priced = pricedCards?.items;
-			if (!priced) return applyOwned(base);
-			// Keys computed once (not in the comparator), and UNPRICED cards
-			// always sink to the end in BOTH directions, keeping their number
-			// order there. Reversing them to the top made "low to high" lead
-			// with a wall of unpriced cards — and when a payload arrives with
-			// prices missing entirely (transient upstream gaps), a degenerate
-			// all-zero sort no longer masquerades as a ranking.
-			const keyed = priced.map((item) => ({
-				item,
-				key: bestMarketPrice(item, sortCondition).value,
-			}));
-			const withPrice = keyed.filter((k) => k.key > 0);
-			const unpriced = keyed.filter((k) => k.key === 0);
-			withPrice.sort((a, b) => b.key - a.key);
-			if (sortBy === "valueAsc") withPrice.reverse();
-			return applyOwned([...withPrice, ...unpriced].map((k) => k.item));
-		}
-		if (sortBy === "nameAsc") {
-			return applyOwned(
-				base.slice().sort((a, b) => {
-					const nameA = "number" in a ? getCardDisplayName(a) : a.name;
-					const nameB = "number" in b ? getCardDisplayName(b) : b.name;
-					return nameA.localeCompare(nameB);
-				}),
-			);
-		}
-		// Catalog/API already return ascending number order; reverse for descending.
-		return applyOwned(sortBy === "numberDesc" ? base.slice().reverse() : base);
+	// One dataset per mounted list — each keyed to its OWN sort, so a mode
+	// toggle recomputes nothing (the hidden list's data is untouched).
+	const cardItems = useMemo(() => {
+		// Map the local catalog cards and filter client-side (the whole set is
+		// already local).
+		const all = (catalogSet?.cards ?? []).map(catalogCardToScrydex);
+		const f = debouncedFilter.trim().toLowerCase();
+		const base = f
+			? all.filter(
+					(c) =>
+						getCardDisplayName(c).toLowerCase().includes(f) ||
+						c.name.toLowerCase().includes(f) ||
+						getCardNumber(c).toLowerCase().includes(f),
+				)
+			: all;
+		return applyOwned(
+			sortSetItems(
+				base,
+				cardSort,
+				!isSealedMode ? pricedCards?.items : undefined,
+				"NM",
+			),
+		);
 	}, [
-		isSealedMode,
-		sealedSet,
 		catalogSet,
 		debouncedFilter,
+		cardSort,
+		isSealedMode,
 		pricedCards,
-		isValueSort,
-		sortBy,
-		sortCondition,
-		ownedOnly,
-		ownedIdSet,
+		applyOwned,
 	]);
+
+	const sealedItems = useMemo(() => {
+		// Sealed items come pre-filtered from the API.
+		const base = sealedSet?.items ?? [];
+		return applyOwned(
+			sortSetItems(
+				base,
+				sealedSort,
+				isSealedMode ? pricedCards?.items : undefined,
+				"U",
+			),
+		);
+	}, [sealedSet, sealedSort, isSealedMode, pricedCards, applyOwned]);
+
+	const cards = isSealedMode ? sealedItems : cardItems;
 
 	// The expansion's `total` is its card count; in sealed mode the product
 	// count comes from the first unfiltered response instead.
@@ -410,10 +504,30 @@ export default function SetDetail() {
 	// + attached search bar) position it correctly instead of hiding it.
 	const summaryHeader = (
 		<>
+			{/* Cards ⇄ Sealed — moved here from the search page's old filter
+			    menu: "show this set's sealed products" is a decision that
+			    belongs on the set. Our own segmented chips (not SwiftUI glass,
+			    which iOS hides while a search bar is active). Hidden in the
+			    Collected view, which is cards-only. */}
+			{!ownedOnly && (
+				<View style={styles.modePickerWrap}>
+					<SegmentedChips
+						options={[
+							{ value: "cards", label: "Cards" },
+							{ value: "sealed", label: "Sealed" },
+						]}
+						value={productMode}
+						onChange={handleProductModeChange}
+					/>
+				</View>
+			)}
 			{/* Card mode replaces this info bar with the completion card below
-			    (which carries the logo); only sealed mode still shows it. */}
+			    (which carries the logo); only sealed mode still shows it. The
+			    entrance fade covers the Cards ⇄ Sealed remount, so the header
+			    arrives with the grid's waterfall instead of hard-cutting. */}
 			{isSealedMode && (
-				<View
+				<Animated.View
+					entering={FadeIn.duration(250)}
 					style={[
 						styles.summaryRow,
 						{
@@ -448,9 +562,10 @@ export default function SetDetail() {
 							{countValue}
 						</Text>
 					</View>
-				</View>
+				</Animated.View>
 			)}
 			{showCompletion && (
+				<Animated.View entering={FadeIn.duration(250)}>
 				<Pressable
 					disabled={ownedOnly}
 					onPress={() => {
@@ -548,6 +663,7 @@ export default function SetDetail() {
 						/>
 					</View>
 				</Pressable>
+				</Animated.View>
 			)}
 		</>
 	);
@@ -559,14 +675,16 @@ export default function SetDetail() {
 
 	const renderItem = useCallback(
 		({ item, index }: { item: SetItem; index: number }) => {
+			// Item-derived, not mode-derived: both lists stay mounted, so the
+			// hidden one renders with a stale mode flag otherwise.
+			const isSealedItem = !("number" in item);
 			const image = getCardImage(item, undefined, "small") ?? "";
-			const cardNumber = "number" in item ? getCardNumber(item) : "";
-			const displayName =
-				"number" in item ? getCardDisplayName(item) : item.name;
+			const cardNumber = isSealedItem ? "" : getCardNumber(item);
+			const displayName = isSealedItem ? item.name : getCardDisplayName(item);
 			const showPlaceholder = !image || failedImages.has(item.id);
 			// In value mode, open the item on the variant that drove its sort
 			// position so the hero price matches the ranking.
-			const priceInfo = bestMarketPrice(item, sortCondition);
+			const priceInfo = bestMarketPrice(item, isSealedItem ? "U" : "NM");
 			const bestVariant = isValueSort ? priceInfo.variant : undefined;
 
 			// Quick-add must store a REAL variant/condition (what the card-detail
@@ -599,16 +717,16 @@ export default function SetDetail() {
 							setName: name,
 							cardImageUrl: image || undefined,
 							cardValue: priceInfo.value,
-							productType: isSealedMode ? "sealed" : "card",
+							productType: isSealedItem ? "sealed" : "card",
 							variant: quickVariant,
 							condition: quickCondition,
 						}}
 						onPress={() => {
 							Keyboard.dismiss();
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-							prefetchDetail(isSealedMode ? "sealed" : "card", item.id);
+							prefetchDetail(isSealedItem ? "sealed" : "card", item.id);
 							router.push({
-								pathname: isSealedMode ? "/(sealed)/[id]" : "/(card)/[id]",
+								pathname: isSealedItem ? "/(sealed)/[id]" : "/(card)/[id]",
 								params: {
 									id: item.id,
 									name: displayName,
@@ -629,7 +747,7 @@ export default function SetDetail() {
 								]}
 							>
 								<SymbolView
-									name={isSealedMode ? "shippingbox" : "photo"}
+									name={isSealedItem ? "shippingbox" : "photo"}
 									size={24}
 									tintColor={t.text.tertiary}
 									weight="regular"
@@ -651,7 +769,7 @@ export default function SetDetail() {
 									</Text>
 								)}
 							</View>
-						) : isSealedMode ? (
+						) : isSealedItem ? (
 							// Sealed art comes in arbitrary aspect ratios — inset it on
 							// the tile background so the tile keeps the card silhouette.
 							<View
@@ -712,8 +830,6 @@ export default function SetDetail() {
 			name,
 			failedImages,
 			isValueSort,
-			isSealedMode,
-			sortCondition,
 			prefetchDetail,
 			showHint,
 			dismissHint,
@@ -735,15 +851,7 @@ export default function SetDetail() {
 	).map((o) => ({
 		label: SORT_LABELS[o],
 		isOn: sortBy === o,
-		onPress: () => {
-			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-			// Value sorts need prices — a Pro feature.
-			if ((o === "valueDesc" || o === "valueAsc") && !isPro) {
-				void presentProPaywallIfNeeded();
-				return;
-			}
-			setSortBy(o);
-		},
+		onPress: () => handleSortChange(o),
 	}));
 
 	return (
@@ -770,39 +878,10 @@ export default function SetDetail() {
 				}}
 			/>
 
-			<Stack.SearchBar
-				placeholder={isSealedMode ? "Search products..." : "Search this set..."}
-				onChangeText={(e) => setFilterQuery(e.nativeEvent.text)}
-				// Pre-26 iOS renders this under the header — pin it so the manual
-				// content offset above stays correct instead of collapsing on scroll.
-				hideWhenScrolling={HAS_BOTTOM_SEARCH_BAR ? undefined : false}
-				{...legacySearchBarStyle(t)}
-			/>
-
-			{/* iOS 26 gets the glass bottom toolbar; earlier iOS renders that
-			    toolbar as a bare glyph floating over content, so it gets a
-			    frosted FAB + action sheet instead (inside the container below). */}
-			{HAS_BOTTOM_SEARCH_BAR && (
-				<Stack.Toolbar placement="bottom" tintColor={t.accentOn}>
-					<Stack.Toolbar.SearchBarSlot />
-					<Stack.Toolbar.Menu
-						icon="arrow.up.arrow.down"
-						tintColor={t.accentOn}
-					>
-						{sortActions.map((a) => (
-							<Stack.Toolbar.MenuAction
-								key={a.label}
-								isOn={a.isOn}
-								onPress={a.onPress}
-							>
-								{a.label}
-							</Stack.Toolbar.MenuAction>
-						))}
-					</Stack.Toolbar.Menu>
-				</Stack.Toolbar>
-			)}
-
-			<View style={styles.container}>
+			<View
+				style={styles.container}
+				onTouchStart={() => Keyboard.dismiss()}
+			>
 				{/* Deep-water gradient — the one background every screen shares. */}
 				<LinearGradient
 					colors={t.background.colors}
@@ -812,62 +891,156 @@ export default function SetDetail() {
 				/>
 				{isError ? (
 					<ErrorState title="Couldn't load set" onRetry={() => refetch()} />
-				) : showSkeleton ? (
-					<FlatList
-						data={SKELETON_DATA}
-						keyExtractor={(item) => item.id}
-						numColumns={COLUMNS}
-						renderItem={() => <SkeletonCard color={t.glass.elevatedFill} />}
-						ListHeaderComponent={summaryHeader}
-						contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}
-						columnWrapperStyle={styles.row}
-						scrollEnabled={false}
-					/>
-				) : cards.length === 0 ? (
-					<View style={styles.emptyState}>
-						<SymbolView
-							name={
-								ownedOnly && !debouncedFilter
-									? "square.stack.3d.up.slash"
-									: "magnifyingglass"
-							}
-							size={44}
-							tintColor={t.text.tertiary}
-							weight="regular"
-						/>
-						<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
-							{ownedOnly && !debouncedFilter
-								? "No cards collected yet"
-								: "No matching cards"}
-						</Text>
-					</View>
 				) : (
-					<FlatList
-						// Remount on sort change so the list snaps back to the top —
-						// otherwise the reorder happens off-screen and looks broken.
-						key={sortBy}
-						data={cards}
-						keyExtractor={(item) => item.id}
-						numColumns={COLUMNS}
-						renderItem={renderItem}
-						ListHeaderComponent={summaryHeader}
-						contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}
-						columnWrapperStyle={styles.row}
-						showsVerticalScrollIndicator={false}
-						keyboardDismissMode="on-drag"
-						keyboardShouldPersistTaps="handled"
-						removeClippedSubviews
-						initialNumToRender={15}
-						maxToRenderPerBatch={9}
-						windowSize={7}
-					/>
+					<>
+						{/* BOTH lists stay mounted; the mode toggle is a visibility
+						    flip. Each list pays its cell-mount cost once (native
+						    context-menu host per card cell made rebuild-on-toggle
+						    slow) and keeps its own scroll position. */}
+						<View
+							style={[
+								StyleSheet.absoluteFill,
+								isSealedMode && styles.layerHidden,
+							]}
+							pointerEvents={isSealedMode ? "none" : "auto"}
+						>
+							{showCardsSkeleton ? (
+								<FlatList
+									data={SKELETON_DATA}
+									keyExtractor={(item) => item.id}
+									numColumns={COLUMNS}
+									renderItem={() => (
+										<SkeletonCard color={t.glass.elevatedFill} />
+									)}
+									ListHeaderComponent={summaryHeader}
+									contentContainerStyle={[
+										styles.grid,
+										{ paddingTop: topPadding },
+									]}
+									columnWrapperStyle={styles.row}
+									scrollEnabled={false}
+								/>
+							) : cardItems.length === 0 ? (
+								<View style={styles.emptyState}>
+									<SymbolView
+										name={
+											ownedOnly && !debouncedFilter
+												? "square.stack.3d.up.slash"
+												: "magnifyingglass"
+										}
+										size={44}
+										tintColor={t.text.tertiary}
+										weight="regular"
+									/>
+									<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
+										{ownedOnly && !debouncedFilter
+											? "No cards collected yet"
+											: "No matching cards"}
+									</Text>
+								</View>
+							) : (
+								<FlatList
+									// Remounts when cards becomes the visible mode → waterfall.
+									key={`cards-${cardGen}`}
+									ref={cardListRef}
+									data={cardItems}
+									keyExtractor={(item) => item.id}
+									numColumns={COLUMNS}
+									renderItem={renderItem}
+									ListHeaderComponent={summaryHeader}
+									contentContainerStyle={[
+										styles.grid,
+										{ paddingTop: topPadding },
+									]}
+									columnWrapperStyle={styles.row}
+									showsVerticalScrollIndicator={false}
+									keyboardDismissMode="on-drag"
+									keyboardShouldPersistTaps="handled"
+									removeClippedSubviews
+									initialNumToRender={15}
+									maxToRenderPerBatch={9}
+									windowSize={7}
+								/>
+							)}
+						</View>
+						{/* Sealed layer mounts on first visit and stays. */}
+						{sealedVisited && !ownedOnly && (
+							<View
+								style={[
+									StyleSheet.absoluteFill,
+									!isSealedMode && styles.layerHidden,
+								]}
+								pointerEvents={isSealedMode ? "auto" : "none"}
+							>
+								{showSealedSkeleton ? (
+									<FlatList
+										data={SKELETON_DATA}
+										keyExtractor={(item) => item.id}
+										numColumns={COLUMNS}
+										renderItem={() => (
+											<SkeletonCard color={t.glass.elevatedFill} />
+										)}
+										ListHeaderComponent={summaryHeader}
+										contentContainerStyle={[
+											styles.grid,
+											{ paddingTop: topPadding },
+										]}
+										columnWrapperStyle={styles.row}
+										scrollEnabled={false}
+									/>
+								) : sealedItems.length === 0 ? (
+									<View style={styles.emptyState}>
+										<SymbolView
+											name="magnifyingglass"
+											size={44}
+											tintColor={t.text.tertiary}
+											weight="regular"
+										/>
+										<Text
+											style={[styles.emptyTitle, { color: t.text.primary }]}
+										>
+											No matching products
+										</Text>
+									</View>
+								) : (
+									<FlatList
+										// Remounts when sealed becomes visible → waterfall.
+										key={`sealed-${sealedGen}`}
+										ref={sealedListRef}
+										data={sealedItems}
+										keyExtractor={(item) => item.id}
+										numColumns={COLUMNS}
+										renderItem={renderItem}
+										ListHeaderComponent={summaryHeader}
+										contentContainerStyle={[
+											styles.grid,
+											{ paddingTop: topPadding },
+										]}
+										columnWrapperStyle={styles.row}
+										showsVerticalScrollIndicator={false}
+										keyboardDismissMode="on-drag"
+										keyboardShouldPersistTaps="handled"
+										removeClippedSubviews
+										initialNumToRender={15}
+										maxToRenderPerBatch={9}
+										windowSize={7}
+									/>
+								)}
+							</View>
+						)}
+					</>
 				)}
-				{!HAS_BOTTOM_SEARCH_BAR && (
-					<LegacyToolbarMenu
-						icon="arrow.up.arrow.down"
-						actions={sortActions}
-					/>
-				)}
+				{/* Our floating search bar — sort menu embedded as the trailing
+				    button. One code path for every iOS version. */}
+				<FloatingSearchBar
+					value={filterQuery}
+					onChangeText={setFilterQuery}
+					placeholder={
+						isSealedMode ? "Search products..." : "Search this set..."
+					}
+					menuIcon="arrow.up.arrow.down"
+					menuActions={sortActions}
+				/>
 			</View>
 		</>
 	);
@@ -876,6 +1049,14 @@ export default function SetDetail() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
+	},
+	// Hidden-but-mounted list layer: opacity (not display:none, which gives
+	// VirtualizedList a zero viewport and under-renders on reshow).
+	layerHidden: {
+		opacity: 0,
+	},
+	modePickerWrap: {
+		marginBottom: 10,
 	},
 	// Set info bar — glass card: RELEASED / logo / CARDS.
 	summaryRow: {

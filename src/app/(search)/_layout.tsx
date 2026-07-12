@@ -20,6 +20,9 @@ export default function SearchLayout() {
 
 	return (
 		<Stack
+			// Native header is safe again: the search field is our own
+			// FloatingSearchBar, so there's no UISearchController to hide these
+			// buttons or collapse the bar mid-search.
 			screenOptions={{
 				headerShown: true,
 				headerTitle: "Search",

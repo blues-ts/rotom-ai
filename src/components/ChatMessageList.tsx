@@ -33,6 +33,11 @@ interface ChatMessageListProps {
 	streamingLeadStore?: LeadStore;
 	isStreaming: boolean;
 	onRetry?: () => void;
+	/**
+	 * Visual-top padding (e.g. transparent-header height) — the transcript
+	 * rests below it but still scrolls under it to the screen edge.
+	 */
+	topInset?: number;
 }
 
 export interface ChatMessageListRef {
@@ -49,7 +54,14 @@ const AWAY_FROM_LATEST_PX = 240;
 // screen of dead space under every short reply.)
 const ChatMessageList = forwardRef<ChatMessageListRef, ChatMessageListProps>(
 	(
-		{ messages, streamingContent, streamingLeadStore, isStreaming, onRetry },
+		{
+			messages,
+			streamingContent,
+			streamingLeadStore,
+			isStreaming,
+			onRetry,
+			topInset,
+		},
 		ref,
 	) => {
 		const t = useRiverTheme();
@@ -169,7 +181,13 @@ const ChatMessageList = forwardRef<ChatMessageListRef, ChatMessageListProps>(
 					)}
 					ListHeaderComponent={headerComponent}
 					style={styles.list}
-					contentContainerStyle={styles.content}
+					// Inverted list: the container is flipped, so paddingBottom is
+					// the VISUAL top — where the transcript rests below a
+					// transparent header while still scrolling under it.
+					contentContainerStyle={[
+						styles.content,
+						topInset ? { paddingBottom: topInset } : null,
+					]}
 					showsVerticalScrollIndicator={false}
 					keyboardDismissMode="on-drag"
 					onScroll={handleScroll}

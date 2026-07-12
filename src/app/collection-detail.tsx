@@ -42,9 +42,8 @@ import { formatCurrency } from "@/lib/format";
 import {
 	HAS_BOTTOM_SEARCH_BAR,
 	HEADER_SEARCH_BAR_HEIGHT,
-	legacySearchBarStyle,
 } from "@/lib/platform";
-import { LegacyToolbarMenu } from "@/components/LegacyToolbarMenu";
+import FloatingSearchBar from "@/components/FloatingSearchBar";
 import { CONDITION_LABELS, formatVariantLabel } from "@/lib/scrydex";
 import type { CollectionCard } from "@/types/collection";
 
@@ -708,39 +707,10 @@ export default function CollectionDetail() {
 				}}
 			/>
 
-			<Stack.SearchBar
-				placeholder="Search cards..."
-				onChangeText={(e) => setFilterQuery(e.nativeEvent.text)}
-				// Pre-26 iOS renders this under the header — pin it so the manual
-				// content offset above stays correct instead of collapsing on scroll.
-				hideWhenScrolling={HAS_BOTTOM_SEARCH_BAR ? undefined : false}
-				{...legacySearchBarStyle(t)}
-			/>
-
-			{/* iOS 26 gets the glass bottom toolbar; earlier iOS renders that
-			    toolbar as a bare glyph floating over content, so it gets a
-			    frosted FAB + action sheet instead (inside the container below). */}
-			{HAS_BOTTOM_SEARCH_BAR && (
-				<Stack.Toolbar placement="bottom" tintColor={t.accentOn}>
-					<Stack.Toolbar.SearchBarSlot />
-					<Stack.Toolbar.Menu
-						icon="arrow.up.arrow.down"
-						tintColor={t.accentOn}
-					>
-						{sortActions.map((a) => (
-							<Stack.Toolbar.MenuAction
-								key={a.label}
-								isOn={a.isOn}
-								onPress={a.onPress}
-							>
-								{a.label}
-							</Stack.Toolbar.MenuAction>
-						))}
-					</Stack.Toolbar.Menu>
-				</Stack.Toolbar>
-			)}
-
-			<View style={styles.container}>
+			<View
+				style={styles.container}
+				onTouchStart={() => Keyboard.dismiss()}
+			>
 				{/* Deep-water gradient — the one background every screen shares. */}
 				<LinearGradient
 					colors={t.background.colors}
@@ -817,7 +787,8 @@ export default function CollectionDetail() {
 					<View
 						style={[
 							styles.emptyState,
-							{ paddingTop: topPadding, paddingBottom: insets.bottom + 24 },
+							// Bottom padding clears the floating search bar.
+						{ paddingTop: topPadding, paddingBottom: insets.bottom + 110 },
 						]}
 					>
 						<SymbolView
@@ -862,12 +833,15 @@ export default function CollectionDetail() {
 						}
 					/>
 				)}
-				{!HAS_BOTTOM_SEARCH_BAR && (
-					<LegacyToolbarMenu
-						icon="arrow.up.arrow.down"
-						actions={sortActions}
-					/>
-				)}
+				{/* Our floating search bar — sort menu embedded as the trailing
+				    button. One code path for every iOS version. */}
+				<FloatingSearchBar
+					value={filterQuery}
+					onChangeText={setFilterQuery}
+					placeholder="Search cards..."
+					menuIcon="arrow.up.arrow.down"
+					menuActions={sortActions}
+				/>
 			</View>
 		</>
 	);

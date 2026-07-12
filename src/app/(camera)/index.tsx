@@ -49,9 +49,12 @@ import {
 	type CameraRef,
 } from "react-native-vision-camera";
 
-import { palette } from "@/constants/theme";
+import { darkTheme, palette } from "@/constants/theme";
 import * as CardVision from "../../../modules/card-vision";
-import { useScanSession } from "@/context/ScanSessionContext";
+import {
+	useScanSession,
+	type ScannedCard,
+} from "@/context/ScanSessionContext";
 import { playCaptureFeedback } from "@/lib/captureSound";
 import {
 	MODEL_LOCK_MARGIN,
@@ -69,12 +72,18 @@ import {
 	binderY,
 } from "@/components/scanner/BinderFrameOverlay";
 import BinderReviewOverlay from "@/components/scanner/BinderReviewOverlay";
+import ScanTray, {
+	TRAY_PADDING_H,
+	TRAY_ROW_TOP_PAD,
+	trayMetrics,
+} from "@/components/scanner/ScanTray";
 
 const cardImageUrl = (id: string) =>
 	`https://images.scrydex.com/pokemon/${id}/small`;
 
-// The captured card flies into the library button over this long; the scan loop
-// stays paused for the same window so a card held in the reticle counts once.
+// The captured card flies into the scanned-card tray over this long; the scan
+// loop stays paused for the same window so a card held in the reticle counts
+// once. ScanTray's ENTER_DELAY_MS is tuned against this.
 const FLY_MS = 520;
 const CAPTURE_FLASH_MS = FLY_MS + 80;
 
@@ -101,24 +110,23 @@ const cardY = height * CARD_CENTER_Y_RATIO - cardHeight / 2;
 // Palette — signals layered over the live feed.
 const RIVER = palette.accent; // searching / scan (design-system accent)
 
-// Blue glow framing the screen. Drawn as concentric rounded-rect strokes from
-// the edge inward — one continuous frame so the corners stay seamless — with
-// opacity falling off toward the centre. Thickness is capped by the side margin
-// so the glow never reaches the card rectangle.
-const RING_GAP = 16; // keep the glow this far clear of the card
-const RING_THICKNESS = Math.max(0, (width - cardWidth) / 2 - RING_GAP);
-const RING_STEPS = 18;
-const RING_STROKE = RING_THICKNESS / RING_STEPS + 1.5;
-const SCREEN_CORNER = 52;
-const RING_RECTS = Array.from({ length: RING_STEPS }, (_, i) => {
-	const t = i / (RING_STEPS - 1); // 0 at the edge → 1 at the inner extent
-	const inset = t * RING_THICKNESS;
-	return {
-		inset,
-		rx: Math.max(2, SCREEN_CORNER - inset),
-		opacity: 0.5 * Math.pow(1 - t, 1.7),
-	};
-});
+// Blue glow hugging the viewfinder. Drawn as concentric rounded-rect strokes
+// radiating OUTWARD from the hole with opacity falling off — each ring tracks
+// the animated viewfinder rect, so the glow rides the card ↔ binder morph.
+const GLOW_THICKNESS = 20;
+const GLOW_STEPS = 12;
+const GLOW_STROKE = GLOW_THICKNESS / GLOW_STEPS + 1.5;
+
+// Bottom sheet — everything below the viewfinder lives on one surface, the
+// same lip language as the card-detail sheet. Its top edge sits far enough
+// below the box that the glow fades out before the surface starts; it rides
+// the mode morph since the binder box is taller.
+const SHEET_GAP = 20;
+const SHEET_TOP_PAD = 10;
+const TRAY_TOP_OFFSET = 10; // tray's offset inside the sheet body
+const TOOLBAR_H = 56;
+const sheetTopSingle = cardY + cardHeight + SHEET_GAP;
+const sheetTopBinder = binderY + binderHeight + SHEET_GAP;
 const AMBER = "#FFAE04"; // hold steady
 const REST = "rgba(255,255,255,0.92)";
 
@@ -250,7 +258,42 @@ const AnimatedOutline = memo(function AnimatedOutline({
 	);
 });
 
-const EdgeGlow = memo(function EdgeGlow() {
+const GlowRing = memo(function GlowRing({
+	progress,
+	index,
+}: {
+	progress: SharedValue<number>;
+	index: number;
+}) {
+	const t = index / (GLOW_STEPS - 1); // 0 at the outline → 1 at the outer extent
+	const outset = 1.5 + t * GLOW_THICKNESS;
+	const animatedProps = useAnimatedProps(() => {
+		const { x, y, w, h, r } = viewfinderRect(progress.value);
+		return {
+			x: x - outset,
+			y: y - outset,
+			width: w + 2 * outset,
+			height: h + 2 * outset,
+			rx: r + outset,
+			ry: r + outset,
+		};
+	});
+	return (
+		<AnimatedRect
+			animatedProps={animatedProps}
+			fill="none"
+			stroke={RIVER}
+			strokeOpacity={0.5 * Math.pow(1 - t, 1.7)}
+			strokeWidth={GLOW_STROKE}
+		/>
+	);
+});
+
+const ReticleGlow = memo(function ReticleGlow({
+	progress,
+}: {
+	progress: SharedValue<number>;
+}) {
 	return (
 		<Svg
 			style={StyleSheet.absoluteFill}
@@ -258,20 +301,8 @@ const EdgeGlow = memo(function EdgeGlow() {
 			height={height}
 			pointerEvents="none"
 		>
-			{RING_RECTS.map((r, i) => (
-				<Rect
-					key={i}
-					x={r.inset}
-					y={r.inset}
-					width={width - 2 * r.inset}
-					height={height - 2 * r.inset}
-					rx={r.rx}
-					ry={r.rx}
-					fill="none"
-					stroke={RIVER}
-					strokeOpacity={r.opacity}
-					strokeWidth={RING_STROKE}
-				/>
+			{Array.from({ length: GLOW_STEPS }, (_, i) => (
+				<GlowRing key={i} progress={progress} index={i} />
 			))}
 		</Svg>
 	);
@@ -283,7 +314,7 @@ export default function CameraScreen() {
 	const photoOutput = usePhotoOutput({ qualityPrioritization: "speed" });
 	const cameraRef = useRef<CameraRef>(null);
 
-	const { count, addScan } = useScanSession();
+	const { count, scans, addScan, removeScan } = useScanSession();
 	const insets = useSafeAreaInsets();
 
 	const [isActive, setIsActive] = useState(false);
@@ -317,17 +348,34 @@ export default function CameraScreen() {
 		scanningPausedRef.current = v;
 		setScanningPaused(v);
 	}, []);
-	// The card currently flying from the reticle into the library button. `key`
-	// re-arms the flight effect for each capture (even back-to-back same image).
+	// The card currently flying from the reticle: single captures land in the
+	// scanned-card tray, binder confirms in the library button (the tray is
+	// faded out in binder mode). `key` re-arms the flight effect for each
+	// capture (even back-to-back same image).
 	const [flyingCard, setFlyingCard] = useState<{
 		image: string;
 		key: number;
+		target: "tray" | "library";
 	} | null>(null);
-	const fly = useSharedValue(0); // 0 = at reticle, 1 = landed in the library button
+	const fly = useSharedValue(0); // 0 = at reticle, 1 = landed
 	// 0 = single-card box, 1 = binder-page box; drives the viewfinder morph.
 	const modeProgress = useSharedValue(0);
+	// 0 = tray hidden (empty session), 1 = shown. The alignment caption yields
+	// its spot to the tray — once cards are landing it's redundant.
+	const trayProgress = useSharedValue(0);
 	const singleCaptionStyle = useAnimatedStyle(() => ({
-		opacity: 1 - modeProgress.value,
+		opacity: (1 - modeProgress.value) * (1 - trayProgress.value),
+	}));
+	const trayStyle = useAnimatedStyle(() => ({
+		opacity: (1 - modeProgress.value) * trayProgress.value,
+	}));
+	// The sheet's lip tracks the viewfinder bottom through the mode morph.
+	const sheetStyle = useAnimatedStyle(() => ({
+		top: interpolate(
+			modeProgress.value,
+			[0, 1],
+			[sheetTopSingle, sheetTopBinder],
+		),
 	}));
 	const binderCaptionStyle = useAnimatedStyle(() => ({
 		opacity: modeProgress.value,
@@ -354,20 +402,41 @@ export default function CameraScreen() {
 	const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const voteRef = useRef<string[]>([]); // recent confident top-1 ids (windowed)
 
-	// Flight path: reticle centre → the library button at the top-right of the
-	// header. The card shrinks and arcs up into the button on each capture.
+	// Flight paths from the reticle centre. Single captures shrink and arc DOWN
+	// into the newest (leftmost) tray slot; binder confirms still arc up into
+	// the library button at the top-right of the header.
 	const reticleCx = cardX + cardWidth / 2;
 	const reticleCy = cardY + cardHeight / 2;
-	const flyDX = width - 30 - reticleCx;
-	const flyDY = insets.top + 24 - reticleCy;
+	// Fit the tray to whatever vertical band THIS screen's sheet body has
+	// between the lip and the toolbar — full-size cards on big phones, scaled
+	// down on minis/SEs instead of overflowing.
+	const toolbarBlockH = TOOLBAR_H + insets.bottom + 10; // glass host + bottom margin
+	const tray = trayMetrics(
+		height - sheetTopSingle - SHEET_TOP_PAD - TRAY_TOP_OFFSET - toolbarBlockH,
+	);
+	const trayDX = TRAY_PADDING_H + tray.itemW / 2 - reticleCx;
+	const trayDY =
+		sheetTopSingle +
+		SHEET_TOP_PAD +
+		TRAY_TOP_OFFSET +
+		TRAY_ROW_TOP_PAD +
+		tray.thumbH / 2 -
+		reticleCy;
+	const libDX = width - 30 - reticleCx;
+	const libDY = insets.top + 24 - reticleCy;
+	const flyToLibrary = flyingCard?.target === "library";
+	const flyDX = flyToLibrary ? libDX : trayDX;
+	const flyDY = flyToLibrary ? libDY : trayDY;
+	const flyEndScale = flyToLibrary ? 0.1 : tray.itemW / cardWidth;
+	const flyArc = flyToLibrary ? -26 : 22; // sin bulge: up into the header, out toward the tray
 	const flyStyle = useAnimatedStyle(() => {
 		const p = fly.value;
 		return {
 			opacity: interpolate(p, [0, 0.75, 1], [1, 1, 0]),
 			transform: [
 				{ translateX: flyDX * p },
-				{ translateY: flyDY * p - 26 * Math.sin(p * Math.PI) },
-				{ scale: interpolate(p, [0, 1], [1, 0.1]) },
+				{ translateY: flyDY * p + flyArc * Math.sin(p * Math.PI) },
+				{ scale: interpolate(p, [0, 1], [1, flyEndScale]) },
 				{ rotateZ: `${interpolate(p, [0, 1], [0, 10])}deg` },
 			],
 		};
@@ -385,6 +454,16 @@ export default function CameraScreen() {
 			},
 		);
 	}, [flyingCard, fly]);
+
+	// Tray fades in with the first capture and back out when the session
+	// empties (X on the last card, or a clear from the library screen).
+	const hasScans = count > 0;
+	useEffect(() => {
+		trayProgress.value = withTiming(hasScans ? 1 : 0, {
+			duration: 220,
+			easing: Easing.out(Easing.cubic),
+		});
+	}, [hasScans, trayProgress]);
 
 	useEffect(() => {
 		return () => {
@@ -404,6 +483,28 @@ export default function CameraScreen() {
 		setTorchEnabled(false); // don't leave the torch burning on the library screen
 		router.push("/(camera)/library");
 	}, []);
+
+	// Tray card → the full card detail screen, same push as the session
+	// library grid.
+	const handleOpenCard = useCallback((card: ScannedCard) => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		setTorchEnabled(false); // don't leave the torch burning on the detail screen
+		router.push({
+			pathname: "/(card)/[id]",
+			params: { id: card.id, image: card.image },
+		});
+	}, []);
+
+	// Removing a card also frees it for immediate rescan — the dedupe ref would
+	// otherwise block re-capturing a card the user just deleted while it's
+	// still sitting in the reticle.
+	const handleRemoveScan = useCallback(
+		(id: string) => {
+			removeScan(id);
+			if (lastCapturedIdRef.current === id) lastCapturedIdRef.current = null;
+		},
+		[removeScan],
+	);
 
 	const captureAndIdentify = useCallback(async (): Promise<{
 		matches: CardVision.CardMatch[];
@@ -451,7 +552,7 @@ export default function CameraScreen() {
 
 			const image = cardImageUrl(id);
 			// New object + key launches the flight effect; the card lands in the badge.
-			setFlyingCard({ image, key: Date.now() });
+			setFlyingCard({ image, key: Date.now(), target: "tray" });
 
 			playCaptureFeedback();
 			addScan({ id, image, score });
@@ -725,9 +826,13 @@ export default function CameraScreen() {
 				addScan({ id: p.id, image: cardImageUrl(p.id), score: p.score });
 			}
 			// One representative flight into the library badge (the badge count
-			// jumping by N carries the rest).
+			// jumping by N carries the rest — the tray is faded out in binder mode).
 			if (picked[0]) {
-				setFlyingCard({ image: cardImageUrl(picked[0].id), key: Date.now() });
+				setFlyingCard({
+					image: cardImageUrl(picked[0].id),
+					key: Date.now(),
+					target: "library",
+				});
 			}
 			resetBinder();
 		},
@@ -847,43 +952,68 @@ export default function CameraScreen() {
 				}
 			/>
 
-			{/* Captions cross-fade during the morph, each pinned under its own box. */}
-			<Animated.Text
-				style={[
-					styles.reticleCaption,
-					{ top: cardY + cardHeight + 14 },
-					singleCaptionStyle,
-				]}
-				pointerEvents="none"
-			>
-				Align the card inside the frame
-			</Animated.Text>
-			<Animated.Text
-				style={[
-					styles.reticleCaption,
-					{ top: binderY + binderHeight + 14 },
-					binderCaptionStyle,
-				]}
-				pointerEvents="none"
-			>
-				Align your cards inside the frame
-			</Animated.Text>
 			{mode === "binder" && binderPhase === "analyzing" && (
 				<View style={styles.binderSpinner} pointerEvents="none">
 					<ActivityIndicator size="large" color="#fff" />
 				</View>
 			)}
 
-			{/* Blue glow framing the screen — concentric strokes keep corners seamless. */}
-			<EdgeGlow />
+			{/* Blue glow hugging the viewfinder — rides the card ↔ binder morph. */}
+			<ReticleGlow progress={modeProgress} />
 
-			{/* Bottom bar — native SwiftUI glass buttons: info (left), scan status
-			    (centre), torch (right). */}
-			<View
-				style={[styles.toolbar, { bottom: insets.bottom + 10 }]}
-				pointerEvents="box-none"
-			>
-				<Host style={styles.toolbarHost}>
+			{/* Bottom sheet — everything below the viewfinder on one surface, the
+			    same lip language as the card-detail sheet. The body holds the tray
+			    (single) or the shutter (binder), with the alignment caption in the
+			    same slot while the tray is empty. */}
+			<Animated.View style={[styles.sheet, sheetStyle]}>
+				<View style={styles.sheetBody} pointerEvents="box-none">
+					<ScanTray
+						scans={scans}
+						onPress={handleOpenCard}
+						onRemove={handleRemoveScan}
+						interactive={mode === "single" && count > 0}
+						metrics={tray}
+						style={[styles.sheetTray, trayStyle]}
+					/>
+					<Animated.View
+						style={[styles.captionOverlay, singleCaptionStyle]}
+						pointerEvents="none"
+					>
+						<Text style={styles.sheetCaption}>
+							Align the card inside the frame
+						</Text>
+					</Animated.View>
+					<View style={styles.binderControls} pointerEvents="box-none">
+						<Animated.Text
+							style={[styles.sheetCaption, binderCaptionStyle]}
+							pointerEvents="none"
+						>
+							Align your cards inside the frame
+						</Animated.Text>
+						{/* Binder shutter — manual capture, one page per tap. Stays
+						    mounted through the mode morph so it can scale/fade both
+						    ways; taps are disabled whenever it isn't fully the
+						    binder's turn. */}
+						{binderPhase === "idle" && (
+							<Animated.View
+								style={[styles.shutter, shutterStyle]}
+								pointerEvents={mode === "binder" ? "auto" : "none"}
+							>
+								<Pressable
+									style={styles.shutterPress}
+									onPress={handleBinderShutter}
+								>
+									<View style={styles.shutterInner} />
+								</Pressable>
+							</Animated.View>
+						)}
+					</View>
+				</View>
+
+				{/* Glass toolbar — info (left), scan status (centre), torch (right),
+				    pinned above the home indicator. */}
+				<View style={[styles.toolbar, { marginBottom: insets.bottom + 10 }]}>
+					<Host style={styles.toolbarHost}>
 					<ZStack>
 						{/* Status pill on its own centered layer — ZStack centers it
 						    regardless of how many buttons flank it in the row above. */}
@@ -985,22 +1115,9 @@ export default function CameraScreen() {
 						</Button>
 						</HStack>
 					</ZStack>
-				</Host>
-			</View>
-
-			{/* Binder shutter — manual capture, one page per tap. Stays mounted
-			    through the mode morph so it can scale/fade both ways; taps are
-			    disabled whenever it isn't fully the binder's turn. */}
-			{binderPhase === "idle" && (
-				<Animated.View
-					style={[styles.shutter, { bottom: insets.bottom + 84 }, shutterStyle]}
-					pointerEvents={mode === "binder" ? "auto" : "none"}
-				>
-					<Pressable style={styles.shutterPress} onPress={handleBinderShutter}>
-						<View style={styles.shutterInner} />
-					</Pressable>
-				</Animated.View>
-			)}
+					</Host>
+				</View>
+			</Animated.View>
 
 			{/* Post-shutter review: toggle wrong matches off, then confirm.
 			    binderPhoto may be "" (frame JPEG write failed) — the overlay
@@ -1017,7 +1134,8 @@ export default function CameraScreen() {
 				/>
 			)}
 
-			{/* The captured card flies from the reticle into the library button. */}
+			{/* The captured card flies from the reticle into the tray (single) or
+			    the library button (binder). */}
 			{flyingCard && (
 				<Animated.View
 					key={flyingCard.key}
@@ -1044,14 +1162,67 @@ const styles = StyleSheet.create({
 		flex: 1,
 		backgroundColor: "#000",
 	},
-	toolbar: {
+	sheet: {
 		position: "absolute",
-		left: 16,
-		right: 16,
-		alignItems: "stretch",
+		left: 0,
+		right: 0,
+		bottom: 0,
+		borderTopLeftRadius: 28,
+		borderTopRightRadius: 28,
+		borderTopWidth: StyleSheet.hairlineWidth,
+		borderColor: darkTheme.glass.surfaceBorder,
+		backgroundColor: darkTheme.glass.sheetFill,
+		paddingTop: SHEET_TOP_PAD,
+		// Lift the lip off the camera feed, same as the card-detail sheet.
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: -8 },
+		shadowOpacity: 0.22,
+		shadowRadius: 18,
+		elevation: 12,
+	},
+	sheetBody: {
+		flex: 1,
+	},
+	sheetTray: {
+		position: "absolute",
+		top: TRAY_TOP_OFFSET,
+		left: 0,
+		right: 0,
+	},
+	captionOverlay: {
+		position: "absolute",
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		alignItems: "center",
+		justifyContent: "center",
+		// Reserve the binder column's shutter block (68pt + 14pt gap) so this
+		// caption sits at the SAME height as the binder caption — the two
+		// cross-fade in place during the mode morph instead of jumping.
+		paddingBottom: 82,
+	},
+	sheetCaption: {
+		textAlign: "center",
+		fontSize: 13,
+		fontWeight: "500",
+		color: darkTheme.text.secondary,
+	},
+	binderControls: {
+		position: "absolute",
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		alignItems: "center",
+		justifyContent: "center",
+		gap: 14,
+	},
+	toolbar: {
+		marginHorizontal: 16,
 	},
 	toolbarHost: {
-		height: 56,
+		height: TOOLBAR_H,
 	},
 	permissionContainer: {
 		flex: 1,
@@ -1080,15 +1251,6 @@ const styles = StyleSheet.create({
 		fontSize: 16,
 		fontWeight: "700",
 	},
-	reticleCaption: {
-		position: "absolute",
-		left: 0,
-		right: 0,
-		textAlign: "center",
-		fontSize: 13,
-		fontWeight: "500",
-		color: "rgba(255,255,255,0.65)",
-	},
 	binderSpinner: {
 		position: "absolute",
 		top: 0,
@@ -1099,8 +1261,6 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	shutter: {
-		position: "absolute",
-		alignSelf: "center",
 		width: 68,
 		height: 68,
 		borderRadius: 34,

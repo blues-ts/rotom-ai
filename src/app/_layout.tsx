@@ -297,6 +297,20 @@ function AppContent() {
 					}}
 				/>
 				<Stack.Screen
+					name="pokemon-cards"
+					options={{
+						animation: "slide_from_right",
+						headerShown: true,
+						headerTitle: "",
+						headerBackButtonDisplayMode: "minimal",
+						headerTransparent: true,
+						headerStyle: { backgroundColor: "transparent" },
+						...legacyHeaderBlur(t.isDark),
+						headerTintColor: t.accentOn,
+						headerShadowVisible: false,
+					}}
+				/>
+				<Stack.Screen
 					name="create-collection"
 					options={{
 						presentation: "formSheet",

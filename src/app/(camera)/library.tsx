@@ -404,14 +404,18 @@ const styles = StyleSheet.create({
 		rowGap: GAP,
 	},
 	tile: { width: imageWidth },
-	cardImage: { width: imageWidth, height: imageHeight, borderRadius: 10 },
+	// No container radius — the artwork's own printed corners do the rounding
+	// (matches the card detail screen and the binder review tray).
+	cardImage: { width: imageWidth, height: imageHeight },
 	greyOverlay: {
 		position: "absolute",
 		top: 0,
 		left: 0,
 		width: imageWidth,
 		height: imageHeight,
-		borderRadius: 10,
+		// ≈ the card's printed corner (~4.5% of width) so the dim overlay
+		// doesn't show square corners over the art's transparent ones.
+		borderRadius: imageWidth * 0.045,
 		backgroundColor: "rgba(120,120,120,0.5)",
 	},
 	check: {

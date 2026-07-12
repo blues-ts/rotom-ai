@@ -8,7 +8,7 @@ import {
 	View,
 } from "react-native";
 
-import { router, Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
@@ -23,6 +23,13 @@ import {
 	useReanimatedKeyboardAnimation,
 } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Button, Host, Image as UIImage, VStack } from "@expo/ui/swift-ui";
+import {
+	buttonStyle,
+	frame,
+	glassEffect,
+	padding,
+} from "@expo/ui/swift-ui/modifiers";
 
 import ChatInput from "@/components/ChatInput";
 import ChatMessageList, {
@@ -41,7 +48,11 @@ import { warmScanner } from "@/lib/scannerWarmup";
 
 export default function Home() {
 	const t = useRiverTheme();
-	const { bottom } = useSafeAreaInsets();
+	const { top, bottom } = useSafeAreaInsets();
+	// No nav bar — the floating glass buttons form the top chrome row, starting
+	// just under the status bar.
+	const chromeTop = top + 8;
+	const chromeBottom = chromeTop + 44; // one 44pt button row
 	const chatListRef = useRef<ChatMessageListRef>(null);
 	const { height: keyboardHeight, progress: keyboardProgress } =
 		useReanimatedKeyboardAnimation();
@@ -217,45 +228,6 @@ export default function Home() {
 				style={StyleSheet.absoluteFill}
 			/>
 
-			{/* Toolbar — native Liquid Glass chrome, accent-tinted per the design
-			    system (rule 5: never rebuild chrome as custom glass). Tint goes on
-			    each button: the Toolbar-level tintColor is dropped for header
-			    (left/right) placements on iOS in this expo-router version. */}
-			<Stack.Toolbar placement="left">
-				<Stack.Toolbar.Button
-					icon={"square.and.pencil"}
-					tintColor={t.accentOn}
-					onPress={handleNewChat}
-				/>
-			</Stack.Toolbar>
-
-			<Stack.Toolbar placement="right">
-				<Stack.Toolbar.Button
-					icon="gearshape"
-					tintColor={t.accentOn}
-					onPress={() => {
-						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-						router.push("/(settings)");
-					}}
-				/>
-				<Stack.Toolbar.Button
-					icon={"folder"}
-					tintColor={t.accentOn}
-					onPress={() => {
-						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-						router.push("/(collections)");
-					}}
-				/>
-				<Stack.Toolbar.Button
-					icon={"magnifyingglass"}
-					tintColor={t.accentOn}
-					onPress={() => {
-						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-						router.push("/(search)");
-					}}
-				/>
-			</Stack.Toolbar>
-
 			{/* Empty-state hero + suggestions live OUTSIDE the keyboard-avoiding
 			    layout and fade out as one with the keyboard's progress — nothing
 			    re-lays-out, so nothing can stutter. (Compensating the KAV squeeze
@@ -266,7 +238,7 @@ export default function Home() {
 					<Animated.View
 						style={[
 							styles.emptyLayer,
-							{ paddingBottom: bottom + 56 },
+							{ paddingTop: chromeBottom, paddingBottom: bottom + 56 },
 							emptyFadeStyle,
 						]}
 						pointerEvents={keyboardShown ? "none" : "box-none"}
@@ -303,6 +275,7 @@ export default function Home() {
 							streamingLeadStore={streamingLeadStore}
 							isStreaming={isStreaming}
 							onRetry={retryLast}
+							topInset={chromeBottom + 8}
 						/>
 					</View>
 				)}
@@ -316,6 +289,109 @@ export default function Home() {
 				/>
 				<Animated.View style={bottomSpacerStyle} />
 			</Animated.View>
+
+			{/* Floating chrome — no nav bar on this screen (its scroll-edge effect
+			    dimmed content outside the bar). New-chat floats top-left; settings /
+			    collections / search stack as a vertical glass column top-right.
+			    Same circle-glass recipe as the scanner toolbar. Rendered last so
+			    the chat list underneath can't swallow their taps. */}
+			<View
+				style={[styles.newChatButton, { top: chromeTop }]}
+				pointerEvents="box-none"
+			>
+				<Host style={styles.newChatHost}>
+					<Button onPress={handleNewChat} modifiers={[buttonStyle("plain")]}>
+						<UIImage
+							systemName="square.and.pencil"
+							size={20}
+							color={t.accentOn}
+							modifiers={[
+								frame({ width: 44, height: 44 }),
+								glassEffect({
+									shape: "circle",
+									glass: { variant: "regular", interactive: true },
+								}),
+							]}
+						/>
+					</Button>
+				</Host>
+			</View>
+			<View
+				style={[styles.navColumn, { top: chromeTop }]}
+				pointerEvents="box-none"
+			>
+				<Host style={styles.navColumnHost}>
+					{/* One capsule of glass around the whole stack (Maps-style
+					    grouped controls) — the buttons inside are plain. */}
+					<VStack
+						spacing={0}
+						modifiers={[
+							padding({ vertical: 6 }),
+							glassEffect({
+								shape: "capsule",
+								glass: { variant: "regular", interactive: true },
+							}),
+						]}
+					>
+						<Button
+							onPress={() => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								router.push("/(settings)");
+							}}
+							modifiers={[buttonStyle("plain")]}
+						>
+							<UIImage
+								systemName="gearshape"
+								size={20}
+								color={t.accentOn}
+								modifiers={[frame({ width: 44, height: 44 })]}
+							/>
+						</Button>
+						<Button
+							onPress={() => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								router.push("/(collections)");
+							}}
+							modifiers={[buttonStyle("plain")]}
+						>
+							<UIImage
+								systemName="folder"
+								size={20}
+								color={t.accentOn}
+								modifiers={[frame({ width: 44, height: 44 })]}
+							/>
+						</Button>
+						<Button
+							onPress={() => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								router.push("/(search)");
+							}}
+							modifiers={[buttonStyle("plain")]}
+						>
+							<UIImage
+								systemName="magnifyingglass"
+								size={20}
+								color={t.accentOn}
+								modifiers={[frame({ width: 44, height: 44 })]}
+							/>
+						</Button>
+						<Button
+							onPress={() => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								router.push("/(camera)");
+							}}
+							modifiers={[buttonStyle("plain")]}
+						>
+							<UIImage
+								systemName="camera.viewfinder"
+								size={20}
+								color={t.accentOn}
+								modifiers={[frame({ width: 44, height: 44 })]}
+							/>
+						</Button>
+					</VStack>
+				</Host>
+			</View>
 		</>
 	);
 }
@@ -344,5 +420,23 @@ const styles = StyleSheet.create({
 		left: 0,
 		right: 0,
 		bottom: 0,
+	},
+	newChatButton: {
+		position: "absolute",
+		left: 14,
+	},
+	newChatHost: {
+		width: 44,
+		height: 44,
+	},
+	// Pinned under the status bar (top set inline from insets), opposite the
+	// new-chat button.
+	navColumn: {
+		position: "absolute",
+		right: 14,
+	},
+	navColumnHost: {
+		width: 44,
+		height: 44 * 4 + 12, // four rows + the capsule's vertical padding
 	},
 });

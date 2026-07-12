@@ -3,6 +3,9 @@ import {
 	Dimensions,
 	FlatList,
 	Keyboard,
+	type NativeScrollEvent,
+	type NativeSyntheticEvent,
+	Pressable,
 	StyleSheet,
 	Text,
 	View,
@@ -26,8 +29,7 @@ import * as Haptics from "expo-haptics";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacing, useRiverTheme } from "@/constants/theme";
-import { HAS_BOTTOM_SEARCH_BAR, legacySearchBarStyle } from "@/lib/platform";
-import { LegacyToolbarMenu } from "@/components/LegacyToolbarMenu";
+import { HAS_BOTTOM_SEARCH_BAR } from "@/lib/platform";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { useApi } from "@/lib/axios";
@@ -46,11 +48,14 @@ import {
 	getVariantNames,
 } from "@/lib/scrydex";
 import CardImage from "@/components/CardImage";
+import FloatingSearchBar from "@/components/FloatingSearchBar";
+import SegmentedChips from "@/components/SegmentedChips";
 import CardPressable from "@/components/CardPressable";
 import CardContextMenu from "@/components/CardContextMenu";
 import TapHoldHintOverlay from "@/components/TapHoldHintOverlay";
 import { useTapHoldHint } from "@/hooks/useTapHoldHint";
 import ErrorState from "@/components/ErrorState";
+import PokedexBrowser from "@/components/PokedexBrowser";
 import { Image } from "expo-image";
 import { useQuery } from "@tanstack/react-query";
 import { CATALOG_SETS_KEY } from "@/hooks/usePrefetchExpansions";
@@ -69,11 +74,13 @@ import type {
 
 type SearchMode = "cards" | "sealed";
 type SetsLanguage = "EN" | "JA";
+type BrowseMode = "sets" | "pokedex";
 
-const MODE_LABELS: Record<SearchMode, string> = {
-	cards: "⭐ Cards",
-	sealed: "📦 Sealed",
-};
+// Sets grouped by era (series) — headers + pre-chunked rows of two, same
+// shape as the Pokédex's generation grouping.
+type SetListItem =
+	| { key: string; kind: "header"; title: string }
+	| { key: string; kind: "row"; sets: ScrydexExpansion[] };
 
 // JA expansions don't index is_online_only:false (same quirk as JA cards),
 // so both use the negation form to drop TCG Pocket sets.
@@ -101,7 +108,9 @@ const PADDING = 12;
 // bar occupy ~96pt below the safe area, so content starts below that instead
 // of the compact iOS 26 offsets.
 const LEGACY_TOP_GRID = 108; // 96 header+search, plus the grid gap
-const LEGACY_TOP_TEXT = 116; // 96 header+search, plus the text gap
+// The visible chip bar (browse/language or search-scope toggles) sits between
+// the header and the content; grids pad down past it.
+const CHIP_BAR_H = 44;
 const screenWidth = Dimensions.get("window").width;
 const imageWidth = (screenWidth - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 const imageHeight = imageWidth * 1.4;
@@ -209,12 +218,15 @@ function LoadingSpinner({ color }: { color: string }) {
 function SetsBrowser({
 	mode,
 	language,
+	topPadding,
+	onScroll,
 }: {
 	mode: SearchMode;
 	language: SetsLanguage;
+	topPadding: number;
+	onScroll?: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
 }) {
 	const t = useRiverTheme();
-	const insets = useSafeAreaInsets();
 	const api = useApi();
 	const prefetchSetImages = usePrefetchSetImages();
 
@@ -240,6 +252,40 @@ function SetsBrowser({
 			.map(catalogSetToExpansion);
 	}, [allSets, language]);
 
+	// Grouped by ERA (the expansion's series — "Scarlet & Violet", "Sword &
+	// Shield", …), same headers-plus-chunked-rows shape as the Pokédex's
+	// generations: headers can't be interleaved into a numColumns FlatList,
+	// so each list item is a full-width header or one pre-chunked row of two
+	// tiles. Series appear in the order of their newest set, and never share
+	// a row across eras.
+	const listData = useMemo(() => {
+		const groups = new Map<string, ScrydexExpansion[]>();
+		for (const s of filtered) {
+			const era = s.series || "Other";
+			const g = groups.get(era);
+			if (g) g.push(s);
+			else groups.set(era, [s]);
+		}
+		// "Other" (sets with no series) always sinks to the bottom, after the
+		// real eras.
+		const eras = [...groups.keys()].sort((a, b) =>
+			a === "Other" ? 1 : b === "Other" ? -1 : 0,
+		);
+		const items: SetListItem[] = [];
+		for (const era of eras) {
+			const sets = groups.get(era)!;
+			items.push({ key: `era-${era}`, kind: "header", title: era });
+			for (let i = 0; i < sets.length; i += 2) {
+				items.push({
+					key: `row-${sets[i].id}`,
+					kind: "row",
+					sets: sets.slice(i, i + 2),
+				});
+			}
+		}
+		return items;
+	}, [filtered]);
+
 	// As set tiles scroll into view, warm that set's card images so opening it is
 	// instant. Guarded so each set is prefetched at most once per mount. Refs keep
 	// the handler/config stable, which FlatList requires.
@@ -247,10 +293,13 @@ function SetsBrowser({
 	const onViewableItemsChanged = useRef(
 		({ viewableItems }: { viewableItems: ViewToken[] }) => {
 			for (const v of viewableItems) {
-				const setId = (v.item as ScrydexExpansion | undefined)?.id;
-				if (setId && !prefetchedRef.current.has(setId)) {
-					prefetchedRef.current.add(setId);
-					prefetchSetImages(setId);
+				const row = v.item as SetListItem | undefined;
+				if (row?.kind !== "row") continue;
+				for (const s of row.sets) {
+					if (!prefetchedRef.current.has(s.id)) {
+						prefetchedRef.current.add(s.id);
+						prefetchSetImages(s.id);
+					}
 				}
 			}
 		},
@@ -267,79 +316,91 @@ function SetsBrowser({
 		animatedIdsRef.current = new Set();
 	}, [language]);
 
-	const renderSet = useCallback(
-		({ item, index }: { item: ScrydexExpansion; index: number }) => {
-			const firstAppearance = !animatedIdsRef.current.has(item.id);
-			if (firstAppearance) animatedIdsRef.current.add(item.id);
-			return (
-				<Animated.View
-					entering={
-						firstAppearance
-							? cardWaterfall(index)
-							: undefined
-					}
+	const renderSetTile = useCallback(
+		(item: ScrydexExpansion) => (
+			<CardPressable
+				key={item.id}
+				onPress={() => {
+					Keyboard.dismiss();
+					Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+					// Data/images are already warmed when the tile scrolled into view
+					// (onViewableItemsChanged). Re-prefetching here would fire
+					// Image.prefetch for the whole set right as the screen transitions
+					// in, making the navigation choppy — so just navigate.
+					router.push({
+						pathname: "/set-detail",
+						params: {
+							id: item.id,
+							name: getExpansionDisplayName(item),
+							mode,
+							releaseDate: item.release_date ?? "",
+							total: item.total !== undefined ? String(item.total) : "",
+							logo: item.logo ?? "",
+						},
+					});
+				}}
+			>
+				<View
+					style={[
+						styles.setTile,
+						{
+							backgroundColor: t.glass.surfaceFill,
+							borderColor: t.glass.surfaceBorder,
+						},
+						t.glass.shadow,
+					]}
 				>
-					<CardPressable
-						onPress={() => {
-							Keyboard.dismiss();
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-							// Data/images are already warmed when the tile scrolled into view
-							// (onViewableItemsChanged). Re-prefetching here would fire
-							// Image.prefetch for the whole set right as the screen transitions
-							// in, making the navigation choppy — so just navigate.
-							router.push({
-								pathname: "/set-detail",
-								params: {
-									id: item.id,
-									name: getExpansionDisplayName(item),
-									mode,
-									releaseDate: item.release_date ?? "",
-									total: item.total !== undefined ? String(item.total) : "",
-									logo: item.logo ?? "",
-								},
-							});
-						}}
+					<View style={styles.setLogoBox}>
+						{item.logo ? (
+							<Image
+								source={{ uri: item.logo }}
+								style={styles.setLogo}
+								contentFit="contain"
+								transition={150}
+								cachePolicy="memory-disk"
+							/>
+						) : (
+							<SymbolView
+								name="square.stack"
+								size={26}
+								tintColor={t.text.tertiary}
+								weight="regular"
+							/>
+						)}
+					</View>
+					<Text
+						style={[styles.setName, { color: t.text.primary }]}
+						numberOfLines={1}
 					>
-						<View
-							style={[
-								styles.setTile,
-								{
-									backgroundColor: t.glass.surfaceFill,
-									borderColor: t.glass.surfaceBorder,
-								},
-								t.glass.shadow,
-							]}
-						>
-							<View style={styles.setLogoBox}>
-								{item.logo ? (
-									<Image
-										source={{ uri: item.logo }}
-										style={styles.setLogo}
-										contentFit="contain"
-										transition={150}
-										cachePolicy="memory-disk"
-									/>
-								) : (
-									<SymbolView
-										name="square.stack"
-										size={26}
-										tintColor={t.text.tertiary}
-										weight="regular"
-									/>
-								)}
-							</View>
-							<Text
-								style={[styles.setName, { color: t.text.primary }]}
-								numberOfLines={1}
-							>
-								{getExpansionDisplayName(item)}
-							</Text>
-						</View>
-					</CardPressable>
+						{getExpansionDisplayName(item)}
+					</Text>
+				</View>
+			</CardPressable>
+		),
+		[t, mode],
+	);
+
+	const renderSet = useCallback(
+		({ item, index }: { item: SetListItem; index: number }) => {
+			const firstAppearance = !animatedIdsRef.current.has(item.key);
+			if (firstAppearance) animatedIdsRef.current.add(item.key);
+			const entering = firstAppearance ? cardWaterfall(index) : undefined;
+			if (item.kind === "header") {
+				return (
+					<Animated.View entering={entering} style={styles.eraHeader}>
+						<Text style={[styles.eraTitle, { color: t.text.primary }]}>
+							{item.title}
+						</Text>
+					</Animated.View>
+				);
+			}
+			return (
+				<Animated.View entering={entering} style={styles.setRow}>
+					{item.sets.map(renderSetTile)}
 				</Animated.View>
 			);
 		},
-		[t, mode],
+		[t, renderSetTile],
 	);
 
 	if (isError) {
@@ -353,7 +414,7 @@ function SetsBrowser({
 				keyExtractor={(item) => item.id}
 				numColumns={2}
 				renderItem={() => <SkeletonSetTile color={t.glass.elevatedFill} />}
-				contentContainerStyle={[styles.grid, { paddingTop: insets.top + (HAS_BOTTOM_SEARCH_BAR ? 56 : LEGACY_TOP_GRID) }]}
+				contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}
 				columnWrapperStyle={styles.row}
 				scrollEnabled={false}
 			/>
@@ -365,7 +426,7 @@ function SetsBrowser({
 			<Text
 				style={[
 					styles.empty,
-					{ color: t.text.secondary, marginTop: insets.top + (HAS_BOTTOM_SEARCH_BAR ? 20 : LEGACY_TOP_TEXT) },
+					{ color: t.text.secondary, marginTop: topPadding - 36 },
 				]}
 			>
 				No sets found
@@ -376,20 +437,20 @@ function SetsBrowser({
 	return (
 		<FlatList
 			key={language}
-			data={filtered}
-			keyExtractor={(item) => item.id}
-			numColumns={2}
+			data={listData}
+			keyExtractor={(item) => item.key}
 			renderItem={renderSet}
+			onScroll={onScroll}
+			scrollEventThrottle={32}
 			onViewableItemsChanged={onViewableItemsChanged}
 			viewabilityConfig={viewabilityConfig}
-			contentContainerStyle={[styles.grid, { paddingTop: insets.top + (HAS_BOTTOM_SEARCH_BAR ? 56 : LEGACY_TOP_GRID) }]}
-			columnWrapperStyle={styles.row}
+			contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}
 			showsVerticalScrollIndicator={false}
 			keyboardDismissMode="on-drag"
 			keyboardShouldPersistTaps="handled"
 			removeClippedSubviews
-			initialNumToRender={10}
-			maxToRenderPerBatch={8}
+			initialNumToRender={8}
+			maxToRenderPerBatch={6}
 			windowSize={7}
 		/>
 	);
@@ -405,6 +466,9 @@ export default function Search() {
 	const [debouncedQuery, setDebouncedQuery] = useState("");
 	const [mode, setMode] = useState<SearchMode>("cards");
 	const [setsLanguage, setSetsLanguage] = useState<SetsLanguage>("EN");
+	// What the browse area shows while the search bar is empty: the sets grid
+	// or the full Pokédex.
+	const [browse, setBrowse] = useState<BrowseMode>("sets");
 	const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
 	// Debounce search input
@@ -424,9 +488,16 @@ export default function Search() {
 		hasNextPage,
 		fetchNextPage,
 	} = useInfiniteQuery<ApiListResponse<ScrydexCard | ScrydexSealedProduct>>({
-		queryKey: ["searchCards", mode, debouncedQuery, isPro],
+		queryKey: ["searchCards", mode, debouncedQuery, isPro, setsLanguage],
 		queryFn: async ({ pageParam }) => {
 			const page = pageParam as number;
+			const toggleLang = setsLanguage === "JA" ? "ja" : "en";
+			// The chip's language filters results too; an explicit "jp"/"en"
+			// typed in the query still wins.
+			const withToggleLang = (q: string) =>
+				q && !q.includes("language_code:")
+					? `${q} language_code:${toggleLang}`
+					: q;
 			// Non-Pro: search the local catalog (no pricing API). Cards only —
 			// sealed search is a Pro feature (the catalog has no sealed products).
 			if (!isPro) {
@@ -436,7 +507,7 @@ export default function Search() {
 					q: rest,
 					page,
 					pageSize: 30,
-					language,
+					language: language ?? toggleLang,
 				});
 				return {
 					data: res.data.map(catalogCardToScrydex),
@@ -447,14 +518,14 @@ export default function Search() {
 			}
 			const search = mode === "sealed" ? searchSealed : searchCards;
 			const primary = await search(api, {
-				q: buildSearchQ(debouncedQuery),
+				q: withToggleLang(buildSearchQ(debouncedQuery)),
 				page,
 				pageSize: 30,
 			});
 			if (primary.total_count > 0) return primary;
 			// Prefix search only matches printed names — retry fieldless so
 			// English terms can match translations of Japanese cards.
-			const fallbackQ = buildSearchFallbackQ(debouncedQuery);
+			const fallbackQ = withToggleLang(buildSearchFallbackQ(debouncedQuery));
 			if (!fallbackQ) return primary;
 			return search(api, { q: fallbackQ, page, pageSize: 30 });
 		},
@@ -463,9 +534,13 @@ export default function Search() {
 			lastPage.page * lastPage.page_size < lastPage.total_count
 				? lastPage.page + 1
 				: undefined,
-		enabled: isPro
-			? buildSearchQ(debouncedQuery).length > 0
-			: debouncedQuery.trim().length > 0,
+		// In Pokédex mode the search bar filters the dex list instead — no
+		// card search fires at all.
+		enabled:
+			browse !== "pokedex" &&
+			(isPro
+				? buildSearchQ(debouncedQuery).length > 0
+				: debouncedQuery.trim().length > 0),
 	});
 
 	const cards = useMemo<CardResult[]>(
@@ -646,9 +721,84 @@ export default function Search() {
 		],
 	);
 
-	const isSearching = debouncedQuery.trim().length > 0;
+	// Pokédex mode: the browse area stays up while typing (the text filters
+	// the dex client-side); every card-search state is suppressed.
+	const dexBrowsing = browse === "pokedex";
+	// Search-scope chips (Cards|Sealed) replace the browse chips while a card
+	// search is active; the header collapses then on iOS 26, so the bar rides
+	// up with the content.
+	const scopeActive = !dexBrowsing && !!searchQuery.trim();
+	// Actively filtering the dex — the Sets|Pokédex toggle fades out until
+	// the query clears.
+	const dexFiltering = dexBrowsing && !!searchQuery.trim();
+	// Both segmented controls stay mounted, stacked, sharing one footprint —
+	// these opacities crossfade them into each other (browse ⇄ scope), and
+	// fade browse out entirely while filtering the dex. scopeOpacity ALSO
+	// drives the bar's position: entering search collapses the header, so the
+	// bar glides up in the same motion instead of teleporting (which read as
+	// a hard cut over the crossfade).
+	const browseOpacity = useSharedValue(1);
+	const scopeOpacity = useSharedValue(0);
+	const browseVisible = !scopeActive && !dexFiltering;
+	useEffect(() => {
+		browseOpacity.value = withTiming(browseVisible ? 1 : 0, { duration: 200 });
+		scopeOpacity.value = withTiming(scopeActive ? 1 : 0, { duration: 200 });
+	}, [browseVisible, scopeActive, browseOpacity, scopeOpacity]);
+	const browseChipsStyle = useAnimatedStyle(() => ({
+		opacity: browseOpacity.value,
+	}));
+	const scopeChipsStyle = useAnimatedStyle(() => ({
+		opacity: scopeOpacity.value,
+	}));
+	// Static: the floating X/camera row persists through search (that's the
+	// point of it), so the header collapse no longer frees the space the bar
+	// used to glide into.
+	const chipBarTop =
+		insets.top + (HAS_BOTTOM_SEARCH_BAR ? 54 : LEGACY_TOP_GRID - 40);
+
+	// Safari-style: the chip bar fades out on scroll-down and returns on any
+	// scroll-up (or near the top), so switching modes is one flick away.
+	const [chipsScrolledAway, setChipsScrolledAway] = useState(false);
+	const lastScrollYRef = useRef(0);
+	const handleBrowseScroll = useCallback(
+		(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+			const y = e.nativeEvent.contentOffset.y;
+			const dy = y - lastScrollYRef.current;
+			lastScrollYRef.current = y;
+			if (y <= 20) {
+				setChipsScrolledAway(false);
+				return;
+			}
+			if (dy > 4) setChipsScrolledAway(true);
+			else if (dy < -4) setChipsScrolledAway(false);
+		},
+		[],
+	);
+	// Fresh list contexts reset the fade — from the event handlers that cause
+	// them (mode switch, typing), not an effect.
+	const resetChipsFade = useCallback(() => {
+		lastScrollYRef.current = 0;
+		setChipsScrolledAway(false);
+	}, []);
+	const chipsScrollOpacity = useSharedValue(1);
+	useEffect(() => {
+		chipsScrollOpacity.value = withTiming(chipsScrolledAway ? 0 : 1, {
+			duration: 180,
+		});
+	}, [chipsScrolledAway, chipsScrollOpacity]);
+	const chipBarFadeStyle = useAnimatedStyle(() => ({
+		opacity: chipsScrollOpacity.value,
+	}));
+	// One offset for every state now — with the button row persistent, search
+	// results sit exactly where the browse grids do.
+	const gridTop =
+		insets.top + (HAS_BOTTOM_SEARCH_BAR ? 56 : LEGACY_TOP_GRID) + CHIP_BAR_H;
+	const resultsTop = gridTop;
+	const textTop = gridTop + 12;
+	const isSearching = !dexBrowsing && debouncedQuery.trim().length > 0;
 	const showHint =
-		!searchQuery.trim() && !isSearching && displayCards.length === 0;
+		dexBrowsing ||
+		(!searchQuery.trim() && !isSearching && displayCards.length === 0);
 	const showSkeleton = isSearching && isLoading && displayCards.length === 0;
 	const showError = isSearching && isError && displayCards.length === 0;
 	const showNoResults =
@@ -658,64 +808,40 @@ export default function Search() {
 		cards.length === 0 &&
 		displayCards.length === 0;
 
-	// One list drives both the iOS 26 toolbar menu and the legacy FAB sheet.
-	const filterActions = [
-		{
-			label: MODE_LABELS.cards,
-			isOn: mode === "cards",
-			onPress: () => {
-				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-				setMode("cards");
-			},
+	// Chip-bar handlers — the old toolbar menu's actions, now one visible tap.
+	// (SegmentedChips fires the tap haptic itself.)
+	const handleBrowseChange = useCallback(
+		(b: BrowseMode) => {
+			setBrowse(b);
+			resetChipsFade();
 		},
-		{
-			label: MODE_LABELS.sealed,
-			isOn: mode === "sealed",
-			onPress: () => {
-				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-				// Sealed pricing is a Pro feature (no free catalog data for it).
-				if (!isPro) {
-					void presentProPaywallIfNeeded();
-					return;
-				}
-				setMode("sealed");
-			},
+		[resetChipsFade],
+	);
+	// Language applies to whichever browse is active: it filters the sets
+	// grid AND the cards a Pokédex entry opens to.
+	const handleLangToggle = useCallback(() => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		setSetsLanguage((l) => (l === "EN" ? "JA" : "EN"));
+	}, []);
+	const handleModeChange = useCallback(
+		(m: SearchMode) => {
+			// Sealed pricing is a Pro feature (no free catalog data for it).
+			if (m === "sealed" && !isPro) {
+				void presentProPaywallIfNeeded();
+				return;
+			}
+			setMode(m);
 		},
-		{
-			label: "🇺🇸 English Sets",
-			isOn: setsLanguage === "EN",
-			onPress: () => {
-				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-				setSetsLanguage("EN");
-			},
-		},
-		{
-			label: "🇯🇵 Japanese Sets",
-			isOn: setsLanguage === "JA",
-			onPress: () => {
-				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-				setSetsLanguage("JA");
-			},
-		},
-	];
+		[isPro],
+	);
 
 	return (
 		<>
-			<Stack.SearchBar
-				placeholder="Search cards..."
-				onChangeText={(e) => setSearchQuery(e.nativeEvent.text)}
-				onCancelButtonPress={() => router.back()}
-				// Pre-26 iOS renders this under the header — pin it so the manual
-				// content offsets stay correct instead of collapsing on scroll.
-				hideWhenScrolling={HAS_BOTTOM_SEARCH_BAR ? undefined : false}
-				{...legacySearchBarStyle(t)}
-			/>
-
 			{/* Per-button tint: Toolbar-level tintColor is dropped for header
 			    placements on iOS in this expo-router version. */}
 			<Stack.Toolbar placement="right">
 				<Stack.Toolbar.Button
-					icon="camera"
+					icon="camera.viewfinder"
 					tintColor={t.accentOn}
 					onPress={() => {
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -728,30 +854,13 @@ export default function Search() {
 				/>
 			</Stack.Toolbar>
 
-			{/* iOS 26 gets the glass bottom toolbar; earlier iOS renders that
-			    toolbar as a bare glyph floating over content, so it gets a
-			    frosted FAB + action sheet instead (inside the container below). */}
-			{HAS_BOTTOM_SEARCH_BAR && (
-				<Stack.Toolbar placement="bottom" tintColor={t.accentOn}>
-					<Stack.Toolbar.SearchBarSlot />
-					<Stack.Toolbar.Menu
-						icon="line.3.horizontal.decrease.circle"
-						tintColor={t.accentOn}
-					>
-						{filterActions.map((a) => (
-							<Stack.Toolbar.MenuAction
-								key={a.label}
-								isOn={a.isOn}
-								onPress={a.onPress}
-							>
-								{a.label}
-							</Stack.Toolbar.MenuAction>
-						))}
-					</Stack.Toolbar.Menu>
-				</Stack.Toolbar>
-			)}
-
-			<View style={styles.container}>
+			{/* The search field is our FloatingSearchBar (no UISearchController).
+			    Any touch on the content dismisses the keyboard (no-op when
+			    it's already down). */}
+			<View
+				style={styles.container}
+				onTouchStart={() => Keyboard.dismiss()}
+			>
 				{/* Deep-water gradient — the one background every screen shares. */}
 				<LinearGradient
 					colors={t.background.colors}
@@ -759,10 +868,26 @@ export default function Search() {
 					pointerEvents="none"
 					style={StyleSheet.absoluteFill}
 				/>
-				{/* Sets browser is the default content until the user types */}
+				{/* Sets browser (or the Pokédex) is the default content until the
+				    user types */}
 				{showHint && (
 					<Animated.View entering={FadeIn.duration(200)} style={{ flex: 1 }}>
-						<SetsBrowser mode={mode} language={setsLanguage} />
+						{browse === "pokedex" ? (
+							<PokedexBrowser
+								topPadding={gridTop}
+								filteringTopPadding={gridTop}
+								language={setsLanguage}
+								filter={searchQuery}
+								onScroll={handleBrowseScroll}
+							/>
+						) : (
+							<SetsBrowser
+								mode={mode}
+								language={setsLanguage}
+								topPadding={gridTop}
+								onScroll={handleBrowseScroll}
+							/>
+						)}
 					</Animated.View>
 				)}
 				{showSkeleton && (
@@ -771,14 +896,7 @@ export default function Search() {
 						keyExtractor={(item) => item.id}
 						numColumns={COLUMNS}
 						renderItem={() => <SkeletonCard color={t.glass.elevatedFill} />}
-						contentContainerStyle={[
-							styles.grid,
-							{
-								paddingTop:
-									insets.top +
-									(HAS_BOTTOM_SEARCH_BAR ? PADDING : LEGACY_TOP_GRID),
-							},
-						]}
+						contentContainerStyle={[styles.grid, { paddingTop: resultsTop }]}
 						columnWrapperStyle={styles.row}
 						scrollEnabled={false}
 					/>
@@ -792,27 +910,20 @@ export default function Search() {
 					<Text
 						style={[
 							styles.empty,
-							{ color: t.text.secondary, marginTop: insets.top + (HAS_BOTTOM_SEARCH_BAR ? 20 : LEGACY_TOP_TEXT) },
+							{ color: t.text.secondary, marginTop: textTop },
 						]}
 					>
 						{mode === "sealed" ? "No products found" : "No cards found"}
 					</Text>
 				)}
-				{displayCards.length > 0 && (
+				{!dexBrowsing && displayCards.length > 0 && (
 					<Animated.View style={[{ flex: 1 }, clearAnimatedStyle]}>
 						<FlatList
 							data={displayCards}
 							keyExtractor={(item) => item.id}
 							numColumns={COLUMNS}
 							renderItem={renderItem}
-							contentContainerStyle={[
-								styles.grid,
-								{
-								paddingTop:
-									insets.top +
-									(HAS_BOTTOM_SEARCH_BAR ? PADDING : LEGACY_TOP_GRID),
-							},
-							]}
+							contentContainerStyle={[styles.grid, { paddingTop: resultsTop }]}
 							columnWrapperStyle={styles.row}
 							showsVerticalScrollIndicator={false}
 							keyboardDismissMode="on-drag"
@@ -821,6 +932,8 @@ export default function Search() {
 							initialNumToRender={15}
 							maxToRenderPerBatch={9}
 							windowSize={7}
+							onScroll={handleBrowseScroll}
+							scrollEventThrottle={32}
 							onEndReached={handleEndReached}
 							onEndReachedThreshold={0.5}
 							ListFooterComponent={
@@ -843,12 +956,80 @@ export default function Search() {
 						/>
 					</Animated.View>
 				)}
-				{!HAS_BOTTOM_SEARCH_BAR && (
-					<LegacyToolbarMenu
-						icon="line.3.horizontal.decrease.circle"
-						actions={filterActions}
-					/>
-				)}
+
+				{/* Chip bar — the old filter menu, made visible. OUR components,
+				    not SwiftUI glass: iOS hides native glass hosts while the
+				    bottom search bar is active, which made the controls vanish
+				    mid-search. Browsing: Sets|Pokédex + language. Searching:
+				    the Cards|Sealed scope + language (chip steps aside while
+				    the keyboard is up). Floats over the grids. */}
+				<Animated.View
+					style={[styles.chipBar, { top: chipBarTop }, chipBarFadeStyle]}
+					pointerEvents={chipsScrolledAway ? "none" : "box-none"}
+				>
+					<View style={styles.chipRow} pointerEvents="box-none">
+						{/* Both controls share one footprint (fixed segment width)
+						    and crossfade into each other on browse ⇄ search. */}
+						<View pointerEvents="box-none">
+							<Animated.View
+								style={browseChipsStyle}
+								pointerEvents={browseVisible ? "auto" : "none"}
+							>
+								<SegmentedChips
+									options={[
+										{ value: "sets", label: "Sets" },
+										{ value: "pokedex", label: "Pokédex" },
+									]}
+									value={browse}
+									onChange={handleBrowseChange}
+									itemWidth={86}
+								/>
+							</Animated.View>
+							<Animated.View
+								style={[StyleSheet.absoluteFill, scopeChipsStyle]}
+								pointerEvents={scopeActive ? "auto" : "none"}
+							>
+								<SegmentedChips
+									options={[
+										{ value: "cards", label: "Cards" },
+										{ value: "sealed", label: "Sealed" },
+									]}
+									value={mode}
+									onChange={handleModeChange}
+									itemWidth={86}
+								/>
+							</Animated.View>
+						</View>
+						{/* Always visible — it drives the language of both browsing
+						    AND search results, so it stays put while typing. */}
+						<Pressable
+							onPress={handleLangToggle}
+							style={[
+								styles.langChip,
+								{
+									backgroundColor: t.glass.elevatedFill,
+									borderColor: t.glass.elevatedBorder,
+								},
+							]}
+						>
+							<Text style={[styles.langText, { color: t.text.primary }]}>
+								{setsLanguage === "EN" ? "🇺🇸 EN" : "🇯🇵 JA"}
+							</Text>
+						</Pressable>
+					</View>
+				</Animated.View>
+
+				{/* The search bar itself — ours, floating, keyboard-riding. */}
+				<FloatingSearchBar
+					value={searchQuery}
+					onChangeText={(text) => {
+						setSearchQuery(text);
+						// Typing swaps the list context (results / dex filter) — the
+						// chip bar should be visible for the fresh list.
+						resetChipsFade();
+					}}
+					placeholder={dexBrowsing ? "Search Pokémon..." : "Search cards..."}
+				/>
 			</View>
 		</>
 	);
@@ -857,6 +1038,43 @@ export default function Search() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
+	},
+	chipBar: {
+		position: "absolute",
+		left: 0,
+		right: 0,
+		zIndex: 10,
+	},
+	chipRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		paddingHorizontal: PADDING,
+	},
+	// Era section headers — same language as the Pokédex generation headers.
+	eraHeader: {
+		marginTop: 16,
+		marginBottom: 10,
+		paddingHorizontal: 2,
+	},
+	eraTitle: {
+		fontSize: 17,
+		fontWeight: "700",
+	},
+	setRow: {
+		flexDirection: "row",
+		gap: GAP,
+		marginBottom: GAP,
+	},
+	langChip: {
+		paddingHorizontal: 14,
+		paddingVertical: 8,
+		borderRadius: 999,
+		borderWidth: 1,
+	},
+	langText: {
+		fontSize: 13,
+		fontWeight: "600",
 	},
 	hint: {
 		flex: 1,
@@ -877,7 +1095,9 @@ const styles = StyleSheet.create({
 	grid: {
 		padding: PADDING,
 		paddingTop: 20,
-		paddingBottom: 75,
+		// Clear the floating search bar (50pt capsule + gap above the home
+		// indicator).
+		paddingBottom: 120,
 	},
 	row: {
 		gap: GAP,
