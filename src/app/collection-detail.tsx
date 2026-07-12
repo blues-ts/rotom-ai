@@ -39,6 +39,7 @@ import ErrorState from "@/components/ErrorState";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { formatCurrency } from "@/lib/format";
+import { SORT_OPTION_LABELS } from "@/lib/sortLabels";
 import FloatingSearchBar from "@/components/FloatingSearchBar";
 import { CONDITION_LABELS, formatVariantLabel } from "@/lib/scrydex";
 import type { CollectionCard } from "@/types/collection";
@@ -97,11 +98,12 @@ function SkeletonBlock({
 
 type SortOption = "dateAdded" | "nameAsc" | "valueDesc" | "valueAsc";
 
+// Sheet order matches the app-wide convention: recency, name, value.
 const SORT_LABELS: Record<SortOption, string> = {
-	valueDesc: "Value (high to low)",
-	valueAsc: "Value (low to high)",
-	nameAsc: "Name (A–Z)",
-	dateAdded: "Date added (newest)",
+	dateAdded: SORT_OPTION_LABELS.dateAdded,
+	nameAsc: SORT_OPTION_LABELS.name,
+	valueDesc: SORT_OPTION_LABELS.valueDesc,
+	valueAsc: SORT_OPTION_LABELS.valueAsc,
 };
 
 function sortCards(cards: CollectionCard[], by: SortOption): CollectionCard[] {

@@ -351,6 +351,26 @@ function AppContent() {
 					}}
 				/>
 				<Stack.Screen
+					name="menu-sheet"
+					options={({ route }) => ({
+						presentation: "formSheet",
+						sheetAllowedDetents: "fitToContents",
+						sheetGrabberVisible: true,
+						// Bottom sheets get the larger 28pt top radius.
+						sheetCornerRadius: 28,
+						headerShown: true,
+						headerTransparent: false,
+						headerTitle:
+							(route.params as { title?: string } | undefined)?.title ??
+							"Sort by",
+						headerStyle: { backgroundColor: t.glass.sheetFill },
+						headerTintColor: t.text.primary,
+						headerShadowVisible: false,
+						headerLeft: () => null,
+						contentStyle: { backgroundColor: t.glass.sheetFill },
+					})}
+				/>
+				<Stack.Screen
 					name="(camera)"
 					options={{
 						presentation: "fullScreenModal",

@@ -49,6 +49,7 @@ import {
 } from "@/lib/scrydex";
 import CardImage from "@/components/CardImage";
 import FloatingSearchBar from "@/components/FloatingSearchBar";
+import { SORT_OPTION_LABELS } from "@/lib/sortLabels";
 import SegmentedChips from "@/components/SegmentedChips";
 import CardPressable from "@/components/CardPressable";
 import CardContextMenu from "@/components/CardContextMenu";
@@ -75,12 +76,19 @@ import type {
 type SearchMode = "cards" | "sealed";
 type SetsLanguage = "EN" | "JA";
 type BrowseMode = "sets" | "pokedex";
+// Catalog order is newest-release-first; "oldest" walks it backwards and
+// "alpha" re-sorts eras and sets by display name.
+type SetsSort = "newest" | "oldest" | "alpha";
+// "grid" = the 2-up logo tiles; "list" = one compact row per set.
+type SetsView = "grid" | "list";
 
-// Sets grouped by era (series) — headers + pre-chunked rows of two, same
-// shape as the Pokédex's generation grouping.
+// Sets grouped by era (series) — headers + pre-chunked rows of two (grid
+// view) or one item per set (list view), same headers-in-items shape as the
+// Pokédex's generation grouping.
 type SetListItem =
 	| { key: string; kind: "header"; title: string }
-	| { key: string; kind: "row"; sets: ScrydexExpansion[] };
+	| { key: string; kind: "row"; sets: ScrydexExpansion[] }
+	| { key: string; kind: "set"; set: ScrydexExpansion };
 
 // JA expansions don't index is_online_only:false (same quirk as JA cards),
 // so both use the negation form to drop TCG Pocket sets.
@@ -218,11 +226,15 @@ function LoadingSpinner({ color }: { color: string }) {
 const SetsBrowser = memo(function SetsBrowser({
 	mode,
 	language,
+	sort,
+	view,
 	topPadding,
 	onScroll,
 }: {
 	mode: SearchMode;
 	language: SetsLanguage;
+	sort: SetsSort;
+	view: SetsView;
 	topPadding: number;
 	onScroll?: ScrollHandlerProcessed<Record<string, unknown>>;
 }) {
@@ -255,36 +267,62 @@ const SetsBrowser = memo(function SetsBrowser({
 	// Grouped by ERA (the expansion's series — "Scarlet & Violet", "Sword &
 	// Shield", …), same headers-plus-chunked-rows shape as the Pokédex's
 	// generations: headers can't be interleaved into a numColumns FlatList,
-	// so each list item is a full-width header or one pre-chunked row of two
-	// tiles. Series appear in the order of their newest set, and never share
-	// a row across eras.
+	// so each list item is a full-width header, one pre-chunked row of two
+	// tiles (grid view), or a single compact row (list view). The catalog is
+	// newest-first, so eras appear in the order of their newest set — or,
+	// sorted oldest-first, in the order of their oldest — and never share a
+	// row across eras.
 	const listData = useMemo(() => {
+		const ordered =
+			sort === "newest"
+				? filtered
+				: sort === "oldest"
+					? [...filtered].reverse()
+					: [...filtered].sort((a, b) =>
+							getExpansionDisplayName(a).localeCompare(
+								getExpansionDisplayName(b),
+							),
+						);
+		const items: SetListItem[] = [];
+		const pushSets = (sets: ScrydexExpansion[]) => {
+			if (view === "list") {
+				for (const s of sets) {
+					items.push({ key: `set-${s.id}`, kind: "set", set: s });
+				}
+			} else {
+				for (let i = 0; i < sets.length; i += 2) {
+					items.push({
+						key: `row-${sets[i].id}`,
+						kind: "row",
+						sets: sets.slice(i, i + 2),
+					});
+				}
+			}
+		};
+		// A to Z is one flat run across every set — no era headers. The
+		// release sorts group by era, in first-encounter order (the era of
+		// its newest/oldest set), with "Other" (sets with no series) always
+		// sunk to the bottom.
+		if (sort === "alpha") {
+			pushSets(ordered);
+			return items;
+		}
 		const groups = new Map<string, ScrydexExpansion[]>();
-		for (const s of filtered) {
+		for (const s of ordered) {
 			const era = s.series || "Other";
 			const g = groups.get(era);
 			if (g) g.push(s);
 			else groups.set(era, [s]);
 		}
-		// "Other" (sets with no series) always sinks to the bottom, after the
-		// real eras.
 		const eras = [...groups.keys()].sort((a, b) =>
 			a === "Other" ? 1 : b === "Other" ? -1 : 0,
 		);
-		const items: SetListItem[] = [];
 		for (const era of eras) {
-			const sets = groups.get(era)!;
 			items.push({ key: `era-${era}`, kind: "header", title: era });
-			for (let i = 0; i < sets.length; i += 2) {
-				items.push({
-					key: `row-${sets[i].id}`,
-					kind: "row",
-					sets: sets.slice(i, i + 2),
-				});
-			}
+			pushSets(groups.get(era)!);
 		}
 		return items;
-	}, [filtered]);
+	}, [filtered, sort, view]);
 
 	// As set tiles scroll into view, warm that set's card images so opening it is
 	// instant. Guarded so each set is prefetched at most once per mount. Refs keep
@@ -294,8 +332,9 @@ const SetsBrowser = memo(function SetsBrowser({
 		({ viewableItems }: { viewableItems: ViewToken[] }) => {
 			for (const v of viewableItems) {
 				const row = v.item as SetListItem | undefined;
-				if (row?.kind !== "row") continue;
-				for (const s of row.sets) {
+				if (!row || row.kind === "header") continue;
+				const sets = row.kind === "row" ? row.sets : [row.set];
+				for (const s of sets) {
 					if (!prefetchedRef.current.has(s.id)) {
 						prefetchedRef.current.add(s.id);
 						prefetchSetImages(s.id);
@@ -309,37 +348,41 @@ const SetsBrowser = memo(function SetsBrowser({
 	// Tracks tiles that have already played their entrance animation. FlatList
 	// recycles cells while scrolling and `entering` re-fires on every mount, so
 	// without this guard the fade-in replays on every scroll-back and janks the
-	// grid. Each tile animates once, on first appearance. Cleared on language
-	// change so the freshly-swapped list animates in again.
-	const animatedIdsRef = useRef<Set<string>>(new Set());
-	useEffect(() => {
-		animatedIdsRef.current = new Set();
-	}, [language]);
+	// grid. The guard is a FRESH set per list context (language/sort/view) —
+	// memoized during render, so it's already empty when the remounted list
+	// (keyed on the same context) renders its first cells, and every switch
+	// replays the waterfall. A single persistent set would remember keys from
+	// earlier visits and go quiet on the way back.
+	const listKey = `${language}-${view}-${sort}`;
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- listKey IS the cache key
+	const animatedIds = useMemo(() => new Set<string>(), [listKey]);
+
+	const openSet = useCallback(
+		(item: ScrydexExpansion) => {
+			Keyboard.dismiss();
+			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+			// Data/images are already warmed when the tile scrolled into view
+			// (onViewableItemsChanged). Re-prefetching here would fire
+			// Image.prefetch for the whole set right as the screen transitions
+			// in, making the navigation choppy — so just navigate.
+			router.push({
+				pathname: "/set-detail",
+				params: {
+					id: item.id,
+					name: getExpansionDisplayName(item),
+					mode,
+					releaseDate: item.release_date ?? "",
+					total: item.total !== undefined ? String(item.total) : "",
+					logo: item.logo ?? "",
+				},
+			});
+		},
+		[mode],
+	);
 
 	const renderSetTile = useCallback(
 		(item: ScrydexExpansion) => (
-			<CardPressable
-				key={item.id}
-				onPress={() => {
-					Keyboard.dismiss();
-					Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-					// Data/images are already warmed when the tile scrolled into view
-					// (onViewableItemsChanged). Re-prefetching here would fire
-					// Image.prefetch for the whole set right as the screen transitions
-					// in, making the navigation choppy — so just navigate.
-					router.push({
-						pathname: "/set-detail",
-						params: {
-							id: item.id,
-							name: getExpansionDisplayName(item),
-							mode,
-							releaseDate: item.release_date ?? "",
-							total: item.total !== undefined ? String(item.total) : "",
-							logo: item.logo ?? "",
-						},
-					});
-				}}
-			>
+			<CardPressable key={item.id} onPress={() => openSet(item)}>
 				<View
 					style={[
 						styles.setTile,
@@ -377,13 +420,69 @@ const SetsBrowser = memo(function SetsBrowser({
 				</View>
 			</CardPressable>
 		),
-		[t, mode],
+		[t, openSet],
+	);
+
+	// Compact list view: one glass row per set — small logo, name, release
+	// year — the same tap target as the tile.
+	const renderSetListRow = useCallback(
+		(item: ScrydexExpansion) => (
+			<CardPressable key={item.id} onPress={() => openSet(item)}>
+				<View
+					style={[
+						styles.setListRow,
+						{
+							backgroundColor: t.glass.surfaceFill,
+							borderColor: t.glass.surfaceBorder,
+						},
+						t.glass.shadow,
+					]}
+				>
+					<View style={styles.setListLogoBox}>
+						{item.logo ? (
+							<Image
+								source={{ uri: item.logo }}
+								style={styles.setListLogo}
+								contentFit="contain"
+								transition={150}
+								cachePolicy="memory-disk"
+							/>
+						) : (
+							<SymbolView
+								name="square.stack"
+								size={16}
+								tintColor={t.text.tertiary}
+								weight="regular"
+							/>
+						)}
+					</View>
+					<Text
+						style={[styles.setListName, { color: t.text.primary }]}
+						numberOfLines={1}
+					>
+						{getExpansionDisplayName(item)}
+					</Text>
+					{!!item.release_date && (
+						<Text style={[styles.setListYear, { color: t.text.secondary }]}>
+							{item.release_date.slice(0, 4)}
+						</Text>
+					)}
+					<SymbolView
+						name="chevron.right"
+						size={12}
+						tintColor={t.text.tertiary}
+						weight="semibold"
+					/>
+				</View>
+			</CardPressable>
+		),
+		[t, openSet],
 	);
 
 	const renderSet = useCallback(
 		({ item, index }: { item: SetListItem; index: number }) => {
-			const firstAppearance = !animatedIdsRef.current.has(item.key);
-			if (firstAppearance) animatedIdsRef.current.add(item.key);
+			const firstAppearance = !animatedIds.has(item.key);
+			if (firstAppearance) animatedIds.add(item.key);
 			const entering = firstAppearance ? cardWaterfall(index) : undefined;
 			if (item.kind === "header") {
 				return (
@@ -394,13 +493,20 @@ const SetsBrowser = memo(function SetsBrowser({
 					</Animated.View>
 				);
 			}
+			if (item.kind === "set") {
+				return (
+					<Animated.View entering={entering} style={styles.setListItem}>
+						{renderSetListRow(item.set)}
+					</Animated.View>
+				);
+			}
 			return (
 				<Animated.View entering={entering} style={styles.setRow}>
 					{item.sets.map(renderSetTile)}
 				</Animated.View>
 			);
 		},
-		[t, renderSetTile],
+		[t, renderSetTile, renderSetListRow, animatedIds],
 	);
 
 	if (isError) {
@@ -439,7 +545,10 @@ const SetsBrowser = memo(function SetsBrowser({
 
 	return (
 		<Animated.FlatList
-			key={language}
+			// Context swaps (language, sort, grid ⇄ list) remount the list —
+			// recycled cells never mix row shapes, and `entering` (a mount
+			// animation) gets a fresh mount to fire on.
+			key={listKey}
 			data={listData}
 			keyExtractor={(item) => item.key}
 			renderItem={renderSet}
@@ -448,7 +557,12 @@ const SetsBrowser = memo(function SetsBrowser({
 			scrollEventThrottle={16}
 			onViewableItemsChanged={onViewableItemsChanged}
 			viewabilityConfig={viewabilityConfig}
-			contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}
+			// A to Z has no era headers, so add the 16pt the first header's own
+			// top margin normally provides below the chip bar.
+			contentContainerStyle={[
+				styles.grid,
+				{ paddingTop: topPadding + (sort === "alpha" ? 16 : 0) },
+			]}
 			showsVerticalScrollIndicator={false}
 			keyboardDismissMode="on-drag"
 			keyboardShouldPersistTaps="handled"
@@ -473,6 +587,11 @@ export default function Search() {
 	// What the browse area shows while the search bar is empty: the sets grid
 	// or the full Pokédex.
 	const [browse, setBrowse] = useState<BrowseMode>("sets");
+	const [setsSort, setSetsSort] = useState<SetsSort>("newest");
+	const [setsView, setSetsView] = useState<SetsView>("grid");
+	// The dex's natural order is ascending dex number — "oldest" first.
+	const [dexSort, setDexSort] = useState<SetsSort>("oldest");
+	const [dexView, setDexView] = useState<SetsView>("grid");
 	const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
 	// Debounce search input
@@ -835,6 +954,49 @@ export default function Search() {
 		cards.length === 0 &&
 		displayCards.length === 0;
 
+	// Sort + layout for the two browsers, in the search bar's trailing menu
+	// (collection-detail's sort pattern). One shared option shape; the active
+	// browser decides which state the sheet reads and writes. Hidden while
+	// card-search results are on screen — they have their own ordering.
+	const setsBrowsing = showHint && !dexBrowsing;
+	const makeViewActions = (
+		sort: SetsSort,
+		setSort: (s: SetsSort) => void,
+		view: SetsView,
+		setView: (v: SetsView) => void,
+	) => [
+		{
+			label: SORT_OPTION_LABELS.newest,
+			isOn: sort === "newest",
+			onPress: () => setSort("newest"),
+		},
+		{
+			label: SORT_OPTION_LABELS.oldest,
+			isOn: sort === "oldest",
+			onPress: () => setSort("oldest"),
+		},
+		{
+			label: SORT_OPTION_LABELS.name,
+			isOn: sort === "alpha",
+			onPress: () => setSort("alpha"),
+		},
+		{
+			label: SORT_OPTION_LABELS.gridView,
+			isOn: view === "grid",
+			onPress: () => setView("grid"),
+		},
+		{
+			label: SORT_OPTION_LABELS.listView,
+			isOn: view === "list",
+			onPress: () => setView("list"),
+		},
+	];
+	const browserViewActions = dexBrowsing
+		? makeViewActions(dexSort, setDexSort, dexView, setDexView)
+		: setsBrowsing
+			? makeViewActions(setsSort, setSetsSort, setsView, setSetsView)
+			: undefined;
+
 	// Chip-bar handlers — the old toolbar menu's actions, now one visible tap.
 	// (SegmentedChips fires the tap haptic itself.)
 	const handleBrowseChange = useCallback(
@@ -905,12 +1067,16 @@ export default function Search() {
 								filteringTopPadding={gridTop}
 								language={setsLanguage}
 								filter={searchQuery}
+								sort={dexSort}
+								view={dexView}
 								onScroll={browseScrollHandler}
 							/>
 						) : (
 							<SetsBrowser
 								mode={mode}
 								language={setsLanguage}
+								sort={setsSort}
+								view={setsView}
 								topPadding={gridTop}
 								onScroll={browseScrollHandler}
 							/>
@@ -1059,6 +1225,9 @@ export default function Search() {
 						resetChipsFade();
 					}}
 					placeholder={dexBrowsing ? "Search Pokémon..." : "Search cards..."}
+					menuIcon="arrow.up.arrow.down"
+					menuTitle="Sort Options"
+					menuActions={browserViewActions}
 				/>
 			</View>
 		</>
@@ -1095,6 +1264,39 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		gap: GAP,
 		marginBottom: GAP,
+	},
+	// Compact list view — one row per set under the era header.
+	setListItem: {
+		marginBottom: GAP,
+	},
+	setListRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 12,
+		borderRadius: 16,
+		borderWidth: 1,
+		paddingVertical: 10,
+		paddingHorizontal: 14,
+	},
+	setListLogoBox: {
+		width: 54,
+		height: 28,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	setListLogo: {
+		width: 54,
+		height: 28,
+	},
+	setListName: {
+		flex: 1,
+		fontSize: 15,
+		fontWeight: "600",
+	},
+	setListYear: {
+		fontSize: 13,
+		fontWeight: "500",
+		fontVariant: ["tabular-nums"],
 	},
 	langChip: {
 		paddingHorizontal: 14,

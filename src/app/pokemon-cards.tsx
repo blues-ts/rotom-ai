@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { spacing, useRiverTheme } from "@/constants/theme";
 import { useApi } from "@/lib/axios";
+import { SORT_OPTION_LABELS } from "@/lib/sortLabels";
 import FloatingSearchBar from "@/components/FloatingSearchBar";
 import { cardWaterfall } from "@/lib/waterfall";
 import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
@@ -78,10 +79,10 @@ const spriteUrl = (id: string) =>
 type SortOption = "newest" | "oldest" | "valueDesc" | "valueAsc";
 
 const SORT_LABELS: Record<SortOption, string> = {
-	newest: "Newest first",
-	oldest: "Oldest first",
-	valueDesc: "Value (high to low)",
-	valueAsc: "Value (low to high)",
+	newest: SORT_OPTION_LABELS.newest,
+	oldest: SORT_OPTION_LABELS.oldest,
+	valueDesc: SORT_OPTION_LABELS.valueDesc,
+	valueAsc: SORT_OPTION_LABELS.valueAsc,
 };
 
 /**
@@ -187,13 +188,13 @@ export default function PokemonCards() {
 		return () => handle.cancel();
 	}, []);
 
-	// Waterfall entrance once per card — recycled cells don't replay it.
-	// Cleared on a new filter here (sort changes clear it in the handler,
-	// which lands BEFORE the keyed remount, unlike an effect).
-	const animatedIdsRef = useRef<Set<string>>(new Set());
-	useEffect(() => {
-		animatedIdsRef.current = new Set();
-	}, [debouncedFilter]);
+	// Waterfall entrance once per card — recycled cells don't replay it. The
+	// guard is a FRESH set per sort/filter context, memoized during render so
+	// it's already empty when the remounted (sort-keyed) list draws its first
+	// cells — every sort switch replays the waterfall. A persistent set with
+	// prefixed keys went quiet on return visits to a sort.
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- these ARE the cache key
+	const animatedIds = useMemo(() => new Set<string>(), [sortBy, debouncedFilter]);
 
 	// The Pokémon's whole card list in one cached query (~2 round trips via
 	// concurrent pages). Drives the grid, the client-side filter, AND the
@@ -411,12 +412,8 @@ export default function PokemonCards() {
 			const bestVariant = isValueSort ? priceInfo.variant : undefined;
 			const variant = priceInfo.variant ?? getVariantNames(item)[0] ?? "normal";
 			const condition = getConditionOptions(item, variant)[0] ?? "NM";
-			// Guard keyed per SORT — a sort change (which also remounts the
-			// keyed list) makes every key fresh, so the waterfall replays;
-			// recycled cells within one sort never do.
-			const guardKey = `${sortBy}-${item.id}`;
-			const firstAppearance = !animatedIdsRef.current.has(guardKey);
-			if (firstAppearance) animatedIdsRef.current.add(guardKey);
+			const firstAppearance = !animatedIds.has(item.id);
+			if (firstAppearance) animatedIds.add(item.id);
 			return (
 				<Animated.View
 					entering={firstAppearance ? cardWaterfall(index) : undefined}
@@ -507,7 +504,7 @@ export default function PokemonCards() {
 				</Animated.View>
 			);
 		},
-		[t, failedImages, prefetchDetail, isValueSort, sortBy],
+		[t, failedImages, prefetchDetail, isValueSort, animatedIds],
 	);
 
 	const showSkeleton = isLoading || !transitionDone || waitingForPriceSort;

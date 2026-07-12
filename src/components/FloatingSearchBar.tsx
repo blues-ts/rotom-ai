@@ -1,30 +1,7 @@
-import { useRef, useState } from "react";
-import {
-	Keyboard,
-	Modal,
-	Pressable,
-	StyleSheet,
-	Text,
-	TextInput,
-	View,
-} from "react-native";
-import Animated, {
-	Easing,
-	FadeIn,
-	FadeOut,
-	runOnJS,
-	runOnUI,
-	SlideInDown,
-	SlideOutDown,
-	useAnimatedStyle,
-	useSharedValue,
-	withSpring,
-} from "react-native-reanimated";
-import {
-	Gesture,
-	GestureDetector,
-	GestureHandlerRootView,
-} from "react-native-gesture-handler";
+import { useRef } from "react";
+import { Keyboard, Pressable, StyleSheet, TextInput } from "react-native";
+import Animated, { useAnimatedStyle } from "react-native-reanimated";
+import { router } from "expo-router";
 import { BlurView } from "expo-blur";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import * as Haptics from "expo-haptics";
@@ -33,6 +10,7 @@ import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller
 
 import { useRiverTheme } from "@/constants/theme";
 import type { LegacyMenuAction } from "@/components/LegacyToolbarMenu";
+import { setMenuSheetActions } from "@/lib/menuSheet";
 
 // Our own floating search bar — replaces Stack.SearchBar so there is NO
 // UISearchController session at all. That session was the source of every
@@ -40,7 +18,9 @@ import type { LegacyMenuAction } from "@/components/LegacyToolbarMenu";
 // hosts, collapses the header on its own schedule, and can't be unfocused
 // without native commands. A plain TextInput in a frosted capsule has none
 // of those behaviors, works identically on every iOS version, and can embed
-// whatever we want — like the trailing sort/filter menu button.
+// whatever we want — like the trailing sort/filter menu button, which
+// presents the shared /menu-sheet route (a NATIVE form sheet, the same
+// presentation create-collection and configure use).
 
 const BAR_HEIGHT = 50;
 
@@ -57,7 +37,7 @@ export default function FloatingSearchBar({
 	placeholder: string;
 	/** Trailing menu button glyph (defaults to the filter funnel). */
 	menuIcon?: SFSymbol;
-	/** Presented in a bottom form sheet from the embedded trailing button. */
+	/** Presented in the /menu-sheet form sheet from the trailing button. */
 	menuActions?: LegacyMenuAction[];
 	/** Sheet heading above the options. */
 	menuTitle?: string;
@@ -76,47 +56,16 @@ export default function FloatingSearchBar({
 		],
 	}));
 
-	// Sheet close is two-phase so the slide-out plays before the Modal
-	// unmounts (Modal kills exiting animations otherwise).
-	const [modalVisible, setModalVisible] = useState(false);
-	const [sheetShown, setSheetShown] = useState(false);
-	// Drag-to-dismiss: the sheet follows a downward drag; past the threshold
-	// (or on a flick) it dismisses, otherwise it springs back. UI-thread
-	// owned, so resets go through runOnUI.
-	const sheetDragY = useSharedValue(0);
 	const openMenu = () => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 		Keyboard.dismiss();
-		runOnUI(() => {
-			sheetDragY.value = 0;
-		})();
-		setModalVisible(true);
-		setSheetShown(true);
-	};
-	const closeMenu = () => {
-		setSheetShown(false);
-		setTimeout(() => setModalVisible(false), 240);
-	};
-	const sheetPan = Gesture.Pan()
-		// Vertical-only intent, downward — option taps stay taps.
-		.activeOffsetY(10)
-		.onUpdate((e) => {
-			sheetDragY.value = Math.max(0, e.translationY);
-		})
-		.onEnd((e) => {
-			if (e.translationY > 80 || e.velocityY > 800) {
-				runOnJS(closeMenu)();
-			} else {
-				sheetDragY.value = withSpring(0, {
-					stiffness: 380,
-					damping: 30,
-					mass: 0.7,
-				});
-			}
+		// Function props can't ride router params — deposit, then present.
+		setMenuSheetActions(menuActions ?? []);
+		router.push({
+			pathname: "/menu-sheet",
+			params: { title: menuTitle ?? "Sort by" },
 		});
-	const sheetDragStyle = useAnimatedStyle(() => ({
-		transform: [{ translateY: sheetDragY.value }],
-	}));
+	};
 
 	return (
 		<Animated.View
@@ -184,93 +133,6 @@ export default function FloatingSearchBar({
 					</Pressable>
 				)}
 			</BlurView>
-
-			{/* Sort/filter options in a bottom form sheet — the app's sheet
-			    language (sheetFill, 28pt lip, grabber) instead of a system
-			    action sheet. */}
-			<Modal
-				transparent
-				visible={modalVisible}
-				animationType="none"
-				onRequestClose={closeMenu}
-			>
-				{/* Gesture handlers need their own root inside an RN Modal. */}
-				<GestureHandlerRootView style={styles.modalRoot}>
-				{sheetShown && (
-					<>
-						<Animated.View
-							entering={FadeIn.duration(200)}
-							exiting={FadeOut.duration(200)}
-							style={styles.backdrop}
-						>
-							<Pressable style={StyleSheet.absoluteFill} onPress={closeMenu} />
-						</Animated.View>
-						<GestureDetector gesture={sheetPan}>
-						<Animated.View
-							entering={SlideInDown.duration(320).easing(
-								Easing.out(Easing.cubic),
-							)}
-							exiting={SlideOutDown.duration(240).easing(
-								Easing.in(Easing.cubic),
-							)}
-							style={[
-								styles.sheet,
-								sheetDragStyle,
-								{
-									backgroundColor: t.glass.sheetFill,
-									borderColor: t.glass.surfaceBorder,
-									paddingBottom: insets.bottom + 16,
-								},
-							]}
-						>
-							<View style={styles.grabber} />
-							<Text style={[styles.sheetTitle, { color: t.text.secondary }]}>
-								{menuTitle ?? "Sort by"}
-							</Text>
-							{menuActions?.map((a) => (
-								<Pressable
-									key={a.label}
-									style={({ pressed }) => [
-										styles.optionRow,
-										pressed && { backgroundColor: t.glass.elevatedFill },
-									]}
-									onPress={() => {
-										Haptics.selectionAsync();
-										// Dismiss FIRST, apply AFTER the slide-out: sort
-										// changes can remount a heavy grid, and doing that
-										// synchronously starved the exit animation (laggy
-										// slide, or a hard cut past the modal-hide timeout).
-										closeMenu();
-										setTimeout(() => a.onPress(), 260);
-									}}
-								>
-									<Text
-										style={[
-											styles.optionLabel,
-											{
-												color: a.isOn ? t.text.primary : t.text.body,
-												fontWeight: a.isOn ? "700" : "500",
-											},
-										]}
-									>
-										{a.label}
-									</Text>
-									{a.isOn && (
-										<SymbolView
-											name="checkmark"
-											size={15}
-											tintColor={t.accent}
-											weight="semibold"
-										/>
-									)}
-								</Pressable>
-							))}
-						</Animated.View>
-						</GestureDetector>
-					</>
-				)}
-				</GestureHandlerRootView>
-			</Modal>
 		</Animated.View>
 	);
 }
@@ -307,52 +169,5 @@ const styles = StyleSheet.create({
 	},
 	menuButton: {
 		paddingLeft: 2,
-	},
-	modalRoot: {
-		flex: 1,
-	},
-	backdrop: {
-		position: "absolute",
-		top: 0,
-		left: 0,
-		right: 0,
-		bottom: 0,
-		backgroundColor: "rgba(0,0,0,0.5)",
-	},
-	sheet: {
-		position: "absolute",
-		left: 0,
-		right: 0,
-		bottom: 0,
-		borderTopLeftRadius: 28,
-		borderTopRightRadius: 28,
-		borderTopWidth: StyleSheet.hairlineWidth,
-		paddingTop: 8,
-	},
-	grabber: {
-		alignSelf: "center",
-		width: 36,
-		height: 5,
-		borderRadius: 2.5,
-		backgroundColor: "rgba(255,255,255,0.25)",
-		marginBottom: 12,
-	},
-	sheetTitle: {
-		fontSize: 11,
-		fontWeight: "700",
-		letterSpacing: 1,
-		textTransform: "uppercase",
-		paddingHorizontal: 20,
-		marginBottom: 6,
-	},
-	optionRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		paddingHorizontal: 20,
-		paddingVertical: 14,
-	},
-	optionLabel: {
-		fontSize: 16,
 	},
 });

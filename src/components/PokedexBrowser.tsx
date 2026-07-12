@@ -71,28 +71,58 @@ const GENERATIONS = [
 	{ numeral: "IX", region: "Paldea", from: 906, to: 1025 },
 ] as const;
 
+// Same menu vocabulary as the sets browser: "oldest" is dex order (the
+// default here — #0001 up), "newest" walks it backwards, "alpha" is one flat
+// A-to-Z run with no generation headers.
+export type DexSort = "newest" | "oldest" | "alpha";
+export type DexView = "grid" | "list";
+
 type ListItem =
 	| { key: string; kind: "header"; title: string; region: string }
-	| { key: string; kind: "row"; entries: DexEntry[] };
+	| { key: string; kind: "row"; entries: DexEntry[] }
+	| { key: string; kind: "entry"; entry: DexEntry };
 
-const DEX_LIST: ListItem[] = GENERATIONS.flatMap((g) => {
-	const items: ListItem[] = [
-		{
+// Rows of tiles (grid view) or one item per Pokémon (list view). Headers
+// can't be interleaved into a numColumns FlatList, so grid rows are
+// pre-chunked and generations never share a row.
+function pushEntries(items: ListItem[], entries: DexEntry[], view: DexView) {
+	if (view === "list") {
+		for (const e of entries) {
+			items.push({ key: `p-${e.id}`, kind: "entry", entry: e });
+		}
+	} else {
+		for (let i = 0; i < entries.length; i += COLUMNS) {
+			items.push({
+				key: `row-${entries[i].id}`,
+				kind: "row",
+				entries: entries.slice(i, i + COLUMNS),
+			});
+		}
+	}
+}
+
+const ALPHA_DEX = [...POKEDEX].sort((a, b) => a.name.localeCompare(b.name));
+
+function buildBrowseList(sort: DexSort, view: DexView): ListItem[] {
+	const items: ListItem[] = [];
+	if (sort === "alpha") {
+		pushEntries(items, ALPHA_DEX, view);
+		return items;
+	}
+	const gens = sort === "oldest" ? GENERATIONS : [...GENERATIONS].reverse();
+	for (const g of gens) {
+		items.push({
 			key: `gen-${g.numeral}`,
 			kind: "header",
 			title: `Generation ${g.numeral}`,
 			region: g.region,
-		},
-	];
-	for (let start = g.from; start <= g.to; start += COLUMNS) {
-		items.push({
-			key: `row-${start}`,
-			kind: "row",
-			entries: POKEDEX.slice(start - 1, Math.min(start + COLUMNS - 1, g.to)),
 		});
+		const entries = POKEDEX.slice(g.from - 1, g.to);
+		if (sort === "newest") entries.reverse();
+		pushEntries(items, entries, view);
 	}
 	return items;
-});
+}
 
 // Filter matching is punctuation-blind so "farfetchd", "mr mime", and
 // "nidoran" all hit their entries despite ’ ♀ . in the dex names.
@@ -162,6 +192,72 @@ const DexTile = memo(function DexTile({
 	);
 });
 
+// Compact list view: one glass row per Pokémon — sprite, name, dex number —
+// the same tap target (and touch-down prefetch) as the tile.
+const DexListRow = memo(function DexListRow({
+	entry,
+	language,
+	onPrefetch,
+	t,
+}: {
+	entry: DexEntry;
+	language: "EN" | "JA";
+	onPrefetch: (name: string) => void;
+	t: RiverTheme;
+}) {
+	return (
+		<CardPressable
+			onTouchStart={() => onPrefetch(entry.name)}
+			onPress={() => {
+				Keyboard.dismiss();
+				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+				router.push({
+					pathname: "/pokemon-cards",
+					params: {
+						name: entry.name,
+						dexId: String(entry.id),
+						language,
+					},
+				});
+			}}
+		>
+			<View
+				style={[
+					styles.listRow,
+					{
+						backgroundColor: t.glass.surfaceFill,
+						borderColor: t.glass.surfaceBorder,
+					},
+					t.glass.shadow,
+				]}
+			>
+				<Image
+					source={{ uri: spriteUrl(entry.id) }}
+					style={styles.listSprite}
+					contentFit="contain"
+					cachePolicy="memory-disk"
+					recyclingKey={String(entry.id)}
+				/>
+				<Text
+					style={[styles.listName, { color: t.text.primary }]}
+					numberOfLines={1}
+				>
+					{entry.name}
+				</Text>
+				<Text style={[styles.listNumber, { color: t.text.tertiary }]}>
+					#{String(entry.id).padStart(4, "0")}
+				</Text>
+				<SymbolView
+					name="chevron.right"
+					size={12}
+					tintColor={t.text.tertiary}
+					weight="semibold"
+				/>
+			</View>
+		</CardPressable>
+	);
+});
+
 // memo: the search screen re-renders on every keystroke / chip flip / scroll
 // fade — this skips the whole browser pass when its props didn't change.
 const PokedexBrowser = memo(function PokedexBrowser({
@@ -169,6 +265,8 @@ const PokedexBrowser = memo(function PokedexBrowser({
 	filteringTopPadding,
 	language,
 	filter,
+	sort,
+	view,
 	onScroll,
 }: {
 	topPadding: number;
@@ -181,6 +279,8 @@ const PokedexBrowser = memo(function PokedexBrowser({
 	language: "EN" | "JA";
 	/** Search-bar text — filters the dex by name/number, flat grid (no gens). */
 	filter: string;
+	sort: DexSort;
+	view: DexView;
 	/** Animated scroll handler — the chip bar's fade runs on the UI thread. */
 	onScroll?: ScrollHandlerProcessed<Record<string, unknown>>;
 }) {
@@ -215,22 +315,21 @@ const PokedexBrowser = memo(function PokedexBrowser({
 	const normalized = normalize(trimmed);
 	const isNumeric = /^\d+$/.test(trimmed);
 	const listData = useMemo(() => {
-		if (!normalized) return DEX_LIST;
-		const matches = POKEDEX.filter(
+		if (!normalized) return buildBrowseList(sort, view);
+		// Filter matches follow the active sort too (they're collected in dex
+		// order), just without headers — a filtered list is already flat.
+		let matches = POKEDEX.filter(
 			(e, i) =>
 				DEX_SEARCH_KEYS[i].includes(normalized) ||
 				(isNumeric && String(e.id).startsWith(trimmed)),
 		);
+		if (sort === "newest") matches = [...matches].reverse();
+		else if (sort === "alpha")
+			matches = [...matches].sort((a, b) => a.name.localeCompare(b.name));
 		const rows: ListItem[] = [];
-		for (let i = 0; i < matches.length; i += COLUMNS) {
-			rows.push({
-				key: `row-${matches[i].id}`,
-				kind: "row",
-				entries: matches.slice(i, i + COLUMNS),
-			});
-		}
+		pushEntries(rows, matches, view);
 		return rows;
-	}, [normalized, isNumeric, trimmed]);
+	}, [normalized, isNumeric, trimmed, sort, view]);
 
 	// A new filter can leave the list scrolled past the (now shorter) content.
 	useEffect(() => {
@@ -239,17 +338,21 @@ const PokedexBrowser = memo(function PokedexBrowser({
 
 	// Same once-per-item waterfall as the sets grid: FlatList recycles cells
 	// while scrolling and `entering` re-fires on every mount, so without this
-	// guard the fade-in replays on every scroll-back and janks the grid.
-	// While filtering, entrances are OFF — rows re-shuffle every keystroke and
-	// animating each shuffle reads as flicker.
-	const animatedKeysRef = useRef<Set<string>>(new Set());
+	// guard the fade-in replays on every scroll-back and janks the grid. The
+	// guard is a FRESH set per sort/view context (memoized during render, so
+	// it's already empty when the remounted list draws its first cells) —
+	// every switch replays the waterfall; a persistent set would go quiet on
+	// return visits. While filtering, entrances are OFF — rows re-shuffle
+	// every keystroke and animating each shuffle reads as flicker.
+	const listKey = `${sort}-${view}`;
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- listKey IS the cache key
+	const animatedKeys = useMemo(() => new Set<string>(), [listKey]);
 	const filtering = normalized.length > 0;
 
 	const renderItem = useCallback(
 		({ item, index }: { item: ListItem; index: number }) => {
-			const firstAppearance =
-				!filtering && !animatedKeysRef.current.has(item.key);
-			if (firstAppearance) animatedKeysRef.current.add(item.key);
+			const firstAppearance = !filtering && !animatedKeys.has(item.key);
+			if (firstAppearance) animatedKeys.add(item.key);
 			const entering = firstAppearance ? cardWaterfall(index) : undefined;
 			if (item.kind === "header") {
 				return (
@@ -260,6 +363,18 @@ const PokedexBrowser = memo(function PokedexBrowser({
 						<Text style={[styles.headerRegion, { color: t.text.tertiary }]}>
 							{item.region}
 						</Text>
+					</Animated.View>
+				);
+			}
+			if (item.kind === "entry") {
+				return (
+					<Animated.View entering={entering} style={styles.listItem}>
+						<DexListRow
+							entry={item.entry}
+							language={language}
+							onPrefetch={prefetchPokemon}
+							t={t}
+						/>
 					</Animated.View>
 				);
 			}
@@ -277,7 +392,7 @@ const PokedexBrowser = memo(function PokedexBrowser({
 				</Animated.View>
 			);
 		},
-		[t, language, filtering, prefetchPokemon],
+		[t, language, filtering, prefetchPokemon, animatedKeys],
 	);
 
 	// NO getItemLayout here, deliberately: its offsets don't include the
@@ -287,6 +402,10 @@ const PokedexBrowser = memo(function PokedexBrowser({
 	// self-measurement is exact and cheap (same as the sets grid).
 	return (
 		<Animated.FlatList
+			// Context swaps (sort, grid ⇄ list) remount the list — recycled
+			// cells never mix row shapes, and `entering` (a mount animation)
+			// gets a fresh mount to fire on.
+			key={listKey}
 			ref={listRef}
 			data={listData}
 			keyExtractor={(item) => item.key}
@@ -312,7 +431,11 @@ const PokedexBrowser = memo(function PokedexBrowser({
 				// its gap above the home indicator), so the last dex row rests
 				// fully visible above it.
 				{
-					paddingTop: filtering ? filteringTopPadding : topPadding,
+					// A to Z has no generation headers, so add the 16pt the first
+					// header's own top margin normally provides below the chip bar.
+					paddingTop: filtering
+						? filteringTopPadding
+						: topPadding + (sort === "alpha" ? 16 : 0),
 					paddingBottom: insets.bottom + 90,
 				},
 				// Lets the empty state center itself vertically.
@@ -343,6 +466,33 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		gap: GAP,
 		marginBottom: GAP,
+	},
+	// Compact list view — one row per Pokémon.
+	listItem: {
+		marginBottom: GAP,
+	},
+	listRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 12,
+		borderRadius: 16,
+		borderWidth: 1,
+		paddingVertical: 6,
+		paddingHorizontal: 14,
+	},
+	listSprite: {
+		width: 36,
+		height: 36,
+	},
+	listName: {
+		flex: 1,
+		fontSize: 15,
+		fontWeight: "600",
+	},
+	listNumber: {
+		fontSize: 13,
+		fontWeight: "500",
+		fontVariant: ["tabular-nums"],
 	},
 	header: {
 		flexDirection: "row",

@@ -28,6 +28,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacing, useRiverTheme } from "@/constants/theme";
 import { useApi } from "@/lib/axios";
+import { SORT_OPTION_LABELS } from "@/lib/sortLabels";
 import FloatingSearchBar from "@/components/FloatingSearchBar";
 import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
 import { useOwnedCardIds } from "@/hooks/useOwnedCardIds";
@@ -73,11 +74,11 @@ type SortOption =
 	| "valueAsc";
 
 const SORT_LABELS: Record<SortOption, string> = {
-	number: "Number (low to high)",
-	numberDesc: "Number (high to low)",
-	nameAsc: "Name (A–Z)",
-	valueDesc: "Value (high to low)",
-	valueAsc: "Value (low to high)",
+	number: SORT_OPTION_LABELS.numberAsc,
+	numberDesc: SORT_OPTION_LABELS.numberDesc,
+	nameAsc: SORT_OPTION_LABELS.name,
+	valueDesc: SORT_OPTION_LABELS.valueDesc,
+	valueAsc: SORT_OPTION_LABELS.valueAsc,
 };
 
 /**
@@ -216,9 +217,10 @@ export default function SetDetail() {
 	const sortBy = isSealedMode ? sealedSort : cardSort;
 	// The sealed list mounts (and its query fires) on first visit only.
 	const [sealedVisited, setSealedVisited] = useState(isSealedMode);
-	// Bumped when a mode becomes visible: remounts THAT list so its tiles
-	// waterfall in on every toggle (the Sets ⇄ Pokédex feel) — the hidden
-	// list is never remounted.
+	// Bumped on SORT changes only: remounts that list so its tiles waterfall
+	// in with the new order. Mode toggles never bump — they're a pure
+	// visibility flip (remounting on toggle stalled the JS thread and janked
+	// the header crossfade).
 	const [cardGen, setCardGen] = useState(0);
 	const [sealedGen, setSealedGen] = useState(0);
 	const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
@@ -243,11 +245,12 @@ export default function SetDetail() {
 				return;
 			}
 			if (m === "sealed") setSealedVisited(true);
+			// A pure visibility flip — NO gen bump. Remounting the incoming
+			// grid here (native context-menu host per cell) stalled the JS
+			// thread mid-toggle, which lagged the flip and let the header
+			// crossfade start late. The waterfall still plays on each list's
+			// first mount and on sort changes; toggles just swap instantly.
 			setProductMode(m);
-			// Replay the waterfall for the incoming mode: bumping the gen
-			// remounts that list AND invalidates its entrance-guard keys.
-			if (m === "sealed") setSealedGen((g) => g + 1);
-			else setCardGen((g) => g + 1);
 		},
 		[isPro],
 	);
@@ -486,7 +489,6 @@ export default function SetDetail() {
 	}, [isSealedMode, debouncedFilter, sealedSet]);
 
 	const releaseYear = releaseDate ? releaseDate.slice(0, 4) : "—";
-	const countValue = isSealedMode ? (sealedTotal ?? "—") : total || "—";
 
 	// Completion display: counts zero-padded like collector numbers (087/165),
 	// plus a whole-number percent.
@@ -495,9 +497,42 @@ export default function SetDetail() {
 	const setSizePadded = String(setSize).padStart(padWidth, "0");
 	const completionPct =
 		setSize > 0 ? Math.round((ownedInSet / setSize) * 100) : 0;
-	// The guard also hides this while the catalog/ownership queries load, so
-	// it appears with real numbers instead of flashing "000 / 000".
-	const showCompletion = !isSealedMode && !!catalogSet && !!ownedCardIds;
+	// The guard also hides the completion numbers while the catalog/ownership
+	// queries load, so they appear real instead of flashing "000 / 000".
+	const cardsReady = !!catalogSet && !!ownedCardIds;
+	const showSummaryCard = isSealedMode || cardsReady;
+
+	// Cards ⇄ Sealed crossfade: ONE persistent summary card — the logo never
+	// remounts, while the left/right text slots fade between the two modes'
+	// content (the same stacked-layers idiom as the search screen's chip
+	// crossfade) and the cards-only progress bar collapses away. The sealed
+	// content is the sizing layer (it's always renderable); the cards content
+	// overlays it absolutely.
+	const modeProgress = useSharedValue(isSealedMode ? 1 : 0);
+	useEffect(() => {
+		modeProgress.value = withTiming(isSealedMode ? 1 : 0, { duration: 250 });
+	}, [isSealedMode, modeProgress]);
+	const cardsLayerStyle = useAnimatedStyle(() => ({
+		opacity: 1 - modeProgress.value,
+	}));
+	const sealedLayerStyle = useAnimatedStyle(() => ({
+		opacity: modeProgress.value,
+	}));
+	// The 4pt track and its 10pt gap shrink to nothing in sealed mode.
+	const trackWrapStyle = useAnimatedStyle(() => {
+		const p = 1 - modeProgress.value;
+		return { opacity: p, height: p * 4, marginTop: p * 10 };
+	});
+
+	// The entrance fade plays ONCE — the card's first arrival with the grid.
+	// Sort changes remount the visible list (gen bump), which recreates this
+	// header instance; replaying the fade there covered the whole card and
+	// read as a hard fade instead of the layers crossfading.
+	const summaryFadeDoneRef = useRef(false);
+	const summaryEntering = summaryFadeDoneRef.current
+		? undefined
+		: FadeIn.duration(250);
+	if (showSummaryCard) summaryFadeDoneRef.current = true;
 
 	// Rendered inside the FlatList so native header insets (translucent header
 	// + attached search bar) position it correctly instead of hiding it.
@@ -520,148 +555,164 @@ export default function SetDetail() {
 					/>
 				</View>
 			)}
-			{/* Card mode replaces this info bar with the completion card below
-			    (which carries the logo); only sealed mode still shows it. The
-			    entrance fade covers the Cards ⇄ Sealed remount, so the header
-			    arrives with the grid's waterfall instead of hard-cutting. */}
-			{isSealedMode && (
-				<Animated.View
-					entering={FadeIn.duration(250)}
-					style={[
-						styles.summaryRow,
-						{
-							backgroundColor: t.glass.surfaceFill,
-							borderColor: t.glass.surfaceBorder,
-						},
-						t.glass.shadow,
-					]}
-				>
-					<View style={styles.summarySide}>
-						<Text style={[styles.summaryLabel, { color: t.text.secondary }]}>
-							Released
-						</Text>
-						<Text style={[styles.summaryValue, { color: t.text.primary }]}>
-							{releaseYear}
-						</Text>
-					</View>
-					{!!logo && (
-						<Image
-							source={{ uri: logo }}
-							style={styles.summaryLogo}
-							contentFit="contain"
-							transition={150}
-							cachePolicy="memory-disk"
-						/>
-					)}
-					<View style={[styles.summarySide, styles.summaryRight]}>
-						<Text style={[styles.summaryLabel, { color: t.text.secondary }]}>
-							{isSealedMode ? "Products" : "Cards"}
-						</Text>
-						<Text style={[styles.summaryValue, { color: t.text.primary }]}>
-							{countValue}
-						</Text>
-					</View>
-				</Animated.View>
-			)}
-			{showCompletion && (
-				<Animated.View entering={FadeIn.duration(250)}>
-				<Pressable
-					disabled={ownedOnly}
-					onPress={() => {
-						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-						router.push({
-							pathname: "/set-detail",
-							params: {
-								id,
-								owned: "1",
-								...(name ? { name } : {}),
-								...(releaseDate ? { releaseDate } : {}),
-								...(total ? { total } : {}),
-								...(logo ? { logo } : {}),
-							},
-						});
-					}}
-					style={[
-						styles.completionCard,
-						{
-							backgroundColor: t.glass.surfaceFill,
-							borderColor: t.glass.surfaceBorder,
-						},
-						t.glass.shadow,
-					]}
-				>
-					<View style={styles.completionTopRow}>
-						<View style={styles.summarySide}>
-							<Text style={[styles.summaryLabel, { color: t.text.secondary }]}>
-								Collected
-							</Text>
-							<Text
-								style={[
-									styles.summaryValue,
-									styles.completionCount,
-									{ color: t.text.primary },
-								]}
-							>
-								{ownedPadded} / {setSizePadded}
-							</Text>
-						</View>
-						{!!logo && (
-							<Image
-								source={{ uri: logo }}
-								style={styles.summaryLogo}
-								contentFit="contain"
-								transition={150}
-								cachePolicy="memory-disk"
-							/>
-						)}
-						<View style={styles.completionRight}>
-							<View style={styles.summaryRight}>
-								<Text
-									style={[styles.summaryLabel, { color: t.text.secondary }]}
-								>
-									Progress
-								</Text>
-								<Text
-									style={[
-										styles.summaryValue,
-										styles.completionCount,
-										{ color: t.text.primary },
-									]}
-								>
-									{completionPct}%
-								</Text>
-							</View>
-							{!ownedOnly && (
-								<SymbolView
-									name="chevron.right"
-									size={14}
-									tintColor={t.text.tertiary}
-									weight="semibold"
-								/>
-							)}
-						</View>
-					</View>
-					<View
+			{/* One summary card for BOTH modes — Released/Products (sealed) and
+			    Collected/Progress (cards) crossfade in place around the logo,
+			    which never remounts. The entrance fade covers first arrival, so
+			    the card lands with the grid's waterfall. */}
+			{showSummaryCard && (
+				<Animated.View entering={summaryEntering}>
+					<Pressable
+						disabled={ownedOnly || isSealedMode}
+						onPress={() => {
+							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+							router.push({
+								pathname: "/set-detail",
+								params: {
+									id,
+									owned: "1",
+									...(name ? { name } : {}),
+									...(releaseDate ? { releaseDate } : {}),
+									...(total ? { total } : {}),
+									...(logo ? { logo } : {}),
+								},
+							});
+						}}
 						style={[
-							styles.completionTrack,
-							{ backgroundColor: t.glass.elevatedFill },
+							styles.completionCard,
+							{
+								backgroundColor: t.glass.surfaceFill,
+								borderColor: t.glass.surfaceBorder,
+							},
+							t.glass.shadow,
 						]}
 					>
-						<View
+						<View style={styles.completionTopRow}>
+							<View style={styles.summarySide}>
+								<Animated.View style={sealedLayerStyle}>
+									<Text
+										style={[styles.summaryLabel, { color: t.text.secondary }]}
+									>
+										Released
+									</Text>
+									<Text
+										style={[styles.summaryValue, { color: t.text.primary }]}
+									>
+										{releaseYear}
+									</Text>
+								</Animated.View>
+								<Animated.View
+									style={[StyleSheet.absoluteFill, cardsLayerStyle]}
+								>
+									{cardsReady && (
+										<>
+											<Text
+												style={[
+													styles.summaryLabel,
+													{ color: t.text.secondary },
+												]}
+											>
+												Collected
+											</Text>
+											<Text
+												style={[
+													styles.summaryValue,
+													styles.completionCount,
+													{ color: t.text.primary },
+												]}
+											>
+												{ownedPadded} / {setSizePadded}
+											</Text>
+										</>
+									)}
+								</Animated.View>
+							</View>
+							{!!logo && (
+								<Image
+									source={{ uri: logo }}
+									style={styles.summaryLogo}
+									contentFit="contain"
+									transition={150}
+									cachePolicy="memory-disk"
+								/>
+							)}
+							<View style={[styles.summarySide, styles.summaryRight]}>
+								<Animated.View
+									style={[styles.summaryRight, sealedLayerStyle]}
+								>
+									<Text
+										style={[styles.summaryLabel, { color: t.text.secondary }]}
+									>
+										Products
+									</Text>
+									<Text
+										style={[styles.summaryValue, { color: t.text.primary }]}
+									>
+										{sealedTotal ?? "—"}
+									</Text>
+								</Animated.View>
+								<Animated.View
+									style={[
+										StyleSheet.absoluteFill,
+										styles.completionRight,
+										cardsLayerStyle,
+									]}
+								>
+									{cardsReady && (
+										<>
+											<View style={styles.summaryRight}>
+												<Text
+													style={[
+														styles.summaryLabel,
+														{ color: t.text.secondary },
+													]}
+												>
+													Progress
+												</Text>
+												<Text
+													style={[
+														styles.summaryValue,
+														styles.completionCount,
+														{ color: t.text.primary },
+													]}
+												>
+													{completionPct}%
+												</Text>
+											</View>
+											{!ownedOnly && (
+												<SymbolView
+													name="chevron.right"
+													size={14}
+													tintColor={t.text.tertiary}
+													weight="semibold"
+												/>
+											)}
+										</>
+									)}
+								</Animated.View>
+							</View>
+						</View>
+						<Animated.View
 							style={[
-								styles.completionFill,
-								{
-									backgroundColor: t.accent,
-									width: `${
-										setSize > 0
-											? Math.min((ownedInSet / setSize) * 100, 100)
-											: 0
-									}%`,
-								},
+								styles.completionTrack,
+								{ backgroundColor: t.glass.elevatedFill },
+								trackWrapStyle,
 							]}
-						/>
-					</View>
-				</Pressable>
+						>
+							<View
+								style={[
+									styles.completionFill,
+									{
+										backgroundColor: t.accent,
+										width: `${
+											setSize > 0
+												? Math.min((ownedInSet / setSize) * 100, 100)
+												: 0
+										}%`,
+									},
+								]}
+							/>
+						</Animated.View>
+					</Pressable>
 				</Animated.View>
 			)}
 		</>
@@ -1072,17 +1123,6 @@ const styles = StyleSheet.create({
 	modePickerWrap: {
 		marginBottom: 10,
 	},
-	// Set info bar — glass card: RELEASED / logo / CARDS.
-	summaryRow: {
-		flexDirection: "row",
-		justifyContent: "space-between",
-		alignItems: "center",
-		borderRadius: 20,
-		borderWidth: 1,
-		paddingHorizontal: 14,
-		paddingVertical: 12,
-		marginBottom: 12,
-	},
 	summarySide: {
 		flex: 1,
 	},
@@ -1104,14 +1144,15 @@ const styles = StyleSheet.create({
 		fontSize: 20,
 		fontWeight: "800",
 	},
-	// Set completion — glass card: COLLECTED count / PROGRESS % / fill bar.
+	// Set summary — glass card for BOTH modes: COLLECTED / PROGRESS / fill bar
+	// (cards) crossfading with RELEASED / PRODUCTS (sealed). No `gap`: the
+	// track's spacing is its animated marginTop, so it collapses with the bar.
 	completionCard: {
 		borderRadius: 20,
 		borderWidth: 1,
 		paddingHorizontal: 14,
 		paddingVertical: 12,
 		marginBottom: 20,
-		gap: 10,
 	},
 	completionTopRow: {
 		flexDirection: "row",
