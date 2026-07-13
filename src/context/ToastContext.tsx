@@ -7,7 +7,20 @@ import {
 	useState,
 	type ReactNode,
 } from "react";
+import { Platform } from "react-native";
+import { FullWindowOverlay } from "react-native-screens";
 import Toast from "@/components/Toast";
+
+// The toast must outrank NATIVE modal presentations (card/sealed detail are
+// `modal`, add-to-collection is a `formSheet`) — a plain root-level overlay
+// renders behind them all. FullWindowOverlay hosts it in its own UIWindow
+// above every presented controller; empty areas pass touches through.
+function ToastHost({ children }: { children: ReactNode }) {
+	if (Platform.OS === "ios") {
+		return <FullWindowOverlay>{children}</FullWindowOverlay>;
+	}
+	return <>{children}</>;
+}
 
 export type ToastType = "success" | "error";
 
@@ -43,7 +56,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 	return (
 		<ToastContext.Provider value={value}>
 			{children}
-			<Toast visible={visible} message={message} type={type} />
+			<ToastHost>
+				<Toast visible={visible} message={message} type={type} />
+			</ToastHost>
 		</ToastContext.Provider>
 	);
 }

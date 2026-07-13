@@ -5,9 +5,9 @@ import Animated, {
 	withTiming,
 } from "react-native-reanimated";
 import { useEffect } from "react";
-import { Ionicons } from "@expo/vector-icons";
+import { SymbolView } from "expo-symbols";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTheme } from "@/context/ThemeContext";
+import { useRiverTheme } from "@/constants/theme";
 import type { ToastType } from "@/context/ToastContext";
 
 const HIDDEN_Y = -60;
@@ -21,7 +21,7 @@ export default function Toast({
 	message: string;
 	type: ToastType;
 }) {
-	const { colors } = useTheme();
+	const t = useRiverTheme();
 	const { top } = useSafeAreaInsets();
 	const translateY = useSharedValue(HIDDEN_Y);
 	const opacity = useSharedValue(0);
@@ -46,20 +46,28 @@ export default function Toast({
 			pointerEvents="none"
 			style={[styles.container, { top: top + 8 }, style]}
 		>
+			{/* Same glass pill as RefreshingPill: floats over scrolling content,
+			    so the near-opaque sheet fill rather than the 8% glass. */}
 			<View
 				style={[
 					styles.pill,
-					{ backgroundColor: colors.card, borderColor: colors.border },
+					{
+						backgroundColor: t.glass.sheetFill,
+						borderColor: t.glass.elevatedBorder,
+					},
 				]}
 			>
-				<Ionicons
-					name={type === "success" ? "checkmark-circle" : "alert-circle"}
-					size={18}
-					color={type === "success" ? colors.primary : colors.destructive}
+				<SymbolView
+					name={
+						type === "success"
+							? "checkmark.circle.fill"
+							: "exclamationmark.circle.fill"
+					}
+					size={17}
+					tintColor={type === "success" ? t.accentOn : t.loss}
+					weight="semibold"
 				/>
-				<Text style={[styles.text, { color: colors.foreground }]}>
-					{message}
-				</Text>
+				<Text style={[styles.text, { color: t.text.primary }]}>{message}</Text>
 			</View>
 		</Animated.View>
 	);

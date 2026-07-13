@@ -1,10 +1,9 @@
-import { Pressable } from "react-native";
 import { Redirect, router, Stack } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "expo-symbols";
 import { useRiverTheme } from "@/constants/theme";
-import { legacyHeaderBlur } from "@/lib/platform";
+import HeaderIconButton from "@/components/HeaderIconButton";
 
 export default function SearchLayout() {
 	const { isSignedIn, isLoaded } = useAuth();
@@ -29,11 +28,10 @@ export default function SearchLayout() {
 				headerShadowVisible: false,
 				headerTransparent: true,
 				headerStyle: { backgroundColor: "transparent" },
-				...legacyHeaderBlur(t.isDark),
 				// Native chrome tinted with the accent per the design system.
 				headerTintColor: t.accentOn,
 				headerLeft: () => (
-					<Pressable
+					<HeaderIconButton
 						onPress={() => {
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 							router.back();
@@ -45,7 +43,7 @@ export default function SearchLayout() {
 							tintColor={t.accentOn}
 							weight="medium"
 						/>
-					</Pressable>
+					</HeaderIconButton>
 				),
 			}}
 		/>

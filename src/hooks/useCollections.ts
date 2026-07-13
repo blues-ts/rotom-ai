@@ -188,9 +188,20 @@ export function useCollections() {
     onError: onMutationError,
   });
 
+  // "Added to {name}" — one confirmation for every add path (picker sheet,
+  // card/sealed detail quick-adds, scanner batch).
+  const showAddedToast = useCallback(
+    (collectionId: string) => {
+      const name = query.data?.find((c) => c.id === collectionId)?.name;
+      toast.show(name ? `Added to ${name}` : "Added to collection", "success");
+    },
+    [query.data, toast],
+  );
+
   const addCardToCollection = useMutation({
     mutationFn: (input: AddCollectionCardInput) => upsertCollectionCard(db, input),
     onSuccess: (_data, { collectionId }) => {
+      showAddedToast(collectionId);
       recordCollectionValueSnapshot();
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
       queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
@@ -219,6 +230,7 @@ export function useCollections() {
       });
     },
     onSuccess: (_data, { collectionId }) => {
+      showAddedToast(collectionId);
       recordCollectionValueSnapshot();
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
       queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
@@ -269,6 +281,66 @@ export function useCollections() {
       queryClient.invalidateQueries({ queryKey: ["collection", collectionId] });
       queryClient.invalidateQueries({ queryKey: ["collectionCards", collectionId] });
       queryClient.invalidateQueries({ queryKey: ["collectionValueHistory"] });
+    },
+    onError: onMutationError,
+  });
+
+  // Move specific rows (multi-select) into another collection. If the target
+  // already holds the same config (card + pricing + variant + condition +
+  // grade), merge quantities instead of leaving duplicate rows behind.
+  const moveCardRows = useMutation({
+    mutationFn: async ({
+      toCollectionId,
+      ids,
+    }: {
+      fromCollectionId: string;
+      toCollectionId: string;
+      ids: string[];
+    }) => {
+      if (ids.length === 0) return;
+      await db.withTransactionAsync(async () => {
+        for (const rowId of ids) {
+          const row = await db.getFirstAsync<{
+            collection_id: string;
+            card_id: string;
+            pricing_type: string;
+            variant: string;
+            condition: string;
+            graded_company: string | null;
+            graded_grade: string | null;
+            quantity: number;
+          }>("SELECT * FROM collection_cards WHERE id = ?", [rowId]);
+          if (!row || row.collection_id === toCollectionId) continue;
+          const existing = await db.getFirstAsync<{ id: string }>(
+            `SELECT id FROM collection_cards
+             WHERE collection_id = ? AND card_id = ? AND pricing_type = ? AND variant = ? AND condition = ?
+             AND COALESCE(graded_company, '') = ? AND COALESCE(graded_grade, '') = ?`,
+            [toCollectionId, row.card_id, row.pricing_type, row.variant, row.condition, row.graded_company ?? "", row.graded_grade ?? ""],
+          );
+          if (existing) {
+            await db.runAsync(
+              "UPDATE collection_cards SET quantity = quantity + ? WHERE id = ?",
+              [row.quantity, existing.id],
+            );
+            await db.runAsync("DELETE FROM collection_cards WHERE id = ?", [
+              rowId,
+            ]);
+          } else {
+            await db.runAsync(
+              "UPDATE collection_cards SET collection_id = ? WHERE id = ?",
+              [toCollectionId, rowId],
+            );
+          }
+        }
+      });
+    },
+    onSuccess: (_data, { fromCollectionId, toCollectionId }) => {
+      queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
+      queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
+      for (const cid of [fromCollectionId, toCollectionId]) {
+        queryClient.invalidateQueries({ queryKey: ["collection", cid] });
+        queryClient.invalidateQueries({ queryKey: ["collectionCards", cid] });
+      }
     },
     onError: onMutationError,
   });
@@ -393,6 +465,7 @@ export function useCollections() {
     addCardsToCollection,
     removeCardFromCollection,
     removeCardRows,
+    moveCardRows,
     incrementCardQuantity,
     decrementCardQuantity,
     updateCardPricePaid,

@@ -21,6 +21,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
 import { LinearGradient } from "expo-linear-gradient";
+import HeaderFadeScrim from "@/components/HeaderFadeScrim";
 import { router, useLocalSearchParams } from "expo-router";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import Purchases from "react-native-purchases";
@@ -474,6 +475,7 @@ export default function Settings() {
 					</View>
 				)}
 			</ScrollView>
+			<HeaderFadeScrim />
 		</View>
 	);
 }

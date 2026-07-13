@@ -15,7 +15,6 @@ import { ToastProvider } from "@/context/ToastContext";
 import { ScanSessionProvider } from "@/context/ScanSessionContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { maybeRunSqliteBenchmarkFromFlag } from "@/lib/devPerfBench";
-import { legacyHeaderBlur } from "@/lib/platform";
 import { ClerkLoaded, ClerkProvider } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import {
@@ -40,6 +39,7 @@ import { radius, useRiverTheme } from "@/constants/theme";
 import * as Haptics from "expo-haptics";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import HeaderIconButton from "@/components/HeaderIconButton";
 import {
 	initialWindowMetrics,
 	SafeAreaProvider,
@@ -244,12 +244,11 @@ function AppContent() {
 							headerBackButtonDisplayMode: "minimal",
 							headerTransparent: true,
 							headerStyle: { backgroundColor: "transparent" },
-							...legacyHeaderBlur(t.isDark),
 							headerTintColor: t.accentOn,
 							headerShadowVisible: false,
 							headerLeft: () => <HeaderBackButton />,
 							headerRight: () => (
-								<Pressable
+								<HeaderIconButton
 									onPress={() => {
 										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 										if (!isPro) {
@@ -265,7 +264,7 @@ function AppContent() {
 										tintColor={t.accentOn}
 										weight="medium"
 									/>
-								</Pressable>
+								</HeaderIconButton>
 							),
 					}}
 				/>
@@ -278,7 +277,6 @@ function AppContent() {
 						headerBackButtonDisplayMode: "minimal",
 						headerTransparent: true,
 						headerStyle: { backgroundColor: "transparent" },
-						...legacyHeaderBlur(t.isDark),
 						headerTintColor: t.accentOn,
 						headerShadowVisible: false,
 						headerLeft: () => <HeaderBackButton />,
@@ -293,7 +291,6 @@ function AppContent() {
 						headerBackButtonDisplayMode: "minimal",
 						headerTransparent: true,
 						headerStyle: { backgroundColor: "transparent" },
-						...legacyHeaderBlur(t.isDark),
 						headerTintColor: t.accentOn,
 						headerShadowVisible: false,
 					}}
@@ -307,7 +304,6 @@ function AppContent() {
 						headerBackButtonDisplayMode: "minimal",
 						headerTransparent: true,
 						headerStyle: { backgroundColor: "transparent" },
-						...legacyHeaderBlur(t.isDark),
 						headerTintColor: t.accentOn,
 						headerShadowVisible: false,
 					}}
@@ -407,7 +403,6 @@ function AppContent() {
 						headerBackButtonDisplayMode: "minimal",
 						headerTransparent: true,
 						headerStyle: { backgroundColor: "transparent" },
-						...legacyHeaderBlur(t.isDark),
 						headerTintColor: t.accentOn,
 						headerShadowVisible: false,
 						headerLeft: () => <HeaderBackButton />,

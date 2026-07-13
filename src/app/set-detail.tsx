@@ -30,6 +30,7 @@ import { spacing, useRiverTheme } from "@/constants/theme";
 import { useApi } from "@/lib/axios";
 import { SORT_OPTION_LABELS } from "@/lib/sortLabels";
 import FloatingSearchBar from "@/components/FloatingSearchBar";
+import HeaderFadeScrim from "@/components/HeaderFadeScrim";
 import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
 import { useOwnedCardIds } from "@/hooks/useOwnedCardIds";
 import { searchCards, searchSealed } from "@/lib/api/pricing";
@@ -51,6 +52,7 @@ import TapHoldHintOverlay from "@/components/TapHoldHintOverlay";
 import { useTapHoldHint } from "@/hooks/useTapHoldHint";
 import ErrorState from "@/components/ErrorState";
 import type { ScrydexCard, ScrydexSealedProduct } from "@/types/scrydex";
+import HeaderIconButton from "@/components/HeaderIconButton";
 
 type SetItem = ScrydexCard | ScrydexSealedProduct;
 
@@ -914,8 +916,7 @@ export default function SetDetail() {
 				options={{
 					headerTitle: ownedOnly ? "Collected" : (name ?? "Set"),
 					headerLeft: () => (
-						<Pressable
-							hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+						<HeaderIconButton
 							onPress={() => {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 								router.back();
@@ -927,7 +928,7 @@ export default function SetDetail() {
 								tintColor={t.accentOn}
 								weight="medium"
 							/>
-						</Pressable>
+						</HeaderIconButton>
 					),
 				}}
 			/>
@@ -1106,6 +1107,7 @@ export default function SetDetail() {
 					menuIcon="arrow.up.arrow.down"
 					menuActions={sortActions}
 				/>
+				<HeaderFadeScrim />
 			</View>
 		</>
 	);

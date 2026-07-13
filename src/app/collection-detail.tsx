@@ -41,6 +41,8 @@ import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { formatCurrency } from "@/lib/format";
 import { SORT_OPTION_LABELS } from "@/lib/sortLabels";
 import FloatingSearchBar from "@/components/FloatingSearchBar";
+import HeaderIconButton, { HeaderButtonGroup } from "@/components/HeaderIconButton";
+import HeaderFadeScrim from "@/components/HeaderFadeScrim";
 import { CONDITION_LABELS, formatVariantLabel } from "@/lib/scrydex";
 import type { CollectionCard } from "@/types/collection";
 
@@ -361,6 +363,20 @@ export default function CollectionDetail() {
 		);
 	}, [collection, nameParam, id, deleteCollection]);
 
+	// Hand the selected rows to the move sheet. Selection clears now rather
+	// than on the sheet's success — the rows vanish from this list once moved,
+	// so a lingering selection would point at dead ids.
+	const handleMoveSelected = useCallback(() => {
+		const ids = [...selected];
+		if (ids.length === 0) return;
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		exitSelect();
+		router.push({
+			pathname: "/add-to-collection",
+			params: { moveFromCollectionId: id, moveRowIds: ids.join(",") },
+		});
+	}, [selected, id, exitSelect]);
+
 	const handleDeleteSelected = useCallback(() => {
 		const ids = [...selected];
 		if (ids.length === 0) return;
@@ -613,37 +629,43 @@ export default function CollectionDetail() {
 					headerBackButtonDisplayMode: "minimal",
 					headerRight: () =>
 						selectMode ? (
-							<View style={styles.headerRight}>
+							<HeaderButtonGroup>
 								{selected.size > 0 && (
-									<Pressable
-										onPress={handleDeleteSelected}
-										style={styles.headerButton}
-									>
-										<SymbolView
-											name="trash"
-											size={19}
-											tintColor={t.loss}
-											weight="medium"
-										/>
-									</Pressable>
+									<>
+										<HeaderIconButton onPress={handleMoveSelected}>
+											<SymbolView
+												name="folder"
+												size={19}
+												tintColor={t.accentOn}
+												weight="medium"
+											/>
+										</HeaderIconButton>
+										<HeaderIconButton onPress={handleDeleteSelected}>
+											<SymbolView
+												name="trash"
+												size={19}
+												tintColor={t.loss}
+												weight="medium"
+											/>
+										</HeaderIconButton>
+									</>
 								)}
-								<Pressable onPress={exitSelect} style={styles.headerButton}>
+								<HeaderIconButton onPress={exitSelect}>
 									<SymbolView
 										name="checkmark"
 										size={20}
 										tintColor={t.accentOn}
 										weight="semibold"
 									/>
-								</Pressable>
-							</View>
+								</HeaderIconButton>
+							</HeaderButtonGroup>
 						) : (
-							<View style={styles.headerRight}>
-								<Pressable
+							<HeaderButtonGroup>
+								<HeaderIconButton
 									onPress={() => {
 										Haptics.selectionAsync();
 										setSelectMode(true);
 									}}
-									style={styles.headerButton}
 									disabled={(cards?.length ?? 0) === 0}
 								>
 									<SymbolView
@@ -656,13 +678,12 @@ export default function CollectionDetail() {
 										}
 										weight="medium"
 									/>
-								</Pressable>
-								<Pressable
+								</HeaderIconButton>
+								<HeaderIconButton
 									onPress={() => {
 										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 										handleDelete();
 									}}
-									style={styles.headerButton}
 								>
 									<SymbolView
 										name="trash"
@@ -670,13 +691,12 @@ export default function CollectionDetail() {
 										tintColor={t.accentOn}
 										weight="medium"
 									/>
-								</Pressable>
-								<Pressable
+								</HeaderIconButton>
+								<HeaderIconButton
 									onPress={() => {
 										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 										handleRename();
 									}}
-									style={styles.headerButton}
 								>
 									<SymbolView
 										name="pencil"
@@ -684,13 +704,12 @@ export default function CollectionDetail() {
 										tintColor={t.accentOn}
 										weight="medium"
 									/>
-								</Pressable>
-								<Pressable
+								</HeaderIconButton>
+								<HeaderIconButton
 									onPress={() => {
 										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 										router.push("/(search)");
 									}}
-									style={styles.headerButton}
 								>
 									<SymbolView
 										name="plus"
@@ -698,8 +717,8 @@ export default function CollectionDetail() {
 										tintColor={t.accentOn}
 										weight="medium"
 									/>
-								</Pressable>
-							</View>
+								</HeaderIconButton>
+							</HeaderButtonGroup>
 						),
 				}}
 			/>
@@ -839,6 +858,7 @@ export default function CollectionDetail() {
 					menuIcon="arrow.up.arrow.down"
 					menuActions={sortActions}
 				/>
+				<HeaderFadeScrim headerHeight={headerHeight} />
 			</View>
 		</>
 	);
@@ -854,14 +874,6 @@ const styles = StyleSheet.create({
 		...typeScale.screenTitle,
 		width: "100%",
 		textAlign: "left",
-	},
-	headerRight: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 4,
-	},
-	headerButton: {
-		padding: 8,
 	},
 	summaryRow: {
 		flexDirection: "row",

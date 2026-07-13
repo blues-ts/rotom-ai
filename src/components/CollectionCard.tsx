@@ -137,7 +137,9 @@ const styles = StyleSheet.create({
 	cardImage: {
 		width: "100%",
 		height: "100%",
-		borderRadius: radius.thumb,
+		// ≈ the card's printed corner (~4.5% of width) — a fixed radius clips
+		// into the art's baked-in transparent corners at this thumbnail size.
+		borderRadius: THUMB_WIDTH * 0.045,
 	},
 	// Dark count circle pinned to the last thumbnail's corner (same both modes —
 	// it always sits on card art, not on the screen background).

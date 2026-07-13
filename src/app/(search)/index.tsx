@@ -49,6 +49,7 @@ import {
 } from "@/lib/scrydex";
 import CardImage from "@/components/CardImage";
 import FloatingSearchBar from "@/components/FloatingSearchBar";
+import HeaderFadeScrim from "@/components/HeaderFadeScrim";
 import { SORT_OPTION_LABELS } from "@/lib/sortLabels";
 import SegmentedChips from "@/components/SegmentedChips";
 import CardPressable from "@/components/CardPressable";
@@ -60,6 +61,7 @@ import PokedexBrowser from "@/components/PokedexBrowser";
 import { Image } from "expo-image";
 import { useQuery } from "@tanstack/react-query";
 import { CATALOG_SETS_KEY } from "@/hooks/usePrefetchExpansions";
+import HeaderIconButton from "@/components/HeaderIconButton";
 import {
 	getCatalogSets,
 	searchCatalogCards,
@@ -1026,22 +1028,32 @@ export default function Search() {
 
 	return (
 		<>
-			{/* Per-button tint: Toolbar-level tintColor is dropped for header
-			    placements on iOS in this expo-router version. */}
-			<Stack.Toolbar placement="right">
-				<Stack.Toolbar.Button
-					icon="camera.viewfinder"
-					tintColor={t.accentOn}
-					onPress={() => {
-						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-						if (!isPro) {
-							void presentProPaywallIfNeeded();
-							return;
-						}
-						router.push("/(camera)");
-					}}
-				/>
-			</Stack.Toolbar>
+			{/* Custom headerRight (not Stack.Toolbar.Button) so the button gets
+			    the same glass underlay as every other header icon on iOS < 26;
+			    the iOS 26 bar capsules it natively either way. */}
+			<Stack.Screen
+				options={{
+					headerRight: () => (
+						<HeaderIconButton
+							onPress={() => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								if (!isPro) {
+									void presentProPaywallIfNeeded();
+									return;
+								}
+								router.push("/(camera)");
+							}}
+						>
+							<SymbolView
+								name="camera.viewfinder"
+								size={20}
+								tintColor={t.accentOn}
+								weight="medium"
+							/>
+						</HeaderIconButton>
+					),
+				}}
+			/>
 
 			{/* The search field is our FloatingSearchBar (no UISearchController).
 			    Any touch on the content dismisses the keyboard (no-op when
@@ -1229,6 +1241,7 @@ export default function Search() {
 					menuTitle="Sort Options"
 					menuActions={browserViewActions}
 				/>
+				<HeaderFadeScrim />
 			</View>
 		</>
 	);

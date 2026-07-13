@@ -18,6 +18,7 @@ import Animated, {
 	useAnimatedProps,
 	useAnimatedStyle,
 	useSharedValue,
+	withDelay,
 	withTiming,
 	type SharedValue,
 } from "react-native-reanimated";
@@ -57,12 +58,17 @@ import {
 } from "@/context/ScanSessionContext";
 import { playCaptureFeedback } from "@/lib/captureSound";
 import {
+	filterByLanguage,
 	MODEL_LOCK_MARGIN,
 	MODEL_LOCK_SCORE,
 	OCR_FLOOR,
 	OCR_MARGIN,
 	resolveOcrTieBreak,
 } from "@/lib/scanMatching";
+import { getScanLang, setScanLang, useScanLang } from "@/lib/scanPrefs";
+import * as SecureStore from "expo-secure-store";
+import { SCANNER_TOOLS_HINT_KEY } from "@/hooks/useTapHoldHint";
+import TapHoldHintOverlay from "@/components/TapHoldHintOverlay";
 import { analyzeCardsInFrame, type CardDetection } from "@/lib/binderScan";
 import {
 	BINDER_CORNER_RADIUS,
@@ -72,6 +78,7 @@ import {
 	binderY,
 } from "@/components/scanner/BinderFrameOverlay";
 import BinderReviewOverlay from "@/components/scanner/BinderReviewOverlay";
+import HeaderIconButton, { HeaderButtonGroup } from "@/components/HeaderIconButton";
 import ScanTray, {
 	TRAY_PADDING_H,
 	TRAY_ROW_TOP_PAD,
@@ -86,6 +93,9 @@ const cardImageUrl = (id: string) =>
 // once. ScanTray's ENTER_DELAY_MS is tuned against this.
 const FLY_MS = 520;
 const CAPTURE_FLASH_MS = FLY_MS + 80;
+// Binder confirm: each card lifts off from its detected spot this long after
+// the previous one — a staggered spread rather than one blob.
+const FLOCK_STAGGER_MS = 70;
 
 const { width, height } = Dimensions.get("window");
 
@@ -155,7 +165,8 @@ const scanRegion = {
 };
 
 // Collector-number re-rank thresholds + tie-break logic live in
-// @/lib/scanMatching (shared with binder scan).
+// @/lib/scanMatching (shared with binder scan). The EN/JP language filter
+// pref lives in @/lib/scanPrefs (toggled from the scanner-tips sheet).
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -308,6 +319,75 @@ const ReticleGlow = memo(function ReticleGlow({
 	);
 });
 
+// One card of the binder-confirm flock: rests at its detected spot in the
+// binder frame through its stagger delay, then arcs up into the library
+// button, shrinking and twisting slightly — successive cards land at
+// different angles, so the flight reads as a fanned stack.
+const FlockCard = memo(function FlockCard({
+	image,
+	cx,
+	cy,
+	w,
+	h,
+	index,
+	total,
+	tx,
+	ty,
+}: {
+	image: string;
+	cx: number; // start centre (screen pts)
+	cy: number;
+	w: number; // start size
+	h: number;
+	index: number;
+	total: number;
+	tx: number; // library button centre
+	ty: number;
+}) {
+	const p = useSharedValue(0);
+	useEffect(() => {
+		p.value = withDelay(
+			index * FLOCK_STAGGER_MS,
+			withTiming(1, { duration: FLY_MS, easing: Easing.in(Easing.cubic) }),
+		);
+	}, [p, index]);
+	// Per-card final twist: fanned around the flight path, ±~12°.
+	const twist = total > 1 ? (index / (total - 1) - 0.5) * 24 : 8;
+	const style = useAnimatedStyle(() => {
+		const v = p.value;
+		return {
+			opacity: interpolate(v, [0, 0.75, 1], [1, 1, 0]),
+			transform: [
+				{ translateX: (tx - cx) * v },
+				{ translateY: (ty - cy) * v - 30 * Math.sin(v * Math.PI) },
+				{ rotateZ: `${twist * v}deg` },
+				{ scale: interpolate(v, [0, 1], [1, Math.max(0.08, 24 / w)]) },
+			],
+		};
+	});
+	return (
+		<Animated.View
+			style={[
+				{
+					position: "absolute",
+					left: cx - w / 2,
+					top: cy - h / 2,
+					width: w,
+					height: h,
+				},
+				style,
+			]}
+			pointerEvents="none"
+		>
+			<Image
+				source={{ uri: image }}
+				style={styles.flockCardImage}
+				contentFit="cover"
+			/>
+		</Animated.View>
+	);
+});
+
 export default function CameraScreen() {
 	const device = useCameraDevice("back");
 	const { hasPermission, requestPermission } = useCameraPermission();
@@ -339,6 +419,11 @@ export default function CameraScreen() {
 	// switch, blur) so an in-flight analysis can't resurrect a stale review.
 	const binderGenRef = useRef(0);
 	const binderBusyRef = useRef(false);
+	// Which language's prints the matcher may consider. EN/JA near-twins (same
+	// art, same number) are the classic wrong-card source; scoping the candidate
+	// list to the language in hand turns those ties into clean margins. Toggled
+	// from the scanner-tips sheet; the loop reads getScanLang() directly.
+	const scanLang = useScanLang();
 	// User-controlled scanning pause (the play/pause button). The loop idles while
 	// paused but the camera preview stays live. Mirrored to a ref so the async
 	// scan loop can read it without re-subscribing.
@@ -357,6 +442,14 @@ export default function CameraScreen() {
 		key: number;
 		target: "tray" | "library";
 	} | null>(null);
+	// Binder confirms fly EVERY picked card from its detected spot in the
+	// frame into the library button, staggered — a fanned stack, not one
+	// representative thumbnail.
+	const [flyingFlock, setFlyingFlock] = useState<{
+		cards: { image: string; cx: number; cy: number; w: number; h: number }[];
+		key: number;
+	} | null>(null);
+	const flockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const fly = useSharedValue(0); // 0 = at reticle, 1 = landed
 	// 0 = single-card box, 1 = binder-page box; drives the viewfinder morph.
 	const modeProgress = useSharedValue(0);
@@ -469,6 +562,7 @@ export default function CameraScreen() {
 		return () => {
 			if (deactivateTimer.current) clearTimeout(deactivateTimer.current);
 			if (flashTimer.current) clearTimeout(flashTimer.current);
+			if (flockTimer.current) clearTimeout(flockTimer.current);
 		};
 	}, []);
 
@@ -520,15 +614,20 @@ export default function CameraScreen() {
 			);
 			if (!file?.filePath || pausedRef.current) return null;
 			// Smoothed: averages recent frames so holo glare (which moves) cancels.
-			// Top-12 (not 5): on EN/JA twins the correct print can sit several ranks
-			// down, and the OCR number needs it present as a candidate to pull it up.
-			const matches = await CardVision.identifyInRegionSmoothed(
+			// Top-24 (not 5): the EN/JP filter below drops roughly half the
+			// candidates, and the OCR re-rank still needs the near-twins that
+			// survive present several ranks deep.
+			const raw = await CardVision.identifyInRegionSmoothed(
 				file.filePath,
 				scanRegion,
 				width / height,
-				12,
+				24,
 				5,
 			);
+			// Only the selected language competes — the other language's near-twin
+			// (same art + number) is the main wrong-card source, and removing it
+			// here is what turns a tie into a lockable margin.
+			const matches = filterByLanguage(raw, getScanLang());
 			// Keep the file path: ambiguous frames re-read the printed number off it.
 			return { matches, filePath: file.filePath };
 		} catch {
@@ -825,19 +924,78 @@ export default function CameraScreen() {
 			for (const p of picked) {
 				addScan({ id: p.id, image: cardImageUrl(p.id), score: p.score });
 			}
-			// One representative flight into the library badge (the badge count
-			// jumping by N carries the rest — the tray is faded out in binder mode).
-			if (picked[0]) {
-				setFlyingCard({
-					image: cardImageUrl(picked[0].id),
-					key: Date.now(),
-					target: "library",
+			// Fly every picked card from its detected spot into the library
+			// button. Rects are normalized to the guide-box crop; a card the
+			// picker matched but can't place (shouldn't happen) lifts from the
+			// box centre. Duplicate ids consume detections in order.
+			if (picked.length > 0) {
+				const detections = binderCards ?? [];
+				const used = new Set<number>();
+				const cards = picked.map((p) => {
+					const di = detections.findIndex(
+						(d, i) => !used.has(i) && d.id === p.id,
+					);
+					if (di >= 0) used.add(di);
+					const rect = di >= 0 ? detections[di].rect : null;
+					const cx = rect
+						? (binderRegion.x + (rect.x + rect.w / 2) * binderRegion.w) * width
+						: width / 2;
+					const cy = rect
+						? (binderRegion.y + (rect.y + rect.h / 2) * binderRegion.h) *
+							height
+						: height * CARD_CENTER_Y_RATIO;
+					return {
+						image: cardImageUrl(p.id),
+						cx,
+						cy,
+						w: rect ? rect.w * binderRegion.w * width : 80,
+						h: rect ? rect.h * binderRegion.h * height : 112,
+					};
 				});
+				setFlyingFlock({ cards, key: Date.now() });
+				if (flockTimer.current) clearTimeout(flockTimer.current);
+				flockTimer.current = setTimeout(
+					() => setFlyingFlock(null),
+					picked.length * FLOCK_STAGGER_MS + FLY_MS + 120,
+				);
 			}
 			resetBinder();
 		},
-		[addScan, resetBinder],
+		[addScan, binderCards, resetBinder],
 	);
+
+	// First-run nudge: one bubble above the sheet lip introducing the toolbar's
+	// EN/JP language filter and binder mode. SecureStore-persisted like the
+	// tap-hold hint; waits for indexReady so it never covers a scanner that
+	// isn't running yet. Tap or timeout dismisses.
+	const [showScannerHint, setShowScannerHint] = useState(false);
+	useEffect(() => {
+		if (!indexReady || !CardVision.isAvailable()) return;
+		let active = true;
+		SecureStore.getItemAsync(SCANNER_TOOLS_HINT_KEY)
+			.then((seen) => {
+				if (active && seen !== "true") setShowScannerHint(true);
+			})
+			.catch(() => {});
+		return () => {
+			active = false;
+		};
+	}, [indexReady]);
+
+	const dismissScannerHint = useCallback(() => {
+		setShowScannerHint(false);
+		void SecureStore.setItemAsync(SCANNER_TOOLS_HINT_KEY, "true");
+	}, []);
+
+	const handleToggleLang = useCallback(() => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+		setScanLang(getScanLang() === "en" ? "ja" : "en");
+		// A filter change restarts the scan: votes cast under the old language
+		// (and the dedupe lock) no longer mean anything.
+		voteRef.current = [];
+		lastCapturedIdRef.current = null;
+		if (CardVision.isAvailable()) CardVision.resetSmoothing();
+	}, []);
 
 	const handleToggleTorch = useCallback(() => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -870,7 +1028,7 @@ export default function CameraScreen() {
 							if (!granted) Linking.openSettings();
 						}}
 					>
-						<Text style={styles.permissionButtonText}>Turn on camera</Text>
+						<Text style={styles.permissionButtonText}>Continue</Text>
 					</Pressable>
 				</View>
 			</View>
@@ -894,21 +1052,18 @@ export default function CameraScreen() {
 			<Stack.Screen
 				options={{
 					headerRight: () => (
-						<View style={styles.headerActions}>
+						<HeaderButtonGroup forceDark>
 							{mode === "single" && (
-								<Pressable
-									style={styles.headerButton}
-									onPress={handleTogglePause}
-								>
+								<HeaderIconButton forceDark onPress={handleTogglePause}>
 									<SymbolView
 										name={scanningPaused ? "play" : "pause"}
 										size={21}
 										tintColor={scanningPaused ? "#FFFFFF" : palette.accentSoft}
 										weight="medium"
 									/>
-								</Pressable>
+								</HeaderIconButton>
 							)}
-							<Pressable style={styles.headerButton} onPress={goToLibrary}>
+							<HeaderIconButton forceDark onPress={goToLibrary}>
 								<SymbolView
 									name="square.stack"
 									size={21}
@@ -922,8 +1077,8 @@ export default function CameraScreen() {
 										</Text>
 									</View>
 								)}
-							</Pressable>
-						</View>
+							</HeaderIconButton>
+						</HeaderButtonGroup>
 					),
 				}}
 			/>
@@ -1071,6 +1226,30 @@ export default function CameraScreen() {
 								]}
 							/>
 						</Button>
+						{/* EN/JP filter — which language's prints the matcher considers.
+						    Single mode only: the binder pipeline doesn't read it (yet). */}
+						{mode === "single" && CardVision.isAvailable() && (
+							<Button
+								onPress={handleToggleLang}
+								modifiers={[buttonStyle("plain")]}
+							>
+								<UIText
+									modifiers={[
+										font({ size: 14, weight: "bold" }),
+										foregroundStyle(
+											scanLang === "ja" ? "#FFFFFF" : palette.accentSoft,
+										),
+										frame({ width: 44, height: 44 }),
+										glassEffect({
+											shape: "circle",
+											glass: { variant: "regular", interactive: true },
+										}),
+									]}
+								>
+									{scanLang === "ja" ? "JP" : "EN"}
+								</UIText>
+							</Button>
+						)}
 						<Spacer />
 						{/* Mode toggle lives with the other scan controls — toggling
 						    binder mode makes the shutter appear just above this bar, so
@@ -1119,6 +1298,24 @@ export default function CameraScreen() {
 				</View>
 			</Animated.View>
 
+			{/* First-run nudge — one native popover centered above the sheet lip,
+			    introducing the toolbar tools. Anchored to an invisible STATIC
+			    view in the root layout (same pattern as the card-grid hint), not
+			    the toolbar's Host inside the animated sheet — that anchor raced
+			    layout and pinned the popover to a stale position. */}
+			{mode === "single" && showScannerHint && (
+				<View style={styles.hintAnchor} pointerEvents="none">
+					<TapHoldHintOverlay
+						width={44}
+						height={10}
+						position="above"
+						maxWidth={240}
+						label="Switch EN/JP matching or scan a full binder page below"
+						onDismiss={dismissScannerHint}
+					/>
+				</View>
+			)}
+
 			{/* Post-shutter review: toggle wrong matches off, then confirm.
 			    binderPhoto may be "" (frame JPEG write failed) — the overlay
 			    then shows tiles over the dark backdrop, still usable. */}
@@ -1152,6 +1349,23 @@ export default function CameraScreen() {
 						contentFit="contain"
 					/>
 				</Animated.View>
+			)}
+
+			{/* Binder confirm: the whole page's cards lift off from their spots,
+			    staggered, and spiral into the library button. */}
+			{flyingFlock && (
+				<View style={StyleSheet.absoluteFill} pointerEvents="none">
+					{flyingFlock.cards.map((card, i) => (
+						<FlockCard
+							key={`${flyingFlock.key}-${i}`}
+							{...card}
+							index={i}
+							total={flyingFlock.cards.length}
+							tx={width - 30}
+							ty={insets.top + 24}
+						/>
+					))}
+				</View>
 			)}
 		</View>
 	);
@@ -1224,6 +1438,16 @@ const styles = StyleSheet.create({
 	toolbarHost: {
 		height: TOOLBAR_H,
 	},
+	// Invisible popover anchor: a small centered strip hugging the sheet lip,
+	// so the hint floats mid-screen just above the sheet with its arrow
+	// pointing down at the lip.
+	hintAnchor: {
+		position: "absolute",
+		top: sheetTopSingle - 10,
+		alignSelf: "center",
+		width: 44,
+		height: 10,
+	},
 	permissionContainer: {
 		flex: 1,
 		justifyContent: "center",
@@ -1291,13 +1515,10 @@ const styles = StyleSheet.create({
 		height: "100%",
 		borderRadius: CARD_CORNER_RADIUS,
 	},
-	headerActions: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 4,
-	},
-	headerButton: {
-		padding: 8,
+	flockCardImage: {
+		width: "100%",
+		height: "100%",
+		borderRadius: 8,
 	},
 	headerBadge: {
 		position: "absolute",

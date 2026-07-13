@@ -39,8 +39,10 @@ import { formatCurrency } from "@/lib/format";
 import { typeScale, useRiverTheme } from "@/constants/theme";
 import { ProGate, ProUnlockPill } from "@/components/ProGate";
 import CardImage from "@/components/CardImage";
+import HeaderFadeScrim from "@/components/HeaderFadeScrim";
 import ErrorState from "@/components/ErrorState";
 import type { ScrydexRawPrice, ScrydexTrends } from "@/types/scrydex";
+import HeaderIconButton from "@/components/HeaderIconButton";
 
 // Same width as the card detail page; height follows the artwork's natural
 // aspect ratio (packs are tall, boxes are wide) so there's no letterboxing.
@@ -310,12 +312,10 @@ export default function SealedDetail() {
 			addCardToCollection.mutate(
 				{ collectionId: collectionId!, ...config },
 				{
+					// The "Added to {name}" toast comes from the central mutation
+					// onSuccess in useCollections.
 					onSuccess: () => {
 						Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-						Alert.alert(
-							"Added!",
-							`${formatVariantLabel(variant)} configuration added to collection.`,
-						);
 					},
 				},
 			);
@@ -339,17 +339,14 @@ export default function SealedDetail() {
 					headerTitle: name ?? "Sealed Product",
 					headerRight: () =>
 						configMatches ? null : (
-							<Pressable
-								hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-								onPress={handleAdd}
-							>
+							<HeaderIconButton onPress={handleAdd}>
 								<SymbolView
 									name="plus"
 									size={22}
 									tintColor={t.accentOn}
 									weight="medium"
 								/>
-							</Pressable>
+							</HeaderIconButton>
 						),
 				}}
 			/>
@@ -892,6 +889,7 @@ export default function SealedDetail() {
 						</View>
 						)}
 					</ScrollView>
+					<HeaderFadeScrim />
 				</View>
 			) : (
 				<View style={[styles.container, styles.centered]}>

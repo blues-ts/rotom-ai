@@ -27,7 +27,7 @@ export default function AddToCollection() {
   const t = useRiverTheme();
   const api = useApi();
 
-  const { cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade, pricePaid, cardIds, cardImages } =
+  const { cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade, pricePaid, cardIds, cardImages, moveFromCollectionId, moveRowIds } =
     useLocalSearchParams<{
       cardId: string;
       cardName: string;
@@ -45,13 +45,17 @@ export default function AddToCollection() {
       /** Batch mode (scanner library): comma-joined card ids + parallel images. */
       cardIds?: string;
       cardImages?: string;
+      /** Move mode (collection detail multi-select): source collection +
+       *  comma-joined collection_cards row ids to relocate. */
+      moveFromCollectionId?: string;
+      moveRowIds?: string;
     }>();
 
-  const { collections, addCardToCollection, addCardsToCollection } = useCollections();
+  const { collections, addCardToCollection, addCardsToCollection, moveCardRows } = useCollections();
   const refreshPrices = useRefreshCollectionPrices();
   // Batch adds come from the scanner library — clear those cards from the
   // session once they've landed in a collection.
-  const { removeScans } = useScanSession();
+  const { scans, removeScans } = useScanSession();
   // The collection that was just added to — its row outlines blue as the
   // success cue, then the sheet dismisses itself.
   const [addedId, setAddedId] = useState<string | null>(null);
@@ -67,6 +71,44 @@ export default function AddToCollection() {
     [cardImages],
   );
   const isBatch = batchIds.length > 0;
+
+  // Move mode: relocating existing rows, so no catalog lookups or pricing —
+  // the rows carry everything and just change collections.
+  const moveIds = useMemo(
+    () => (moveRowIds ? moveRowIds.split(",").filter(Boolean) : []),
+    [moveRowIds],
+  );
+  const isMove = moveIds.length > 0 && !!moveFromCollectionId;
+  // Moving a card to the collection it's already in is a no-op — hide the
+  // source collection from the picker.
+  const targetCollections = isMove
+    ? collections.filter((c) => c.id !== moveFromCollectionId)
+    : collections;
+
+  const handleSelectMove = useCallback(
+    (collectionId: string) => {
+      if (!moveFromCollectionId || moveIds.length === 0 || addedId) return;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setAddedId(collectionId);
+      moveCardRows.mutate(
+        {
+          fromCollectionId: moveFromCollectionId,
+          toCollectionId: collectionId,
+          ids: moveIds,
+        },
+        {
+          onSuccess: () => {
+            setTimeout(() => router.back(), 450);
+          },
+          onError: () => {
+            setAddedId(null);
+            Alert.alert("Error", "Couldn't move the cards. Please try again.");
+          },
+        },
+      );
+    },
+    [moveFromCollectionId, moveIds, addedId, moveCardRows],
+  );
 
   // Kick off the priced-batch lookup the moment the sheet opens, not on tap —
   // the seconds the user spends picking a collection hide the network wait, so
@@ -137,8 +179,17 @@ export default function AddToCollection() {
           }),
         });
         // They're filed away now — drop them from the scanning session.
+        const clearedSession = batchIds.length >= scans.length;
         removeScans(batchIds);
-        setTimeout(() => router.back(), 450);
+        // Batch adds come from the scanner library. If the whole session was
+        // just filed away, back out twice — sheet, then the emptied library —
+        // revealing the scanner as it was (binder mode intact) rather than
+        // re-pushing it. A partial add returns to the library as before.
+        // expo-router queues both GO_BACKs, so they run in order.
+        setTimeout(() => {
+          router.back();
+          if (clearedSession) router.back();
+        }, 450);
       } catch {
         // A failed prefetch shouldn't poison retries — refetch on next tap.
         batchFetchRef.current = null;
@@ -146,7 +197,7 @@ export default function AddToCollection() {
         Alert.alert("Error", "Couldn't add the cards. Please try again.");
       }
     },
-    [api, addedId, batchIds, batchImages, addCardsToCollection, removeScans],
+    [api, addedId, batchIds, batchImages, addCardsToCollection, removeScans, scans.length],
   );
 
   const handleSelect = useCallback(
@@ -212,15 +263,19 @@ export default function AddToCollection() {
     <ScrollView contentContainerStyle={styles.container}>
       <Stack.Screen
         options={{
-          headerTitle: isBatch
-            ? `Add ${batchIds.length} ${batchIds.length === 1 ? "Card" : "Cards"}`
-            : "Add to Collection",
+          headerTitle: isMove
+            ? `Move ${moveIds.length} ${moveIds.length === 1 ? "Card" : "Cards"}`
+            : isBatch
+              ? `Add ${batchIds.length} ${batchIds.length === 1 ? "Card" : "Cards"}`
+              : "Add to Collection",
         }}
       />
-      {collections.length === 0 ? (
+      {targetCollections.length === 0 ? (
         <View style={styles.empty}>
           <Text style={[styles.emptyText, { color: t.text.secondary }]}>
-            No collections yet — create one to add this card.
+            {isMove
+              ? "No other collections — create one to move these cards into."
+              : "No collections yet — create one to add this card."}
           </Text>
           <CardPressable
             onPress={() => {
@@ -243,15 +298,17 @@ export default function AddToCollection() {
         </View>
       ) : (
         <View style={styles.list}>
-          {collections.map((collection) => {
+          {targetCollections.map((collection) => {
             const added = addedId === collection.id;
             return (
               <CardPressable
                 key={collection.id}
                 onPress={() =>
-                  isBatch
-                    ? handleSelectBatch(collection.id)
-                    : handleSelect(collection.id)
+                  isMove
+                    ? handleSelectMove(collection.id)
+                    : isBatch
+                      ? handleSelectBatch(collection.id)
+                      : handleSelect(collection.id)
                 }
                 disabled={!!addedId}
                 pressScale={0.98}
@@ -277,7 +334,9 @@ export default function AddToCollection() {
                     style={[styles.collectionCount, { color: t.text.secondary }]}
                   >
                     {added
-                      ? "Added"
+                      ? isMove
+                        ? "Moved"
+                        : "Added"
                       : `${collection.cardCount} ${collection.cardCount === 1 ? "card" : "cards"}`}
                   </Text>
                 </View>

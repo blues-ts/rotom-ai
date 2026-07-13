@@ -4,6 +4,9 @@ import * as SecureStore from "expo-secure-store";
 const TAP_HOLD_HINT_KEY = "tap_hold_hint_seen";
 // Card detail's "Chat about this card" row nudge.
 export const CHAT_CARD_HINT_KEY = "chat_card_hint_seen";
+// Scanner nudge (camera screen): one-time bubble above the sheet introducing
+// the toolbar's EN/JP language filter and binder-page mode.
+export const SCANNER_TOOLS_HINT_KEY = "scanner_tools_hint_seen";
 
 // Module-level guard so each nudge is claimed by exactly one screen per
 // session (e.g. search vs set-detail, whichever shows a first card first)
@@ -53,4 +56,5 @@ export async function resetTapHoldHint() {
 	claimed.clear();
 	await SecureStore.deleteItemAsync(TAP_HOLD_HINT_KEY);
 	await SecureStore.deleteItemAsync(CHAT_CARD_HINT_KEY);
+	await SecureStore.deleteItemAsync(SCANNER_TOOLS_HINT_KEY);
 }

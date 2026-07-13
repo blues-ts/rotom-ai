@@ -1,6 +1,11 @@
 import { StyleSheet, View } from "react-native";
 import { Host, Popover, Text } from "@expo/ui/swift-ui";
-import { frame, padding } from "@expo/ui/swift-ui/modifiers";
+import {
+	fixedSize,
+	frame,
+	multilineTextAlignment,
+	padding,
+} from "@expo/ui/swift-ui/modifiers";
 
 /**
  * A native SwiftUI popover (@expo/ui) that points at a card to nudge the user to
@@ -18,11 +23,20 @@ export default function TapHoldHintOverlay({
 	height,
 	label = "Tap and hold me!",
 	onDismiss,
+	position = "below",
+	maxWidth,
 }: {
 	width: number;
 	height: number;
 	label?: string;
 	onDismiss: () => void;
+	/** Where the hint bubble sits relative to the anchor. "below" for cards
+	 *  near the top of the screen (default); "above" for anchors near the
+	 *  bottom (e.g. the scanner's sheet lip). */
+	position?: "below" | "above";
+	/** Wrap the label to this width (pt) instead of one long line — for hints
+	 *  whose copy is a sentence rather than a few words. */
+	maxWidth?: number;
 }) {
 	return (
 		<View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -32,15 +46,28 @@ export default function TapHoldHintOverlay({
 					onIsPresentedChange={(presented) => {
 						if (!presented) onDismiss();
 					}}
-					attachmentAnchor="bottom"
-					arrowEdge="top"
+					attachmentAnchor={position === "above" ? "top" : "bottom"}
+					arrowEdge={position === "above" ? "bottom" : "top"}
 				>
 					<Popover.Trigger>
 						{/* Invisible anchor framed to the card so the popover points at it. */}
 						<Text modifiers={[frame({ width, height })]}>{""}</Text>
 					</Popover.Trigger>
 					<Popover.Content>
-						<Text modifiers={[padding({ horizontal: 16, vertical: 12 })]}>
+						<Text
+							modifiers={[
+								// maxWidth wraps long copy; fixedSize lets the popover grow
+								// vertically to fit instead of truncating.
+								...(maxWidth
+									? [
+											frame({ maxWidth }),
+											fixedSize({ horizontal: false, vertical: true }),
+											multilineTextAlignment("center"),
+										]
+									: []),
+								padding({ horizontal: 16, vertical: 12 }),
+							]}
+						>
 							{label}
 						</Text>
 					</Popover.Content>

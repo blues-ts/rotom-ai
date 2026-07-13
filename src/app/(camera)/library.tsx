@@ -7,7 +7,6 @@ import { useCallback, useState } from "react";
 import {
 	Alert,
 	Dimensions,
-	Pressable,
 	ScrollView,
 	StyleSheet,
 	Text,
@@ -29,6 +28,10 @@ import { useScanSession, type ScannedCard } from "@/context/ScanSessionContext";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import CardPressable from "@/components/CardPressable";
+import HeaderIconButton, {
+	HeaderButtonGroup,
+	useHeaderGlassStyle,
+} from "@/components/HeaderIconButton";
 
 // Mirror the set-detail grid so the two screens read the same. imageWidth is
 // floored (set-detail gets exact columns from FlatList; a flexWrap grid needs a
@@ -46,6 +49,7 @@ const imageHeight = imageWidth * (88 / 63);
 export default function ScanLibraryScreen() {
 	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
+	const headerGlassStyle = useHeaderGlassStyle(false, true);
 	const { isPro } = useRevenueCat();
 	const { scans, count, removeScans } = useScanSession();
 
@@ -165,9 +169,7 @@ export default function ScanLibraryScreen() {
 				options={{
 					headerTitle,
 					headerLeft: () => (
-						<Pressable
-							hitSlop={8}
-							style={styles.headerIconBtn}
+						<HeaderIconButton
 							onPress={() => {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 								router.back();
@@ -179,15 +181,13 @@ export default function ScanLibraryScreen() {
 								tintColor={t.accentOn}
 								weight="medium"
 							/>
-						</Pressable>
+						</HeaderIconButton>
 					),
 					headerRight: () => {
 						if (count === 0) return null;
 						if (!selectMode) {
 							return (
-								<Pressable
-									hitSlop={8}
-									style={styles.headerIconBtn}
+								<HeaderIconButton
 									onPress={() => {
 										Haptics.selectionAsync();
 										setSelectMode(true);
@@ -199,11 +199,11 @@ export default function ScanLibraryScreen() {
 										tintColor={t.accentOn}
 										weight="medium"
 									/>
-								</Pressable>
+								</HeaderIconButton>
 							);
 						}
 						return (
-							<View style={styles.headerRow}>
+							<HeaderButtonGroup>
 								{selected.size > 0 && (
 									<ContextMenu
 										dropdownMenuMode
@@ -213,7 +213,7 @@ export default function ScanLibraryScreen() {
 										]}
 										onPress={handleMenuPress}
 									>
-										<View style={styles.headerIconBtn}>
+										<View style={headerGlassStyle}>
 											<SymbolView
 												name="ellipsis"
 												size={20}
@@ -223,9 +223,7 @@ export default function ScanLibraryScreen() {
 										</View>
 									</ContextMenu>
 								)}
-								<Pressable
-									hitSlop={8}
-									style={styles.headerIconBtn}
+								<HeaderIconButton
 									onPress={exitSelect}
 								>
 									<SymbolView
@@ -234,8 +232,8 @@ export default function ScanLibraryScreen() {
 										tintColor={t.accentOn}
 										weight="semibold"
 									/>
-								</Pressable>
-							</View>
+								</HeaderIconButton>
+							</HeaderButtonGroup>
 						);
 					},
 				}}
@@ -357,7 +355,6 @@ export default function ScanLibraryScreen() {
 const styles = StyleSheet.create({
 	container: { flex: 1 },
 	headerRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-	headerIconBtn: { padding: 4 },
 	empty: {
 		flex: 1,
 		alignItems: "center",

@@ -28,6 +28,7 @@ import { spacing, useRiverTheme } from "@/constants/theme";
 import { useApi } from "@/lib/axios";
 import { SORT_OPTION_LABELS } from "@/lib/sortLabels";
 import FloatingSearchBar from "@/components/FloatingSearchBar";
+import HeaderFadeScrim from "@/components/HeaderFadeScrim";
 import { cardWaterfall } from "@/lib/waterfall";
 import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
 import { useOwnedCardIds } from "@/hooks/useOwnedCardIds";
@@ -50,6 +51,7 @@ import CardImage from "@/components/CardImage";
 import CardContextMenu from "@/components/CardContextMenu";
 import ErrorState from "@/components/ErrorState";
 import type { ScrydexCard } from "@/types/scrydex";
+import HeaderIconButton from "@/components/HeaderIconButton";
 
 // Every print of one Pokémon — where a Pokédex tile lands. Deliberately the
 // same architecture as set-detail: the WHOLE card list is fetched once
@@ -537,8 +539,7 @@ export default function PokemonCards() {
 						? `Collected ${name ?? ""}`.trim()
 						: (name ?? "Pokédex"),
 					headerLeft: () => (
-						<Pressable
-							hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+						<HeaderIconButton
 							onPress={() => {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 								router.back();
@@ -550,7 +551,7 @@ export default function PokemonCards() {
 								tintColor={t.accentOn}
 								weight="medium"
 							/>
-						</Pressable>
+						</HeaderIconButton>
 					),
 				}}
 			/>
@@ -642,6 +643,7 @@ export default function PokemonCards() {
 					menuIcon="arrow.up.arrow.down"
 					menuActions={sortActions}
 				/>
+				<HeaderFadeScrim />
 			</View>
 		</>
 	);

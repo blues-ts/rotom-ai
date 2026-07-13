@@ -19,6 +19,23 @@ export const NUM_VISUAL_FLOOR = 0.55; // and never trusts a candidate below this
 export const MODEL_LOCK_SCORE = 0.6; // and the top match must look like a card at all
 export const MODEL_LOCK_MARGIN = 0.12; // runner-up this far behind = unambiguous
 
+// Index ids mark Japanese prints with a `_ja` expansion segment (e.g.
+// `sv8a_ja-123`); everything else is the English print.
+export type ScanLang = "en" | "ja";
+
+export function isJapaneseId(id: string): boolean {
+	return id.includes("_ja");
+}
+
+/** Keep only candidates printed in `lang` — scanning with the other language's
+ *  near-twins excluded is what turns EN/JA holo ties into clean margins. */
+export function filterByLanguage(
+	matches: CardMatch[],
+	lang: ScanLang,
+): CardMatch[] {
+	return matches.filter((m) => isJapaneseId(m.id) === (lang === "ja"));
+}
+
 // Normalise a collector number for comparison: uppercase, drop a letter prefix's
 // leading zeros. "TG02" → "TG2", "010" → "10", "123" → "123".
 export function normNum(raw: string): string | null {
@@ -91,7 +108,7 @@ export function resolveOcrTieBreak(
 	});
 	// EN/JA twin (same art + number): split on the script OCR read.
 	if (hits.length > 1) {
-		const byLang = hits.filter((m) => m.id.includes("_ja") === ja);
+		const byLang = hits.filter((m) => isJapaneseId(m.id) === ja);
 		if (byLang.length) hits = byLang;
 	}
 	// (2) A bare number may only CONFIRM a visual leader / co-leader

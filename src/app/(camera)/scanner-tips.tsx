@@ -14,6 +14,11 @@ type Tip = {
 
 const TIPS: Tip[] = [
 	{
+		icon: "globe",
+		title: "Match the card language",
+		body: "The EN/JP button below the frame picks which prints the scanner matches. Set it to the language in hand — English and Japanese twins share the same artwork.",
+	},
+	{
 		icon: "viewfinder",
 		title: "Fill the frame",
 		body: "Line the card up inside the corner guides so the whole card is visible — edges and all.",

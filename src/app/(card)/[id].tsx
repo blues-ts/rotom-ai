@@ -44,6 +44,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { LineChart } from "react-native-wagmi-charts";
 import { useApi } from "@/lib/axios";
 import TapHoldHintOverlay from "@/components/TapHoldHintOverlay";
+import HeaderFadeScrim from "@/components/HeaderFadeScrim";
 import { CHAT_CARD_HINT_KEY, useOneTimeHint } from "@/hooks/useTapHoldHint";
 import { getCard, getCardHistory, getCardListings } from "@/lib/api/pricing";
 import { getCatalogCard, catalogCardToScrydex } from "@/lib/api/catalog";
@@ -73,6 +74,7 @@ import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { ProGate, ProUnlockPill, RedactBar } from "@/components/ProGate";
 import { LockedChartTeaser } from "@/components/LockedChartTeaser";
 import CardImage from "@/components/CardImage";
+import HeaderIconButton from "@/components/HeaderIconButton";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -1109,8 +1111,7 @@ export default function CardDetail() {
 					headerTitle: displayName,
 					headerRight: () =>
 						configMatches ? null : (
-							<Pressable
-								hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+							<HeaderIconButton
 								onPress={() => {
 									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 									if (!isPro) {
@@ -1150,17 +1151,11 @@ export default function CardDetail() {
 														: undefined,
 											},
 											{
+												// The "Added to {name}" toast comes from the central
+												// mutation onSuccess in useCollections.
 												onSuccess: () => {
 													Haptics.notificationAsync(
 														Haptics.NotificationFeedbackType.Success,
-													);
-													const configLabel =
-														pricingTab === "Graded"
-															? `${gradedCompany} ${gradedGrade}`
-															: `${formatVariantLabel(variant)} · ${formatConditionLabel(rawCondition)}`;
-													Alert.alert(
-														"Added!",
-														`${configLabel} configuration added to collection.`,
 													);
 												},
 											},
@@ -1199,7 +1194,7 @@ export default function CardDetail() {
 									tintColor={t.accentOn}
 									weight="medium"
 								/>
-							</Pressable>
+							</HeaderIconButton>
 						),
 				}}
 			/>
@@ -2234,6 +2229,7 @@ export default function CardDetail() {
 						</Text>
 					</View>
 				)}
+				<HeaderFadeScrim />
 			</View>
 		</>
 	);

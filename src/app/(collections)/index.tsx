@@ -10,6 +10,7 @@ import CollectionCard from "@/components/CollectionCard";
 import ErrorState from "@/components/ErrorState";
 import CollectionValueChart from "@/components/CollectionValueChart";
 import RefreshingPill from "@/components/RefreshingPill";
+import HeaderFadeScrim from "@/components/HeaderFadeScrim";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -119,6 +120,7 @@ export default function Collections() {
 					</>
 				)}
 			</ScrollView>
+			<HeaderFadeScrim />
 		</View>
 	);
 }
