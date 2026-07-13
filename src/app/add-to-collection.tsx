@@ -22,6 +22,7 @@ import {
 	selectPrice,
 } from "@/lib/scrydex";
 import { useScanSession } from "@/context/ScanSessionContext";
+import { useToast } from "@/context/ToastContext";
 
 export default function AddToCollection() {
   const t = useRiverTheme();
@@ -53,6 +54,7 @@ export default function AddToCollection() {
 
   const { collections, addCardToCollection, addCardsToCollection, moveCardRows } = useCollections();
   const refreshPrices = useRefreshCollectionPrices();
+  const toast = useToast();
   // Batch adds come from the scanner library — clear those cards from the
   // session once they've landed in a collection.
   const { scans, removeScans } = useScanSession();
@@ -98,6 +100,13 @@ export default function AddToCollection() {
         },
         {
           onSuccess: () => {
+            // The toast outlives this sheet (FullWindowOverlay at the root),
+            // so it stays up as the confirmation after the dismiss below.
+            const target = collections.find((c) => c.id === collectionId);
+            toast.show(
+              `Moved ${moveIds.length} ${moveIds.length === 1 ? "card" : "cards"}${target ? ` to ${target.name}` : ""}`,
+              "success",
+            );
             setTimeout(() => router.back(), 450);
           },
           onError: () => {
@@ -107,7 +116,7 @@ export default function AddToCollection() {
         },
       );
     },
-    [moveFromCollectionId, moveIds, addedId, moveCardRows],
+    [moveFromCollectionId, moveIds, addedId, moveCardRows, collections, toast],
   );
 
   // Kick off the priced-batch lookup the moment the sheet opens, not on tap —

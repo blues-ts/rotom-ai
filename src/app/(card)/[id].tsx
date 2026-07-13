@@ -14,6 +14,7 @@ import {
 	Linking,
 	Pressable,
 	ScrollView,
+	Share,
 	StyleSheet,
 	Text,
 	TextInput,
@@ -74,7 +75,10 @@ import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { ProGate, ProUnlockPill, RedactBar } from "@/components/ProGate";
 import { LockedChartTeaser } from "@/components/LockedChartTeaser";
 import CardImage from "@/components/CardImage";
-import HeaderIconButton from "@/components/HeaderIconButton";
+import HeaderIconButton, {
+	HeaderButtonGroup,
+} from "@/components/HeaderIconButton";
+import { buildCardShareUrl } from "@/lib/share";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -853,6 +857,44 @@ export default function CardDetail() {
 		? getExpansionDisplayName(card.expansion)
 		: undefined;
 
+	// Share the card as a rich link (url-only payload, so iMessage unfurls it
+	// into one tappable bubble: card image + "PSA 10 — $1,234" via the Open
+	// Graph tags the rivertcg.com worker serves). Universal link opens the
+	// card in-app for recipients who have River installed.
+	const handleShare = async () => {
+		if (!cardImage) return;
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		// Compact tier for the preview title: short condition code for Raw
+		// ("NM", not "Near Mint"), company + grade for Graded; variant
+		// prepended when it isn't "normal".
+		const variantLabel =
+			variant && variant !== "normal" ? formatVariantLabel(variant) : null;
+		const selectionLabel =
+			pricingTab === "Graded"
+				? [
+						variantLabel,
+						gradedCompany && gradedGrade
+							? `${gradedCompany} ${gradedGrade}`
+							: "Graded",
+					]
+						.filter(Boolean)
+						.join(" · ")
+				: [variantLabel, rawCondition].filter(Boolean).join(" · ");
+		try {
+			await Share.share({
+				url: buildCardShareUrl({
+					cardId: id,
+					name: displayName,
+					price: heroPrice,
+					selectionLabel,
+					imageUrl: cardImage,
+				}),
+			});
+		} catch {
+			// User dismissed; no-op.
+		}
+	};
+
 	// The chart and recent sales follow the *settled* selection (debounced), so
 	// flicking through conditions/tiers in the configure sheet doesn't fire a
 	// history/listings request for every option passed over — and they're hidden
@@ -1109,10 +1151,22 @@ export default function CardDetail() {
 			<Stack.Screen
 				options={{
 					headerTitle: displayName,
-					headerRight: () =>
-						configMatches ? null : (
+					headerRight: () => (
+						<HeaderButtonGroup>
 							<HeaderIconButton
-								onPress={() => {
+								onPress={handleShare}
+								disabled={!card || !cardImage}
+							>
+								<SymbolView
+									name="square.and.arrow.up"
+									size={19}
+									tintColor={t.accentOn}
+									weight="medium"
+								/>
+							</HeaderIconButton>
+							{!configMatches && (
+								<HeaderIconButton
+									onPress={() => {
 									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 									if (!isPro) {
 										void presentProPaywallIfNeeded();
@@ -1188,14 +1242,16 @@ export default function CardDetail() {
 									}
 								}}
 							>
-								<SymbolView
-									name="plus"
-									size={22}
-									tintColor={t.accentOn}
-									weight="medium"
-								/>
-							</HeaderIconButton>
-						),
+									<SymbolView
+										name="plus"
+										size={22}
+										tintColor={t.accentOn}
+										weight="medium"
+									/>
+								</HeaderIconButton>
+							)}
+						</HeaderButtonGroup>
+					),
 				}}
 			/>
 

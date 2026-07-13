@@ -10,8 +10,10 @@
     "ios": {
       "icon": "./assets/apple-icon.icon",
       "bundleIdentifier": "com.riverai.app",
+      "associatedDomains": ["applinks:rivertcg.com"],
       "infoPlist": {
-        "NSCameraUsageDescription": "River AI TCG uses the camera to scan and identify your trading cards."
+        "NSCameraUsageDescription": "River AI TCG uses the camera to scan and identify your trading cards.",
+        "NSPhotoLibraryAddUsageDescription": "River AI TCG saves card images to your photo library when you choose Save Image from the share sheet."
       }
     },
     "android": {

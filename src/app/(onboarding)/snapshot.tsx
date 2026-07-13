@@ -58,7 +58,7 @@ export default function Snapshot() {
     // TODO: upgrade to image-share via react-native-view-shot + expo-sharing.
     try {
       await Share.share({
-        message: `River says on ${demoCard.name}: "${demoResponse}"\n\nRaw NM: $${demoCard.rawNM} · PSA 10: $${demoCard.psa10.toLocaleString()} (${demoCard.pct30d >= 0 ? "+" : ""}${demoCard.pct30d}% 30d)\n\nTry River: riverai.app`,
+        message: `River says on ${demoCard.name}: "${demoResponse}"\n\nRaw NM: $${demoCard.rawNM} · PSA 10: $${demoCard.psa10.toLocaleString()} (${demoCard.pct30d >= 0 ? "+" : ""}${demoCard.pct30d}% 30d)\n\nTry River: rivertcg.com`,
       });
     } catch {
       // User dismissed; no-op.
