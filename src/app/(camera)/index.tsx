@@ -382,7 +382,7 @@ const FlockCard = memo(function FlockCard({
 			<Image
 				source={{ uri: image }}
 				style={styles.flockCardImage}
-				contentFit="cover"
+				contentFit="contain"
 			/>
 		</Animated.View>
 	);
@@ -944,12 +944,16 @@ export default function CameraScreen() {
 						? (binderRegion.y + (rect.y + rect.h / 2) * binderRegion.h) *
 							height
 						: height * CARD_CENTER_Y_RATIO;
+					// Size from the detected width but at true TCG ratio (63:88) —
+					// detection rects are skewed bounding boxes, and fitting the art
+					// to them cropped the card's top/bottom.
+					const w = rect ? rect.w * binderRegion.w * width : 80;
 					return {
 						image: cardImageUrl(p.id),
 						cx,
 						cy,
-						w: rect ? rect.w * binderRegion.w * width : 80,
-						h: rect ? rect.h * binderRegion.h * height : 112,
+						w,
+						h: w * (88 / 63),
 					};
 				});
 				setFlyingFlock({ cards, key: Date.now() });
