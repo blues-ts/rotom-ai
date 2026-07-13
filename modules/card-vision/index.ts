@@ -55,29 +55,16 @@ export function loadIndexFromFile(
 }
 
 /**
- * Hybrid step 1 (instant, offline): load the best index already on device —
- * the bundled baseline or a previously-downloaded cache, whichever has more
- * cards. `source` is "bundled" | "cached" | "none" (count 0 when nothing local).
+ * Load the bundled index shipped with the app — the only index source; catalog
+ * updates ship as app updates with a newer bundled index. `source` is
+ * "bundled" | "none" (count 0 when this build has no usable index).
  */
 export function loadBestLocal(): Promise<{
   count: number;
   rev: number;
-  source: "bundled" | "cached" | "none";
+  source: "bundled" | "none";
 }> {
   return mod().loadBestLocal();
-}
-
-/**
- * Hybrid step 2 (background): refresh from the server. Downloads + caches + loads
- * only when the server's {rev,count} differs from what's loaded. Call after
- * loadBestLocal so the app is usable immediately while this runs.
- */
-export function refreshFromServer(
-  versionURL: string,
-  manifestURL: string,
-  f16URL: string,
-): Promise<{ count: number; rev: number; updated: boolean }> {
-  return mod().refreshFromServer(versionURL, manifestURL, f16URL);
 }
 
 /**

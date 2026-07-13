@@ -66,6 +66,7 @@ import {
 	resolveOcrTieBreak,
 } from "@/lib/scanMatching";
 import { getScanLang, setScanLang, useScanLang } from "@/lib/scanPrefs";
+import { warmScanner } from "@/lib/scannerWarmup";
 import * as SecureStore from "expo-secure-store";
 import { SCANNER_TOOLS_HINT_KEY } from "@/hooks/useTapHoldHint";
 import TapHoldHintOverlay from "@/components/TapHoldHintOverlay";
@@ -141,9 +142,6 @@ const AMBER = "#FFAE04"; // hold steady
 const REST = "rgba(255,255,255,0.92)";
 
 // On-device scan tuning.
-const SCAN_INDEX_BASE = process.env.EXPO_PUBLIC_API_URL
-	? `${process.env.EXPO_PUBLIC_API_URL}/api/scan-index`
-	: null;
 const ONDEVICE_THRESHOLD = 0.7; // a frame this confident casts a vote
 const INSTANT_LOCK = 0.9; // single very-confident frame locks immediately
 // Holos make look-alikes cluster ~0.75 with tiny margins and the #1 swaps frame
@@ -483,7 +481,11 @@ export default function CameraScreen() {
 	const onDeviceReadyRef = useRef(false);
 	const photoOutputRef = useRef(photoOutput);
 	photoOutputRef.current = photoOutput;
-	const loopRunningRef = useRef(false);
+	// Loop lifetime token: each runLoop() call takes a new generation and the
+	// blur cleanup bumps it. A boolean flag raced re-focus — the old loop's
+	// pending await would see the flag set true again by the NEW loop and keep
+	// running alongside it.
+	const loopGenRef = useRef(0);
 	// True while the post-capture flash plays — the loop skips frames so a card
 	// held in the reticle is captured exactly once.
 	const pausedRef = useRef(false);
@@ -751,12 +753,48 @@ export default function CameraScreen() {
 		setBinderCards(null);
 	}, []);
 
+	const ensureIndexLoaded = useCallback(async () => {
+		if (onDeviceReadyRef.current) return true;
+		if (!CardVision.isAvailable()) return false;
+		// Join the launch warm-up (idempotent; a failed attempt un-caches itself
+		// so this retries) instead of racing it with a duplicate loadBestLocal —
+		// two concurrent loads each decode the ~66 MB index, doubling the wait
+		// and spiking memory. warmScanner resolves once the local index is in
+		// (or the attempt failed); it never throws.
+		await warmScanner();
+		if (CardVision.isLoaded()) {
+			console.log(
+				`[scan] index ready: rev=${CardVision.loadedRev()} count=${CardVision.loadedCount()}`,
+			);
+			markReady();
+			return true;
+		}
+		return false;
+	}, [markReady]);
+
 	const runLoop = useCallback(async () => {
-		if (loopRunningRef.current) return;
-		loopRunningRef.current = true;
-		while (loopRunningRef.current) {
+		const gen = ++loopGenRef.current;
+		let lastReadyAttempt = 0;
+		// Backed off 2s → 30s: each failed attempt re-runs warmScanner, which
+		// fires a server version poll — no index on device must not mean a
+		// network request every couple of seconds for as long as the screen is up.
+		let readyRetryDelay = 2000;
+		while (gen === loopGenRef.current) {
+			if (!onDeviceReadyRef.current) {
+				// Readiness heals from inside the loop, not just once on focus — a
+				// load still in flight (or one transient failure) used to dead-end
+				// the screen until the user navigated away and back.
+				const now = Date.now();
+				if (now - lastReadyAttempt >= readyRetryDelay) {
+					lastReadyAttempt = now;
+					readyRetryDelay = Math.min(readyRetryDelay * 2, 30000);
+					await ensureIndexLoaded();
+					continue;
+				}
+				await delay(300);
+				continue;
+			}
 			if (
-				!onDeviceReadyRef.current ||
 				pausedRef.current ||
 				scanningPausedRef.current ||
 				modeRef.current !== "single"
@@ -765,37 +803,12 @@ export default function CameraScreen() {
 				continue;
 			}
 			const result = await captureAndIdentify();
+			if (gen !== loopGenRef.current) break;
 			if (result && !pausedRef.current && !scanningPausedRef.current)
 				await evaluate(result.matches, result.filePath);
 			await delay(AUTO_INTERVAL_MS);
 		}
-		loopRunningRef.current = false;
-	}, [captureAndIdentify, evaluate]);
-
-	const ensureIndexLoaded = useCallback(async () => {
-		if (onDeviceReadyRef.current) return true;
-		if (!CardVision.isAvailable()) return false;
-		// The launch warm-up usually has the index loaded already — use it as-is
-		// instead of reloading 66 MB from disk again.
-		if (CardVision.isLoaded()) {
-			console.log(
-				`[scan] index already loaded: rev=${CardVision.loadedRev()} count=${CardVision.loadedCount()}`,
-			);
-			markReady();
-			return true;
-		}
-		try {
-			const local = await CardVision.loadBestLocal();
-			if (local.count > 0) {
-				console.log(
-					`[scan] index loaded: rev=${local.rev} count=${local.count} source=${local.source}`,
-				);
-				markReady();
-				return true;
-			}
-		} catch {}
-		return false;
-	}, [markReady]);
+	}, [captureAndIdentify, evaluate, ensureIndexLoaded]);
 
 	useFocusEffect(
 		useCallback(() => {
@@ -813,33 +826,18 @@ export default function CameraScreen() {
 			setIsActive(true);
 			setScanState(onDeviceReadyRef.current ? "searching" : "preparing");
 
-			let cancelled = false;
-			(async () => {
-				await ensureIndexLoaded();
-				if (cancelled || !SCAN_INDEX_BASE) return;
-				// No-op while the server serves the legacy FeaturePrint index (the
-				// native side refuses rev < 1000 before downloading anything); starts
-				// updating automatically once it serves a trained-model index.
-				try {
-					const r = await CardVision.refreshFromServer(
-						`${SCAN_INDEX_BASE}/version`,
-						`${SCAN_INDEX_BASE}/manifest.json`,
-						`${SCAN_INDEX_BASE}/index.f16`,
-					);
-					if (!cancelled && r.count > 0) markReady();
-				} catch {}
-			})();
-
-			const safety = setTimeout(() => !cancelled && setIndexReady(true), 12000);
+			// The index load itself is driven by runLoop: its first iteration calls
+			// ensureIndexLoaded (joining the launch warm-up) and keeps retrying
+			// with backoff until the bundled index is in.
+			const safety = setTimeout(() => setIndexReady(true), 12000);
 			runLoop();
 
 			return () => {
-				cancelled = true;
 				clearTimeout(safety);
 				// Stop scanning immediately, but keep the camera session alive briefly
 				// so a back-swipe shows a live preview through the transition (not a
 				// frozen frame or black). Free the camera if they linger off-screen.
-				loopRunningRef.current = false;
+				loopGenRef.current++;
 				if (deactivateTimer.current) clearTimeout(deactivateTimer.current);
 				deactivateTimer.current = setTimeout(() => setIsActive(false), 20000);
 				// Clear the result UI so swiping back doesn't flash "Got it!".
@@ -850,7 +848,7 @@ export default function CameraScreen() {
 				// coming back doesn't force a re-shutter. Idle has nothing to keep.
 				if (binderPhaseRef.current === "idle") resetBinder();
 			};
-		}, [ensureIndexLoaded, markReady, runLoop, setPaused, resetBinder]),
+		}, [runLoop, setPaused, resetBinder]),
 	);
 
 	const handleTogglePause = useCallback(() => {
@@ -1191,7 +1189,7 @@ export default function CameraScreen() {
 										? binderPhase === "analyzing"
 											? AMBER
 											: palette.accent
-										: scanningPaused
+										: scanningPaused || scanState === "preparing"
 											? "rgba(255,255,255,0.45)"
 											: palette.accent
 								}
@@ -1208,7 +1206,9 @@ export default function CameraScreen() {
 										: "Binder scan"
 									: scanningPaused
 										? "Scanner paused"
-										: "Scanning..."}
+										: scanState === "preparing"
+											? "Getting ready..."
+											: "Scanning..."}
 							</UIText>
 						</HStack>
 						<HStack>

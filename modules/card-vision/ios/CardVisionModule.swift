@@ -43,6 +43,13 @@ public class CardVisionModule: Module {
   private var loadedRev: Int = -1
   // Rolling buffer of recent query embeddings for holo-glare smoothing.
   private var recent: [[Float]] = []
+  // Guards the index state (ids/matrix/dim/count/loadedRev) and the smoothing
+  // buffer. Async functions (loads, identify) run on the module's default
+  // serial queue, but the sync getters (isLoaded/loadedRev/loadedCount) and
+  // resetSmoothing arrive on the JS thread. Snapshots under the lock are
+  // cheap: loads REPLACE the arrays (never mutate in place), so a read is a
+  // COW retain, not a copy.
+  private let stateLock = NSLock()
   // One shared context — creation is expensive and CIContext is thread-safe.
   // The binder grid renders up to 9 crops per shutter; per-call contexts waste
   // hundreds of ms.
@@ -57,16 +64,16 @@ public class CardVisionModule: Module {
     Name("CardVision")
 
     Function("isLoaded") { () -> Bool in
-      self.count > 0
+      self.hasIndex()
     }
 
     // Model revision of the loaded index (-1 when none).
     Function("loadedRev") { () -> Int in
-      self.loadedRev
+      self.loadedState().rev
     }
 
     Function("loadedCount") { () -> Int in
-      self.count
+      self.loadedState().count
     }
 
     // Load a binary index already on disk: `<...>.manifest.json` + a Float16
@@ -76,75 +83,18 @@ public class CardVisionModule: Module {
                             f16Path: self.stripScheme(f16Uri))
     }
 
-    // HYBRID step 1 — instant, offline. Load the best index already on the
-    // device: whichever of the bundled baseline or the previously-downloaded
-    // cache has more cards (so an app update with a newer baseline beats a stale
-    // cache). Returns count 0 + source "none" when nothing is present yet.
+    // Load the bundled index shipped with the app — the only index source.
+    // Catalog updates ship as app updates with a newer bundled index; there is
+    // no server download path. Returns count 0 + source "none" when the build
+    // has no usable bundled index (or it's a legacy FeaturePrint one).
     AsyncFunction("loadBestLocal") { () -> [String: Any] in
-      let bundled = self.bundledIndexPaths()
-      let cached = self.cachedIndexPaths()
-      // Indexes from the removed FeaturePrint era (rev < 1000) are unusable —
-      // treat them as absent (a stale cached download from an old app version).
-      let usable = { (v: (rev: Int, count: Int)?) in
-        v.flatMap { $0.rev >= customModelRevFloor ? $0 : nil }
+      guard let b = self.bundledIndexPaths(),
+            let v = self.versionAt(manifestPath: b.manifest),
+            v.rev >= customModelRevFloor else {
+        return ["count": 0, "rev": -1, "source": "none"]
       }
-      let bv = usable(bundled.flatMap { self.versionAt(manifestPath: $0.manifest) })
-      let cv = usable(cached.flatMap { self.versionAt(manifestPath: $0.manifest) })
-
-      // Prefer the larger catalog (more cards = newer set coverage); on a tie,
-      // the higher model rev (a fresher retrain).
-      let useCached: Bool
-      if let c = cv, let b = bv {
-        useCached = c.count != b.count ? c.count > b.count : c.rev >= b.rev
-      } else { useCached = cv != nil }
-
-      if useCached, cv != nil, let c = cached {
-        let n = try self.loadFromDisk(manifestPath: c.manifest, f16Path: c.f16)
-        return ["count": n, "rev": self.loadedRev, "source": "cached"]
-      }
-      if bv != nil, let b = bundled {
-        let n = try self.loadFromDisk(manifestPath: b.manifest, f16Path: b.f16)
-        return ["count": n, "rev": self.loadedRev, "source": "bundled"]
-      }
-      return ["count": 0, "rev": -1, "source": "none"]
-    }
-
-    // HYBRID step 2 — background. Ask the server for the current {rev,count};
-    // if it differs from what's loaded, download + cache + load it. No-op (and
-    // no network writes) when already current. Safe to call after loadBestLocal.
-    AsyncFunction("refreshFromServer") {
-      (versionURL: String, manifestURL: String, f16URL: String) -> [String: Any] in
-      guard let vurl = URL(string: versionURL), let vdata = try? Data(contentsOf: vurl) else {
-        throw VisionError(description: "Cannot reach \(versionURL)")
-      }
-      let remote = (try? JSONSerialization.jsonObject(with: vdata)) as? [String: Any] ?? [:]
-      let rev = (remote["rev"] as? Int) ?? -1
-      let count = (remote["count"] as? Int) ?? -1
-
-      // The server still serves the legacy FeaturePrint index (rev < 1000),
-      // which this build can't use — no-op (cheap version poll only) until it
-      // serves a trained-model index. Refreshing becomes automatic then.
-      if rev < customModelRevFloor {
-        return ["count": self.count, "rev": self.loadedRev, "updated": false]
-      }
-
-      if rev == self.loadedRev && count == self.count {
-        return ["count": self.count, "rev": self.loadedRev, "updated": false]
-      }
-
-      let paths = self.cacheIndexFilePaths()
-      guard let murl = URL(string: manifestURL), let md = try? Data(contentsOf: murl) else {
-        throw VisionError(description: "Failed to download manifest")
-      }
-      try md.write(to: URL(fileURLWithPath: paths.manifest))
-      guard let furl = URL(string: f16URL), let fd = try? Data(contentsOf: furl) else {
-        throw VisionError(description: "Failed to download vectors")
-      }
-      try fd.write(to: URL(fileURLWithPath: paths.f16))
-      try vdata.write(to: URL(fileURLWithPath: paths.version))
-
-      let n = try self.loadFromDisk(manifestPath: paths.manifest, f16Path: paths.f16)
-      return ["count": n, "rev": self.loadedRev, "updated": true]
+      let n = try self.loadFromDisk(manifestPath: b.manifest, f16Path: b.f16)
+      return ["count": n, "rev": self.loadedState().rev, "source": "bundled"]
     }
 
     // Load from in-memory arrays (small/dev path). `flat` is ids.count * dim.
@@ -152,17 +102,20 @@ public class CardVisionModule: Module {
       guard dim > 0, ids.count * dim == flat.count else {
         throw VisionError(description: "Index shape mismatch: \(ids.count) × \(dim) ≠ \(flat.count)")
       }
+      let floats = flat.map { Float($0) }
+      self.stateLock.lock()
       self.ids = ids
       self.dim = dim
       self.count = ids.count
-      self.matrix = flat.map { Float($0) }
+      self.matrix = floats
+      self.stateLock.unlock()
     }
 
     // Embed a captured photo and return the top-N matches. `crop` runs card
     // rectangle detection + perspective correction first (recommended for live
     // photos, which include background around the card).
     AsyncFunction("identify") { (uri: String, topN: Int, crop: Bool) -> [[String: Any]] in
-      guard self.count > 0 else { throw VisionError(description: "Index not loaded") }
+      guard self.hasIndex() else { throw VisionError(description: "Index not loaded") }
       guard let query = self.embed(path: self.stripScheme(uri), crop: crop) else {
         throw VisionError(description: "Failed to embed image")
       }
@@ -179,7 +132,7 @@ public class CardVisionModule: Module {
     AsyncFunction("identifyInRegion") {
       (uri: String, x: Double, y: Double, w: Double, h: Double,
        previewAspect: Double, topN: Int) -> [[String: Any]] in
-      guard self.count > 0 else { throw VisionError(description: "Index not loaded") }
+      guard self.hasIndex() else { throw VisionError(description: "Index not loaded") }
       guard let cg = self.loadUprightForPreview(self.stripScheme(uri),
                                                 previewAspect: previewAspect) else {
         throw VisionError(description: "Failed to load image")
@@ -202,7 +155,7 @@ public class CardVisionModule: Module {
     AsyncFunction("identifyInRegionSmoothed") {
       (uri: String, x: Double, y: Double, w: Double, h: Double,
        previewAspect: Double, topN: Int, window: Int) -> [[String: Any]] in
-      guard self.count > 0 else { throw VisionError(description: "Index not loaded") }
+      guard self.hasIndex() else { throw VisionError(description: "Index not loaded") }
       guard let cg = self.loadUprightForPreview(self.stripScheme(uri),
                                                 previewAspect: previewAspect) else {
         throw VisionError(description: "Failed to load image")
@@ -215,6 +168,8 @@ public class CardVisionModule: Module {
 
       // Scene-change guard: if this frame barely resembles the running average,
       // the card/scene changed — start the buffer over so we don't blend cards.
+      // Locked: resetSmoothing mutates the buffer from the JS thread.
+      self.stateLock.lock()
       if let last = self.recent.last {
         var s: Float = 0
         let n = min(last.count, v.count)
@@ -224,8 +179,10 @@ public class CardVisionModule: Module {
       self.recent.append(v)
       let cap = max(1, window)
       if self.recent.count > cap { self.recent.removeFirst(self.recent.count - cap) }
+      let frames = self.recent
+      self.stateLock.unlock()
 
-      let avg = self.normalised(self.averageVectors(self.recent))
+      let avg = self.normalised(self.averageVectors(frames))
       return self.topMatches(query: avg, k: topN).map {
         ["id": $0.id, "score": Double($0.score)]
       }
@@ -233,7 +190,9 @@ public class CardVisionModule: Module {
 
     // Clear the smoothing buffer (call when starting a fresh scan session).
     Function("resetSmoothing") {
+      self.stateLock.lock()
       self.recent.removeAll()
+      self.stateLock.unlock()
     }
 
     // Read text off a card via on-device OCR (VNRecognizeTextRequest). Crops to
@@ -274,7 +233,7 @@ public class CardVisionModule: Module {
     AsyncFunction("identifyCardsInFrame") {
       (uri: String, x: Double, y: Double, w: Double, h: Double,
        previewAspect: Double, maxCards: Int, topN: Int) -> [String: Any] in
-      guard self.count > 0 else { throw VisionError(description: "Index not loaded") }
+      guard self.hasIndex() else { throw VisionError(description: "Index not loaded") }
       guard let cg = self.loadUprightForPreview(self.stripScheme(uri),
                                                 previewAspect: previewAspect) else {
         throw VisionError(description: "Failed to load image")
@@ -457,24 +416,7 @@ public class CardVisionModule: Module {
     uri.hasPrefix("file://") ? String(uri.dropFirst("file://".count)) : uri
   }
 
-  // MARK: - Index locations
-
-  /// Cache file paths in the app's Caches dir (created on demand).
-  private func cacheIndexFilePaths() -> (manifest: String, f16: String, version: String) {
-    let base = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first
-      ?? NSTemporaryDirectory()
-    let dir = base + "/scanindex"
-    try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-    return (dir + "/index.manifest.json", dir + "/index.f16", dir + "/version.json")
-  }
-
-  /// Cached (downloaded) index, only if both files exist.
-  private func cachedIndexPaths() -> (manifest: String, f16: String)? {
-    let p = cacheIndexFilePaths()
-    let fm = FileManager.default
-    return fm.fileExists(atPath: p.manifest) && fm.fileExists(atPath: p.f16)
-      ? (p.manifest, p.f16) : nil
-  }
+  // MARK: - Index location
 
   /// Bundled baseline index shipped in the app, if present (assets/ via the
   /// podspec resource_bundle, with a fallback to the main bundle).
@@ -524,12 +466,28 @@ public class CardVisionModule: Module {
     guard floats.count == expected else {
       throw VisionError(description: "Vector buffer is \(floats.count), expected \(expected)")
     }
+    stateLock.lock()
     self.ids = manifest.ids
     self.matrix = floats
     self.dim = manifest.dim
     self.count = manifest.count
     self.loadedRev = manifest.rev
+    stateLock.unlock()
     return manifest.count
+  }
+
+  /// Coherent snapshot of the loaded index. O(1): arrays are COW-retained,
+  /// and loads replace them wholesale rather than mutating in place.
+  private func loadedState() -> (ids: [String], matrix: [Float], dim: Int, count: Int, rev: Int) {
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    return (ids, matrix, dim, count, loadedRev)
+  }
+
+  private func hasIndex() -> Bool {
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    return count > 0
   }
 
   // MARK: - Image loading
@@ -699,19 +657,21 @@ public class CardVisionModule: Module {
   // MARK: - Matching (cosine == dot product on normalised vectors, via vDSP)
 
   private func topMatches(query: [Float], k: Int) -> [(id: String, score: Float)] {
-    guard dim > 0, count > 0, query.count >= dim else { return [] }
-    var scores = [Float](repeating: 0, count: count)
-    matrix.withUnsafeBufferPointer { mb in
+    // Locked snapshot keeps ids/matrix/dim coherent as one set.
+    let snap = loadedState()
+    guard snap.dim > 0, snap.count > 0, query.count >= snap.dim else { return [] }
+    var scores = [Float](repeating: 0, count: snap.count)
+    snap.matrix.withUnsafeBufferPointer { mb in
       query.withUnsafeBufferPointer { qb in
         guard let m = mb.baseAddress, let q = qb.baseAddress else { return }
-        for i in 0..<count {
+        for i in 0..<snap.count {
           var s: Float = 0
-          vDSP_dotpr(m + i * dim, 1, q, 1, &s, vDSP_Length(dim))
+          vDSP_dotpr(m + i * snap.dim, 1, q, 1, &s, vDSP_Length(snap.dim))
           scores[i] = s
         }
       }
     }
-    let top = Array(0..<count).sorted { scores[$0] > scores[$1] }.prefix(max(k, 1))
-    return top.map { (id: ids[$0], score: scores[$0]) }
+    let top = Array(0..<snap.count).sorted { scores[$0] > scores[$1] }.prefix(max(k, 1))
+    return top.map { (id: snap.ids[$0], score: scores[$0]) }
   }
 }

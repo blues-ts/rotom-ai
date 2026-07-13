@@ -9,24 +9,20 @@ import * as CardVision from "../../modules/card-vision";
 // at most once per cold start. The loaded index lives in the native module, so
 // the camera screen just checks `CardVision.isLoaded()` to skip its own load.
 
-const SCAN_INDEX_BASE = process.env.EXPO_PUBLIC_API_URL
-	? `${process.env.EXPO_PUBLIC_API_URL}/api/scan-index`
-	: null;
-
 let warmup: Promise<void> | null = null;
 
 /**
- * Kick off (or join) the background scanner warm-up. Resolves once the best
- * local index is loaded; the server refresh continues after and is best-effort.
- * Never throws — scanning is optional and must not break startup.
+ * Kick off (or join) the background scanner warm-up. Resolves once the bundled
+ * index is loaded (catalog updates ship as app updates — there is no server
+ * download path). Never throws — scanning is optional and must not break
+ * startup.
  */
 export function warmScanner(): Promise<void> {
 	if (warmup) return warmup;
 	if (!CardVision.isAvailable()) return Promise.resolve();
 
 	warmup = (async () => {
-		// Step 1 (blocks readiness): load whatever index is already on device.
-		// Skip when the native module already has it loaded — native state
+		// Skip when the native module already has the index loaded — native state
 		// survives JS Fast Refresh even though this singleton is reset, so without
 		// this guard every reload re-decodes the ~66 MB index into a ~132 MB
 		// in-memory matrix, and a couple of those peaks OOM-kills the app.
@@ -36,22 +32,12 @@ export function warmScanner(): Promise<void> {
 				console.log(
 					`[scan] warmup index: rev=${local.rev} count=${local.count} source=${local.source}`,
 				);
-			} catch {
-				// Nothing local yet (download-only build) — the refresh handles it.
-			}
+			} catch {}
 		}
-		// Step 2 (best-effort, non-blocking for the caller's await): refresh from
-		// the server only when it has a newer {rev,count}. While the server still
-		// serves the legacy FeaturePrint index this is a cheap no-op — the native
-		// side refuses rev < 1000 before downloading anything — and it starts
-		// working automatically once the server serves a trained-model index.
-		if (SCAN_INDEX_BASE) {
-			CardVision.refreshFromServer(
-				`${SCAN_INDEX_BASE}/version`,
-				`${SCAN_INDEX_BASE}/manifest.json`,
-				`${SCAN_INDEX_BASE}/index.f16`,
-			).catch(() => {});
-		}
+		// A failed/empty load must not be cached for the rest of the session —
+		// clear the singleton so the next caller (e.g. the camera screen's
+		// readiness retry loop) attempts the load again.
+		if (!CardVision.isLoaded()) warmup = null;
 	})();
 
 	return warmup;
