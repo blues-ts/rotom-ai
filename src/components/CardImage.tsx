@@ -43,6 +43,18 @@ export default function CardImage({
 	const [errored, setErrored] = useState(false);
 	const shimmerOpacity = useSharedValue(0.3);
 
+	// Reset the load/error latch when the target changes (adjust-during-render,
+	// not an effect, so the stale frame never paints). Without this, a screen
+	// that mounts before its data arrives — e.g. the card detail opened from a
+	// shared link, which starts at uri="" — errors once and then stays on the
+	// fallback forever, even after the real URL comes in.
+	const [prevUri, setPrevUri] = useState(uri);
+	if (prevUri !== uri) {
+		setPrevUri(uri);
+		setLoaded(false);
+		setErrored(false);
+	}
+
 	// Run the shimmer only until the image loads, then cancel it. Otherwise the
 	// infinite repeat keeps ticking on the UI thread for every cell forever
 	// (the shimmer stops rendering but the animation driver doesn't stop),
@@ -70,6 +82,25 @@ export default function CardImage({
 		return (
 			<View style={[style, { backgroundColor, overflow: "hidden" }]}>
 				{fallback}
+			</View>
+		);
+	}
+
+	// No target yet (detail screen waiting on its data query, e.g. opened from
+	// a shared link with no cached thumbnail param): keep shimmering instead of
+	// mounting expo-image with an empty source, which fires onError and would
+	// flash the fallback while the card is merely loading.
+	if (!uri && !placeholder) {
+		return (
+			<View style={[style, { backgroundColor, overflow: "hidden" }]}>
+				<Animated.View
+					pointerEvents="none"
+					style={[
+						StyleSheet.absoluteFill,
+						{ backgroundColor: shimmerColor },
+						shimmerStyle,
+					]}
+				/>
 			</View>
 		);
 	}
