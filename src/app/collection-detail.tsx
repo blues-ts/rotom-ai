@@ -427,6 +427,19 @@ export default function CollectionDetail() {
 					exiting={ZoomOut.duration(200)}
 				>
 				<CardPressable
+					// Long-press = enter select mode with this card already selected
+					// (same as the header checkmark.circle button, minus the trip up
+					// there). In select mode a long press is just a slow tap.
+					delayLongPress={300}
+					onLongPress={() => {
+						if (selectMode) {
+							toggleSelected(item.id);
+							return;
+						}
+						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+						setSelectMode(true);
+						setSelected(new Set([item.id]));
+					}}
 					onPress={() => {
 						if (selectMode) {
 							toggleSelected(item.id);

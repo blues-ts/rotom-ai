@@ -86,6 +86,21 @@ export default function ScanLibraryScreen() {
 		[selectMode, toggle],
 	);
 
+	// Long-press = enter select mode with this card already selected — same
+	// gesture as the collection grid. In select mode it's just a slow tap.
+	const onTileLongPress = useCallback(
+		(card: ScannedCard) => {
+			if (selectMode) {
+				toggle(card.id);
+				return;
+			}
+			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+			setSelectMode(true);
+			setSelected(new Set([card.id]));
+		},
+		[selectMode, toggle],
+	);
+
 	const handleDelete = useCallback(() => {
 		const ids = [...selected];
 		if (ids.length === 0) return;
@@ -286,7 +301,11 @@ export default function ScanLibraryScreen() {
 								layout={LinearTransition.duration(220)}
 								style={styles.tile}
 							>
-								<CardPressable onPress={() => onTilePress(card)}>
+								<CardPressable
+									onPress={() => onTilePress(card)}
+									delayLongPress={300}
+									onLongPress={() => onTileLongPress(card)}
+								>
 									<Image
 										source={{ uri: card.image }}
 										style={styles.cardImage}
