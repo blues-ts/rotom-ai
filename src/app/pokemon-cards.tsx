@@ -209,9 +209,8 @@ export default function PokemonCards() {
 		isError,
 		refetch,
 	} = useQuery({
-		queryKey: pokemonCardsQueryKey(name ?? "", langCode, isPro),
-		queryFn: () =>
-			fetchPokemonCards(api, { name: name ?? "", langCode, isPro }),
+		queryKey: pokemonCardsQueryKey(name ?? "", langCode),
+		queryFn: () => fetchPokemonCards(api, { name: name ?? "", langCode }),
 		enabled: !!name,
 		staleTime: 24 * 60 * 60 * 1000,
 	});
@@ -224,7 +223,6 @@ export default function PokemonCards() {
 			fetchPokemonCards(api, {
 				name: name ?? "",
 				langCode,
-				isPro: true,
 				includePrices: true,
 			}),
 		enabled: isPro && isValueSort && !!name,

@@ -4,7 +4,12 @@
  * backend's in-memory cache. Callers pass the axios instance from useApi().
  */
 import type { AxiosInstance } from "axios";
-import type { ScrydexCard, ScrydexExpansion, ScrydexImage } from "@/types/scrydex";
+import type {
+  ScrydexCard,
+  ScrydexExpansion,
+  ScrydexImage,
+  ScrydexSealedProduct,
+} from "@/types/scrydex";
 
 export interface CatalogSet {
   setId: string;
@@ -93,6 +98,78 @@ export async function searchCatalogCards(
   return { data: res.data.data, total: res.data.total, page: res.data.page, pageSize: res.data.pageSize };
 }
 
+/**
+ * Every card of one Pokémon in a single response (exact name-token match on
+ * the server's multikey index — "mew" does not return Mewtwo). Replaces the
+ * old paged name search for the Pokédex grids.
+ */
+export async function getCatalogPokemonCards(
+  api: AxiosInstance,
+  opts: { name: string; language?: "en" | "ja" },
+): Promise<CatalogCard[]> {
+  const params: Record<string, string> = { name: opts.name };
+  if (opts.language) params.language = opts.language;
+  const res = await api.get<{ success: boolean; count: number; data: CatalogCard[] }>(
+    "/api/catalog/pokemon-cards",
+    { params },
+  );
+  return res.data.data;
+}
+
+export interface CatalogSealed {
+  sealedId: string;
+  setId: string;
+  name: string;
+  type?: string;
+  description?: string;
+  images?: ScrydexImage[];
+  variants?: { name: string; images?: ScrydexImage[] }[];
+  expansionSortOrder?: number;
+  setName?: string;
+  /** English translation of the set name for JA sets. */
+  setNameEn?: string;
+  setSeries?: string;
+  setReleaseDate?: string;
+  setLanguageCode?: string;
+}
+
+export interface CatalogSealedPage {
+  data: CatalogSealed[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** Sealed search/browse; `setId` alone lists a whole set's sealed products. */
+export async function searchCatalogSealed(
+  api: AxiosInstance,
+  opts: {
+    q?: string;
+    setId?: string;
+    page?: number;
+    pageSize?: number;
+    language?: "en" | "ja";
+  },
+): Promise<CatalogSealedPage> {
+  const params: Record<string, string | number> = {
+    page: opts.page ?? 1,
+    pageSize: opts.pageSize ?? 30,
+  };
+  if (opts.q) params.q = opts.q;
+  if (opts.setId) params.setId = opts.setId;
+  if (opts.language) params.language = opts.language;
+  const res = await api.get<{ success: boolean } & CatalogSealedPage>(
+    "/api/catalog/sealed",
+    { params },
+  );
+  return {
+    data: res.data.data,
+    total: res.data.total,
+    page: res.data.page,
+    pageSize: res.data.pageSize,
+  };
+}
+
 // --- Adapters to the Scrydex shapes the existing UI/helpers expect ---
 // (nameEn → translation.en.name so getCard/ExpansionDisplayName keeps working.)
 
@@ -133,5 +210,27 @@ export function catalogCardToScrydex(c: CatalogCard): ScrydexCard {
     language_code: c.languageCode,
     expansion_sort_order: c.expansionSortOrder,
     ...(c.nameEn ? { translation: { en: { name: c.nameEn } } } : {}),
+  };
+}
+
+export function catalogSealedToScrydex(s: CatalogSealed): ScrydexSealedProduct {
+  return {
+    id: s.sealedId,
+    name: s.name,
+    type: s.type,
+    description: s.description,
+    images: s.images,
+    variants: s.variants,
+    expansion_sort_order: s.expansionSortOrder,
+    // The expansion object is load-bearing: sealed detail shows the set name
+    // and year, and a collection add stores expansion.name as set_name.
+    expansion: {
+      id: s.setId,
+      name: s.setName ?? "",
+      series: s.setSeries,
+      release_date: s.setReleaseDate,
+      language_code: s.setLanguageCode,
+      ...(s.setNameEn ? { translation: { en: { name: s.setNameEn } } } : {}),
+    },
   };
 }

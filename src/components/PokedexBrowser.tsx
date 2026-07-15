@@ -22,7 +22,6 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { useRiverTheme, type RiverTheme } from "@/constants/theme";
 import { useApi } from "@/lib/axios";
-import { useRevenueCat } from "@/context/RevenueCatContext";
 import {
 	fetchPokemonCards,
 	pokemonCardsQueryKey,
@@ -289,23 +288,22 @@ const PokedexBrowser = memo(function PokedexBrowser({
 	const listRef = useRef<FlatList<ListItem>>(null);
 	const api = useApi();
 	const queryClient = useQueryClient();
-	const { isPro } = useRevenueCat();
 
 	// Press-in prefetch: touch-down precedes navigation by ~150ms, so the
 	// card list is already warming by the time the screen pushes. Targeted
-	// (one Pokémon per actual press) — a viewport prefetch like the sets grid
-	// would fan hundreds of Scrydex-backed fetches out while scrolling.
+	// (one Pokémon per actual press) — and cheap now: a single catalog request
+	// served from server RAM.
 	const prefetchPokemon = useCallback(
 		(pokemonName: string) => {
 			const langCode = language === "JA" ? "ja" : "en";
 			void queryClient.prefetchQuery({
-				queryKey: pokemonCardsQueryKey(pokemonName, langCode, isPro),
+				queryKey: pokemonCardsQueryKey(pokemonName, langCode),
 				queryFn: () =>
-					fetchPokemonCards(api, { name: pokemonName, langCode, isPro }),
+					fetchPokemonCards(api, { name: pokemonName, langCode }),
 				staleTime: 24 * 60 * 60 * 1000,
 			});
 		},
-		[api, queryClient, isPro, language],
+		[api, queryClient, language],
 	);
 
 	// Filtering is a pure in-memory pass over the bundled names — no debounce

@@ -35,10 +35,7 @@ import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { useApi } from "@/lib/axios";
 import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
 import { usePrefetchSetImages } from "@/hooks/usePrefetchSetImages";
-import { searchCards, searchSealed } from "@/lib/api/pricing";
 import {
-	buildSearchFallbackQ,
-	buildSearchQ,
 	extractSearchLanguage,
 	getCardDisplayName,
 	getCardImage,
@@ -65,8 +62,10 @@ import HeaderIconButton from "@/components/HeaderIconButton";
 import {
 	getCatalogSets,
 	searchCatalogCards,
+	searchCatalogSealed,
 	catalogSetToExpansion,
 	catalogCardToScrydex,
+	catalogSealedToScrydex,
 } from "@/lib/api/catalog";
 import type {
 	ApiListResponse,
@@ -613,46 +612,42 @@ export default function Search() {
 		hasNextPage,
 		fetchNextPage,
 	} = useInfiniteQuery<ApiListResponse<ScrydexCard | ScrydexSealedProduct>>({
-		queryKey: ["searchCards", mode, debouncedQuery, isPro, setsLanguage],
+		queryKey: ["searchCards", mode, debouncedQuery, setsLanguage],
 		queryFn: async ({ pageParam }) => {
 			const page = pageParam as number;
 			const toggleLang = setsLanguage === "JA" ? "ja" : "en";
-			// The chip's language filters results too; an explicit "jp"/"en"
-			// typed in the query still wins.
-			const withToggleLang = (q: string) =>
-				q && !q.includes("language_code:")
-					? `${q} language_code:${toggleLang}`
-					: q;
-			// Non-Pro: search the local catalog (no pricing API). Cards only —
-			// sealed search is a Pro feature (the catalog has no sealed products).
-			if (!isPro) {
-				// A standalone "jp"/"en" tag becomes the catalog language filter.
-				const { rest, language } = extractSearchLanguage(debouncedQuery);
-				const res = await searchCatalogCards(api, {
+			// All search metadata comes from the local catalog — Scrydex only
+			// serves prices now. A standalone "jp"/"en" typed in the query wins
+			// over the chip's language toggle.
+			const { rest, language } = extractSearchLanguage(debouncedQuery);
+			if (mode === "sealed") {
+				// Sealed mode is still Pro-gated in handleModeChange; the query
+				// itself is catalog-backed like everything else.
+				const res = await searchCatalogSealed(api, {
 					q: rest,
 					page,
 					pageSize: 30,
 					language: language ?? toggleLang,
 				});
 				return {
-					data: res.data.map(catalogCardToScrydex),
+					data: res.data.map(catalogSealedToScrydex),
 					page: res.page,
 					page_size: res.pageSize,
 					total_count: res.total,
 				} as ApiListResponse<ScrydexCard | ScrydexSealedProduct>;
 			}
-			const search = mode === "sealed" ? searchSealed : searchCards;
-			const primary = await search(api, {
-				q: withToggleLang(buildSearchQ(debouncedQuery)),
+			const res = await searchCatalogCards(api, {
+				q: rest,
 				page,
 				pageSize: 30,
+				language: language ?? toggleLang,
 			});
-			if (primary.total_count > 0) return primary;
-			// Prefix search only matches printed names — retry fieldless so
-			// English terms can match translations of Japanese cards.
-			const fallbackQ = withToggleLang(buildSearchFallbackQ(debouncedQuery));
-			if (!fallbackQ) return primary;
-			return search(api, { q: fallbackQ, page, pageSize: 30 });
+			return {
+				data: res.data.map(catalogCardToScrydex),
+				page: res.page,
+				page_size: res.pageSize,
+				total_count: res.total,
+			} as ApiListResponse<ScrydexCard | ScrydexSealedProduct>;
 		},
 		initialPageParam: 1,
 		getNextPageParam: (lastPage) =>
@@ -661,11 +656,7 @@ export default function Search() {
 				: undefined,
 		// In Pokédex mode the search bar filters the dex list instead — no
 		// card search fires at all.
-		enabled:
-			browse !== "pokedex" &&
-			(isPro
-				? buildSearchQ(debouncedQuery).length > 0
-				: debouncedQuery.trim().length > 0),
+		enabled: browse !== "pokedex" && debouncedQuery.trim().length > 0,
 	});
 
 	const cards = useMemo<CardResult[]>(

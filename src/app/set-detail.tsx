@@ -34,7 +34,12 @@ import HeaderFadeScrim from "@/components/HeaderFadeScrim";
 import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
 import { useOwnedCardIds } from "@/hooks/useOwnedCardIds";
 import { searchCards, searchSealed } from "@/lib/api/pricing";
-import { getCatalogSet, catalogCardToScrydex } from "@/lib/api/catalog";
+import {
+	getCatalogSet,
+	catalogCardToScrydex,
+	searchCatalogSealed,
+	catalogSealedToScrydex,
+} from "@/lib/api/catalog";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import {
@@ -369,19 +374,26 @@ export default function SetDetail() {
 		staleTime: 24 * 60 * 60 * 1000,
 	});
 
-	// Sealed products aren't in the catalog, so sealed mode still loads live.
+	// Sealed metadata comes from the local catalog too (one request, served
+	// from server RAM); the filter is applied client-side like the cards tab.
 	const {
 		data: sealedSet,
 		isLoading: sealedLoading,
 		isError: sealedError,
 		refetch: refetchSealed,
 	} = useQuery({
-		queryKey: ["setSealed", id, debouncedFilter],
-		queryFn: () => fetchWholeSet(false, "sealed"),
+		queryKey: ["catalog-set-sealed", id],
+		queryFn: async (): Promise<{ items: SetItem[]; totalCount: number }> => {
+			const res = await searchCatalogSealed(api, { setId: id, pageSize: 100 });
+			return {
+				items: res.data.map(catalogSealedToScrydex),
+				totalCount: res.total,
+			};
+		},
 		// Lazily enabled on the first Sealed visit, then stays live so the
 		// mounted-but-hidden list keeps its data.
 		enabled: !!id && sealedVisited,
-		staleTime: 5 * 60 * 1000,
+		staleTime: 24 * 60 * 60 * 1000,
 	});
 
 	const isError = isSealedMode ? sealedError : catalogError;
@@ -472,12 +484,17 @@ export default function SetDetail() {
 	}, [allCatalogCards, debouncedFilter, cardSort, pricedCards, applyOwned]);
 
 	const sealedItems = useMemo(() => {
-		// Sealed items come pre-filtered from the API.
-		const base = sealedSet?.items ?? [];
+		// Catalog sealed comes unfiltered — apply the text filter client-side,
+		// same as the cards tab.
+		const f = debouncedFilter.trim().toLowerCase();
+		const all = sealedSet?.items ?? [];
+		const base = f
+			? all.filter((p) => p.name.toLowerCase().includes(f))
+			: all;
 		return applyOwned(
 			sortSetItems(base, sealedSort, pricedSealed?.items, "U"),
 		);
-	}, [sealedSet, sealedSort, pricedSealed, applyOwned]);
+	}, [sealedSet, debouncedFilter, sealedSort, pricedSealed, applyOwned]);
 
 	const cards = isSealedMode ? sealedItems : cardItems;
 

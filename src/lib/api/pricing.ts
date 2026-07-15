@@ -7,7 +7,6 @@ import type {
   ApiItemResponse,
   ApiListResponse,
   ScrydexCard,
-  ScrydexExpansion,
   ScrydexListing,
   ScrydexPriceHistoryDay,
   ScrydexSealedProduct,
@@ -33,23 +32,6 @@ export async function searchCards(
   const res = await api.get<ApiListResponse<ScrydexCard>>("/api/pricing/cards", {
     params,
   });
-  return res.data;
-}
-
-export async function searchSets(
-  api: AxiosInstance,
-  opts: { q: string; page?: number; pageSize?: number; orderBy?: string },
-): Promise<ApiListResponse<ScrydexExpansion>> {
-  const params: Record<string, string | number> = {
-    q: opts.q,
-    page: opts.page ?? 1,
-    page_size: opts.pageSize ?? 100,
-  };
-  if (opts.orderBy) params.order_by = opts.orderBy;
-  const res = await api.get<ApiListResponse<ScrydexExpansion>>(
-    "/api/pricing/sets",
-    { params },
-  );
   return res.data;
 }
 

@@ -124,30 +124,6 @@ function parseSearchTerms(raw: string): {
 }
 
 /**
- * Turn free text into a Scrydex `q` string. Every token becomes a
- * `(name:tok* OR expansion.name:tok*)` prefix group, AND'd together, so
- * "chariza" matches while still typing, "char storm" finds Charizard from
- * Stormfront, and "151" finds the whole set. Field groups are required to
- * get AND semantics — fieldless terms are "should" clauses (OR'd by
- * relevance), which lets a single matching token drown out the rest. A
- * trailing number token ("232", "4/102", "TG05") becomes a `number:` clause
- * with leading zeros stripped.
- */
-export function buildSearchQ(raw: string): string {
-  const { nameTokens, number, language } = parseSearchTerms(raw);
-  const clauses = nameTokens.map(
-    (tok) => `(name:${tok}* OR expansion.name:${tok}*)`,
-  );
-  if (number) clauses.push(`number:${number}`);
-  if (clauses.length === 0) return "";
-  // A standalone "jp"/"en" tag filters to that language's prints
-  // ("charizard jp" → Japanese Charizards only).
-  if (language) clauses.push(`language_code:${language}`);
-  clauses.push(ONLINE_ONLY_EXCLUSION);
-  return clauses.join(" ");
-}
-
-/**
  * Query for browsing/filtering the cards of one expansion. Filter tokens
  * become `name:` prefix wildcards (with the usual trailing-number handling)
  * so the set page narrows as the user types.
@@ -193,22 +169,6 @@ export function buildPokemonCardsFallbackQ(
     .trim();
   if (!terms) return "";
   const clauses = [terms];
-  if (language) clauses.push(`language_code:${language}`);
-  clauses.push(ONLINE_ONLY_EXCLUSION);
-  return clauses.join(" ");
-}
-
-/**
- * Fieldless fallback for when the structured prefix query finds nothing.
- * Fieldless terms match English translations of Japanese cards (`name:` only
- * matches printed names), so "mew" can still surface ミュウ prints. Terms
- * stay unquoted — quoted fieldless phrases are not supported by Scrydex.
- */
-export function buildSearchFallbackQ(raw: string): string {
-  const { nameTokens, number, language } = parseSearchTerms(raw);
-  if (nameTokens.length === 0) return "";
-  const clauses: string[] = [nameTokens.join(" ")];
-  if (number) clauses.push(`number:${number}`);
   if (language) clauses.push(`language_code:${language}`);
   clauses.push(ONLINE_ONLY_EXCLUSION);
   return clauses.join(" ");
