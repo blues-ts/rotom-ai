@@ -18,10 +18,10 @@ import type { ScrydexCard } from "@/types/scrydex";
 export const POKEMON_CARDS_MAX_PAGES = 10;
 
 export const pokemonCardsQueryKey = (name: string, langCode: "en" | "ja") =>
-	// "v3": the metadata path moved to the catalog's exact name-token lookup —
-	// result set/ordering changed, and the MMKV persister rehydrates old
-	// entries by key, so stale shapes need a fresh key.
-	["pokemonCards", "v3", name, langCode] as const;
+	// "v4": catalog cards now carry set metadata (expansion.release_date for
+	// the newest/oldest sort). The MMKV persister rehydrates old entries by
+	// key, so stale shapes need a fresh key.
+	["pokemonCards", "v4", name, langCode] as const;
 
 /**
  * Every print of one Pokémon. Metadata (the default) is a SINGLE catalog

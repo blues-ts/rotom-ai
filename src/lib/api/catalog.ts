@@ -49,6 +49,10 @@ export interface CatalogCard {
   variants?: { name: string; images?: ScrydexImage[] }[];
   language?: string;
   languageCode?: string;
+  /** Set metadata — only on /pokemon-cards responses (cross-set lists sort by release date). */
+  setName?: string;
+  setNameEn?: string;
+  setReleaseDate?: string;
 }
 
 export async function getCatalogSets(api: AxiosInstance): Promise<CatalogSet[]> {
@@ -210,6 +214,18 @@ export function catalogCardToScrydex(c: CatalogCard): ScrydexCard {
     language_code: c.languageCode,
     expansion_sort_order: c.expansionSortOrder,
     ...(c.nameEn ? { translation: { en: { name: c.nameEn } } } : {}),
+    // Only /pokemon-cards responses carry set metadata; other endpoints'
+    // callers supply their own expansion context, so leave it undefined.
+    ...(c.setName || c.setReleaseDate
+      ? {
+          expansion: {
+            id: c.setId,
+            name: c.setName ?? "",
+            release_date: c.setReleaseDate,
+            ...(c.setNameEn ? { translation: { en: { name: c.setNameEn } } } : {}),
+          },
+        }
+      : {}),
   };
 }
 
