@@ -1,16 +1,23 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
 	Keyboard,
 	Pressable,
 	StyleSheet,
+	Text,
 	TextInput,
 	View,
 } from "react-native";
 
+import Animated, {
+	Easing,
+	useAnimatedStyle,
+	useSharedValue,
+	withTiming,
+} from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { SymbolView } from "expo-symbols";
 import CardPressable from "@/components/CardPressable";
-import { radius, spacing, useRiverTheme } from "@/constants/theme";
+import { spacing, useRiverTheme } from "@/constants/theme";
 
 interface ChatInputProps {
 	/**
@@ -24,6 +31,15 @@ interface ChatInputProps {
 	onFocus?: () => void;
 }
 
+const LINE_HEIGHT = 22;
+// Single line up to 4 lines, then the text scrolls inside the input. The
+// input is sized to the text alone — its 9pt top/bottom gaps are margins
+// (see styles.input), so the breathing room stays even while scrolled.
+const MIN_INPUT_HEIGHT = LINE_HEIGHT;
+const MAX_INPUT_HEIGHT = 4 * LINE_HEIGHT;
+
+const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
+
 export default function ChatInput({
 	onSend,
 	onStop,
@@ -32,17 +48,45 @@ export default function ChatInput({
 }: ChatInputProps) {
 	const t = useRiverTheme();
 	const [text, setText] = useState("");
+	// The input's height is derived from a hidden <Text> mirror of the draft,
+	// measured at the input's width. Native auto-sizing can't be trusted here:
+	// on Fabric, multiline inputs grow but won't shrink while focused, and
+	// onContentSizeChange doesn't fire reliably.
+	const [inputWidth, setInputWidth] = useState(0);
+	const [textHeight, setTextHeight] = useState(LINE_HEIGHT);
+	const inputHeight = Math.min(
+		MAX_INPUT_HEIGHT,
+		Math.max(MIN_INPUT_HEIGHT, Math.ceil(textHeight)),
+	);
+
+	// Animate every height change — line-by-line growth while typing and the
+	// snap back to a pill on clear/send.
+	const animatedHeight = useSharedValue(MIN_INPUT_HEIGHT);
+	useEffect(() => {
+		animatedHeight.value = withTiming(inputHeight, {
+			duration: 180,
+			easing: Easing.out(Easing.quad),
+		});
+	}, [inputHeight, animatedHeight]);
+	const inputHeightStyle = useAnimatedStyle(() => ({
+		height: animatedHeight.value,
+	}));
 	const canSend = useMemo(
 		() => text.trim().length > 0 && !isStreaming,
 		[text, isStreaming],
 	);
+
+	const clearText = () => {
+		setText("");
+		setTextHeight(LINE_HEIGHT);
+	};
 
 	const handleSend = async () => {
 		const trimmed = text.trim();
 		if (!trimmed || isStreaming) return;
 		const accepted = await onSend(trimmed);
 		if (accepted !== false) {
-			setText("");
+			clearText();
 			// Drop the keyboard so the reply streams with the full screen —
 			// leaving it up kept the input floating mid-screen.
 			Keyboard.dismiss();
@@ -66,8 +110,29 @@ export default function ChatInput({
 					t.glass.shadow,
 				]}
 			>
-				<TextInput
-					style={[styles.input, { color: t.text.primary }]}
+				{/* Hidden mirror of the draft; its measured height drives the
+				    input's height (see comment on textHeight above). */}
+				{inputWidth > 0 && (
+					<Text
+						style={[styles.ghost, { width: inputWidth }]}
+						onLayout={({ nativeEvent }) =>
+							setTextHeight(nativeEvent.layout.height)
+						}
+						accessibilityElementsHidden
+						importantForAccessibility="no-hide-descendants"
+					>
+						{text || " "}
+					</Text>
+				)}
+				<AnimatedTextInput
+					style={[
+						styles.input,
+						{ color: t.text.primary },
+						inputHeightStyle,
+					]}
+					onLayout={({ nativeEvent }) =>
+						setInputWidth(nativeEvent.layout.width)
+					}
 					placeholder="Ask River anything…"
 					placeholderTextColor={t.text.secondary}
 					value={text}
@@ -75,14 +140,15 @@ export default function ChatInput({
 					onFocus={onFocus}
 					onSubmitEditing={handleSend}
 					returnKeyType="send"
-					blurOnSubmit={false}
+					multiline
+					submitBehavior="submit"
 					maxLength={250}
 					accessibilityLabel="Message input"
 					accessibilityHint="Type your message to River"
 				/>
 				{text.length > 0 && (
 					<Pressable
-						onPress={() => setText("")}
+						onPress={clearText}
 						hitSlop={8}
 						style={styles.clearButton}
 					>
@@ -133,8 +199,11 @@ const styles = StyleSheet.create({
 	},
 	inputRow: {
 		flexDirection: "row",
-		alignItems: "center",
-		borderRadius: radius.pill,
+		// Bottom-align so the buttons hug the last line as the input grows.
+		alignItems: "flex-end",
+		// Half the single-line height (50pt): reads as a pill at one line,
+		// but stays a rounded rect (not a giant capsule) as the input grows.
+		borderRadius: 25,
 		borderWidth: 1,
 		paddingLeft: 18,
 		paddingRight: 5,
@@ -143,12 +212,31 @@ const styles = StyleSheet.create({
 	input: {
 		flex: 1,
 		fontSize: 17,
-		minHeight: 40,
-		maxHeight: 100,
+		lineHeight: LINE_HEIGHT,
+		// Height is set inline, derived from the ghost measurement. Vertical
+		// gaps are margins, NOT padding: padding would scroll with the text
+		// (it's the UITextView's content inset), leaving lines clipped hard
+		// against the edges mid-scroll. Margins keep the gap even always.
+		marginTop: 9,
+		marginBottom: 9,
 		marginRight: 8,
+		paddingTop: 0,
+		paddingBottom: 0,
+		textAlignVertical: "top",
+	},
+	// Must match the input's font metrics exactly so it wraps identically.
+	ghost: {
+		position: "absolute",
+		top: 0,
+		left: 0,
+		opacity: 0,
+		fontSize: 17,
+		lineHeight: LINE_HEIGHT,
+		pointerEvents: "none",
 	},
 	clearButton: {
 		marginRight: 10,
+		marginBottom: 11,
 	},
 	sendButton: {
 		width: 40,

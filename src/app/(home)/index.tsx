@@ -249,15 +249,14 @@ export default function Home() {
 					<Animated.View
 						style={[
 							styles.emptyLayer,
-							{ paddingTop: chromeBottom, paddingBottom: bottom + 56 },
+							// Hero sits high on the screen: a fixed gap below the
+							// top chrome row rather than vertically centered.
+							{ paddingTop: chromeBottom + 96 },
 							emptyFadeStyle,
 						]}
 						pointerEvents={keyboardShown ? "none" : "box-none"}
 					>
 						<EmptyChat />
-						<ChatSuggestions
-							onSelect={(text) => void handleChatSend(text)}
-						/>
 					</Animated.View>
 					{/* While typing, anywhere above the input dismisses. */}
 					{keyboardShown && (
@@ -289,6 +288,15 @@ export default function Home() {
 							topInset={chromeBottom + 8}
 						/>
 					</View>
+				)}
+
+				{/* Prompt carousel — compact chips directly above the input,
+				    only while the conversation is empty. Lives in the keyboard-
+				    avoiding column so it rides up with the input. */}
+				{messages.length === 0 && !isStreaming && (
+					<ChatSuggestions
+						onSelect={(text) => void handleChatSend(text)}
+					/>
 				)}
 
 				{/* Chat Input */}
@@ -411,17 +419,15 @@ const styles = StyleSheet.create({
 	flex: {
 		flex: 1,
 	},
-	// Center the empty-state hero + suggestion cards as a single group so the
-	// cards sit directly under the tagline rather than at the bottom of the
-	// screen. Absolute so the keyboard-avoiding layout never squeezes it —
-	// paddingBottom (added inline) mirrors the input block it sits above.
+	// Empty-state hero, anchored below the top chrome (paddingTop set inline).
+	// Absolute so the keyboard-avoiding layout never squeezes it.
 	emptyLayer: {
 		position: "absolute",
 		top: 0,
 		left: 0,
 		right: 0,
 		bottom: 0,
-		justifyContent: "center",
+		justifyContent: "flex-start",
 	},
 	// Sits behind the (box-none) chat area, so the input stays tappable while
 	// every other touch lands here.
