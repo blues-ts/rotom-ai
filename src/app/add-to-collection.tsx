@@ -22,13 +22,14 @@ import {
 	selectPrice,
 } from "@/lib/scrydex";
 import { useScanSession } from "@/context/ScanSessionContext";
+import { useScanReviewBatch } from "@/hooks/useScanReviewBatch";
 import { useToast } from "@/context/ToastContext";
 
 export default function AddToCollection() {
   const t = useRiverTheme();
   const api = useApi();
 
-  const { cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade, pricePaid, cardIds, cardImages, moveFromCollectionId, moveRowIds } =
+  const { cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade, pricePaid, cardIds, cardImages, fromReview, moveFromCollectionId, moveRowIds } =
     useLocalSearchParams<{
       cardId: string;
       cardName: string;
@@ -46,6 +47,9 @@ export default function AddToCollection() {
       /** Batch mode (scanner library): comma-joined card ids + parallel images. */
       cardIds?: string;
       cardImages?: string;
+      /** "1" when the scan library (review list) pushed this sheet — the
+       *  priced batch is already in the query cache under the same key. */
+      fromReview?: string;
       /** Move mode (collection detail multi-select): source collection +
        *  comma-joined collection_cards row ids to relocate. */
       moveFromCollectionId?: string;
@@ -119,12 +123,16 @@ export default function AddToCollection() {
     [moveFromCollectionId, moveIds, addedId, moveCardRows, collections, toast],
   );
 
+  // Coming from the review screen, the priced batch is already in the query
+  // cache under the same key — reuse it instead of refetching every card.
+  const reviewBatch = useScanReviewBatch(fromReview === "1" ? batchIds : []);
+
   // Kick off the priced-batch lookup the moment the sheet opens, not on tap —
   // the seconds the user spends picking a collection hide the network wait, so
   // the tap itself only pays the (usually settled) await.
   const batchFetchRef = useRef<ReturnType<typeof getPricedBatch> | null>(null);
   useEffect(() => {
-    if (!isBatch || batchFetchRef.current) return;
+    if (!isBatch || fromReview === "1" || batchFetchRef.current) return;
     // Pull the fully PRICED cards in one batch (same source the collection's
     // price refresh uses) so each card's real default variant / condition /
     // value resolves exactly like the search long-press quick-add does —
@@ -140,7 +148,7 @@ export default function AddToCollection() {
     // Failures surface on the tap's await; this just keeps an untouched
     // promise from raising an unhandled-rejection warning.
     fetch.catch(() => {});
-  }, [api, batchIds, isBatch]);
+  }, [api, batchIds, isBatch, fromReview]);
 
   const handleSelectBatch = useCallback(
     async (collectionId: string) => {
@@ -148,25 +156,50 @@ export default function AddToCollection() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setAddedId(collectionId);
       try {
-        const { cards } = await (batchFetchRef.current ??
-          getPricedBatch(api, {
-            cardIds: batchIds,
-            sealedIds: [],
-            skipRawBackfill: true,
-          }));
+        const cards =
+          reviewBatch.data ??
+          (
+            await (batchFetchRef.current ??
+              getPricedBatch(api, {
+                cardIds: batchIds,
+                sealedIds: [],
+                skipRawBackfill: true,
+              }))
+          ).cards;
         const byId = new Map(cards.map((c) => [c.id, c]));
+        // Review-screen configs (variant / condition / grade / quantity) live
+        // on the session scans; cards without one fall back to the defaults
+        // the blind batch add always used.
+        const configById = new Map(scans.map((s) => [s.id, s.config]));
         // One transactional mutation for the whole batch — one snapshot and
         // one refetch pass instead of a per-card storm.
         await addCardsToCollection.mutateAsync({
           collectionId,
           cards: batchIds.map((id, i) => {
             const card = byId.get(id);
-            const variant = card ? (getVariantNames(card)[0] ?? "normal") : "normal";
-            const condition = card
-              ? (getConditionOptions(card, variant)[0] ?? "NM")
-              : "NM";
+            const config = configById.get(id);
+            const variant =
+              config?.variant ??
+              (card ? (getVariantNames(card)[0] ?? "normal") : "normal");
+            const rawCondition =
+              config?.condition ??
+              (card ? (getConditionOptions(card, variant)[0] ?? "NM") : "NM");
+            const isGraded =
+              config?.pricingType === "Graded" &&
+              !!config.gradedCompany &&
+              !!config.gradedGrade;
             const value = card
-              ? (selectPrice(card, variant, { kind: "raw", condition })?.value ?? 0)
+              ? (selectPrice(
+                  card,
+                  variant,
+                  isGraded
+                    ? {
+                        kind: "graded",
+                        company: config.gradedCompany!,
+                        grade: config.gradedGrade!,
+                      }
+                    : { kind: "raw", condition: rawCondition },
+                )?.value ?? 0)
               : 0;
             return {
               cardId: id,
@@ -180,10 +213,15 @@ export default function AddToCollection() {
                 batchImages[i] ||
                 `https://images.scrydex.com/pokemon/${id}/small`,
               cardValue: value,
-              pricingType: "Raw",
+              pricingType: isGraded ? "Graded" : "Raw",
               productType: "card",
               variant,
-              condition,
+              // Same convention as the card-detail add: graded rows store
+              // "GRADED" so the price refresh keys off company + grade.
+              condition: isGraded ? "GRADED" : rawCondition,
+              gradedCompany: isGraded ? config.gradedCompany : undefined,
+              gradedGrade: isGraded ? config.gradedGrade : undefined,
+              quantity: config?.quantity,
             };
           }),
         });
@@ -191,10 +229,10 @@ export default function AddToCollection() {
         const clearedSession = batchIds.length >= scans.length;
         removeScans(batchIds);
         // Batch adds come from the scanner library. If the whole session was
-        // just filed away, back out twice — sheet, then the emptied library —
-        // revealing the scanner as it was (binder mode intact) rather than
-        // re-pushing it. A partial add returns to the library as before.
-        // expo-router queues both GO_BACKs, so they run in order.
+        // just filed away, also pop the emptied library, revealing the scanner
+        // as it was (binder mode intact) rather than re-pushing it. A partial
+        // add returns to the library as before. expo-router queues the
+        // GO_BACKs, so they run in order.
         setTimeout(() => {
           router.back();
           if (clearedSession) router.back();
@@ -206,7 +244,7 @@ export default function AddToCollection() {
         Alert.alert("Error", "Couldn't add the cards. Please try again.");
       }
     },
-    [api, addedId, batchIds, batchImages, addCardsToCollection, removeScans, scans.length],
+    [api, addedId, batchIds, batchImages, addCardsToCollection, removeScans, scans, reviewBatch.data],
   );
 
   const handleSelect = useCallback(

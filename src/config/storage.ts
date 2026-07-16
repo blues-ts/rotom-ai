@@ -40,4 +40,5 @@ export const HEAVY_QUERY_KEYS = new Set([
 	"pokemonCardsPriced",
 	"setCardsPriced",
 	"setSealed",
+	"scanReviewBatch",
 ]);

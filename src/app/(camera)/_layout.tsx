@@ -45,6 +45,25 @@ export default function CameraLayout() {
 			}}
 		>
 			<Stack.Screen
+				name="scan-configure"
+				options={{
+					presentation: "formSheet",
+					sheetAllowedDetents: [0.6, 1.0],
+					sheetExpandsWhenScrolledToEdge: true,
+					sheetGrabberVisible: true,
+					// Bottom sheets get the larger 28pt top radius.
+					sheetCornerRadius: 28,
+					headerShown: true,
+					headerTransparent: false,
+					headerTitle: "Configure",
+					headerStyle: { backgroundColor: t.glass.sheetFill },
+					headerTintColor: t.text.primary,
+					headerShadowVisible: false,
+					headerLeft: () => null,
+					contentStyle: { backgroundColor: t.glass.sheetFill },
+				}}
+			/>
+			<Stack.Screen
 				name="scanner-tips"
 				options={{
 					presentation: "formSheet",

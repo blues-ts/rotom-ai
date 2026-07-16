@@ -1,175 +1,153 @@
-import { SymbolView } from "expo-symbols";
-import { LinearGradient } from "expo-linear-gradient";
-import { Image } from "expo-image";
-import { router, Stack } from "expo-router";
-import * as Haptics from "expo-haptics";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo } from "react";
 import {
-	Alert,
-	Dimensions,
+	ActivityIndicator,
 	ScrollView,
 	StyleSheet,
 	Text,
 	View,
 } from "react-native";
-import Animated, {
-	LinearTransition,
-	ZoomOut,
-} from "react-native-reanimated";
-import { cardWaterfall } from "@/lib/waterfall";
+import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
+import { router, Stack } from "expo-router";
+import { SymbolView } from "expo-symbols";
+import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import ContextMenu, {
-	type ContextMenuOnPressNativeEvent,
-} from "react-native-context-menu-view";
-import type { NativeSyntheticEvent } from "react-native";
+import Animated, {
+	FadeOut,
+	LinearTransition,
+} from "react-native-reanimated";
+import ContextMenu from "react-native-context-menu-view";
 
 import { spacing, useRiverTheme } from "@/constants/theme";
-import { useScanSession, type ScannedCard } from "@/context/ScanSessionContext";
+import { formatCurrency } from "@/lib/format";
+import {
+	getCardDisplayName,
+	getExpansionDisplayName,
+	getCardNumber,
+} from "@/lib/scrydex";
+import {
+	useScanSession,
+	type ScanCardConfig,
+} from "@/context/ScanSessionContext";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
+import {
+	defaultScanConfig,
+	scanConfigPrice,
+	scanConfigSummary,
+	useScanReviewBatch,
+} from "@/hooks/useScanReviewBatch";
 import CardPressable from "@/components/CardPressable";
-import HeaderIconButton, {
-	HeaderButtonGroup,
-	useHeaderGlassStyle,
-} from "@/components/HeaderIconButton";
+import ErrorState from "@/components/ErrorState";
+import HeaderIconButton from "@/components/HeaderIconButton";
 
-// Mirror the set-detail grid so the two screens read the same. imageWidth is
-// floored (set-detail gets exact columns from FlatList; a flexWrap grid needs a
-// hair of slack or the third tile rounds onto the next row).
-const COLUMNS = 3;
-const GAP = 8;
-const PADDING = spacing.screen;
-const screenWidth = Dimensions.get("window").width;
-const imageWidth = Math.floor(
-	(screenWidth - PADDING * 2 - GAP * (COLUMNS - 1) - 1) / COLUMNS,
-);
-// Card art is always TCG ratio (63:88), never cropped.
-const imageHeight = imageWidth * (88 / 63);
+const MAX_QUANTITY = 99;
+
+// Small thumb — the row is about the config, not the art.
+const THUMB_WIDTH = 44;
+const THUMB_HEIGHT = THUMB_WIDTH * (88 / 63);
 
 export default function ScanLibraryScreen() {
 	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
-	const headerGlassStyle = useHeaderGlassStyle(false, true);
 	const { isPro } = useRevenueCat();
-	const { scans, count, removeScans } = useScanSession();
+	const { scans, count, removeScan, setScanConfig } = useScanSession();
 
-	const [selectMode, setSelectMode] = useState(false);
-	const [selected, setSelected] = useState<Set<string>>(new Set());
+	const ids = useMemo(() => scans.map((s) => s.id), [scans]);
+	const scanById = useMemo(
+		() => new Map(scans.map((s) => [s.id, s])),
+		[scans],
+	);
 
-	const exitSelect = useCallback(() => {
-		setSelectMode(false);
-		setSelected(new Set());
-	}, []);
+	const { data: cards, isLoading, isError, refetch } = useScanReviewBatch(ids);
+	const cardById = useMemo(
+		() => new Map((cards ?? []).map((c) => [c.id, c])),
+		[cards],
+	);
 
-	const toggle = useCallback((id: string) => {
-		Haptics.selectionAsync();
-		setSelected((prev) => {
-			const next = new Set(prev);
-			if (next.has(id)) next.delete(id);
-			else next.add(id);
-			return next;
-		});
-	}, []);
+	// Every row's effective config — the stored one, else the card's defaults
+	// (exactly what the blind batch add would have used).
+	const configFor = useCallback(
+		(id: string): ScanCardConfig | undefined => {
+			const stored = scanById.get(id)?.config;
+			if (stored) return stored;
+			const card = cardById.get(id);
+			return card ? defaultScanConfig(card) : undefined;
+		},
+		[scanById, cardById],
+	);
 
-	const onTilePress = useCallback(
-		(card: ScannedCard) => {
-			if (selectMode) {
-				toggle(card.id);
-				return;
-			}
+	const totalValue = useMemo(() => {
+		let total = 0;
+		for (const id of ids) {
+			const card = cardById.get(id);
+			const config = configFor(id);
+			if (!card || !config) continue;
+			total += (scanConfigPrice(card, config) ?? 0) * config.quantity;
+		}
+		return total;
+	}, [ids, cardById, configFor]);
+
+	const setQuantity = useCallback(
+		(id: string, delta: number) => {
+			const config = configFor(id);
+			if (!config) return;
+			const next = Math.min(
+				MAX_QUANTITY,
+				Math.max(1, config.quantity + delta),
+			);
+			if (next === config.quantity) return;
+			Haptics.selectionAsync();
+			setScanConfig(id, { ...config, quantity: next });
+		},
+		[configFor, setScanConfig],
+	);
+
+	const openConfigure = useCallback(
+		(id: string) => {
+			const config = configFor(id);
+			// No card data yet (still loading / offline) — nothing to configure.
+			if (!config || !cardById.get(id)) return;
+			// Persist the defaults on open so the sheet and this screen read the
+			// same source of truth while options change.
+			if (!scanById.get(id)?.config) setScanConfig(id, config);
 			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 			router.push({
-				pathname: "/(card)/[id]",
-				params: { id: card.id, image: card.image },
+				pathname: "/(camera)/scan-configure",
+				params: { cardId: id, cardIds: ids.join(",") },
 			});
 		},
-		[selectMode, toggle],
+		[configFor, cardById, scanById, setScanConfig, ids],
 	);
 
-	// Long-press = enter select mode with this card already selected — same
-	// gesture as the collection grid. In select mode it's just a slow tap.
-	const onTileLongPress = useCallback(
-		(card: ScannedCard) => {
-			if (selectMode) {
-				toggle(card.id);
-				return;
-			}
+	const handleRemove = useCallback(
+		(id: string) => {
 			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-			setSelectMode(true);
-			setSelected(new Set([card.id]));
+			removeScan(id);
 		},
-		[selectMode, toggle],
+		[removeScan],
 	);
 
-	const handleDelete = useCallback(() => {
-		const ids = [...selected];
+	const handleContinue = useCallback(() => {
 		if (ids.length === 0) return;
-		Alert.alert(
-			`Delete ${ids.length} ${ids.length === 1 ? "card" : "cards"}?`,
-			"They'll be removed from this scanning session.",
-			[
-				{ text: "Cancel", style: "cancel" },
-				{
-					text: "Delete",
-					style: "destructive",
-					onPress: () => {
-						removeScans(ids);
-						exitSelect();
-					},
-				},
-			],
-		);
-	}, [selected, removeScans, exitSelect]);
-
-	const pushAddToCollection = useCallback(
-		(ids: string[]) => {
-			if (ids.length === 0) return;
-			// Collections are Pro — gate before opening the picker, like the
-			// long-press quick-add on search (CardContextMenu).
-			if (!isPro) {
-				void presentProPaywallIfNeeded();
-				return;
-			}
-			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-			const byId = new Map(scans.map((s) => [s.id, s.image]));
-			router.push({
-				pathname: "/add-to-collection",
-				params: {
-					cardIds: ids.join(","),
-					cardImages: ids
-						.map((id) => encodeURIComponent(byId.get(id) ?? ""))
-						.join(","),
-				},
-			});
-			exitSelect();
-		},
-		[isPro, scans, exitSelect],
-	);
-
-	const handleAddToCollection = useCallback(() => {
-		pushAddToCollection([...selected]);
-	}, [pushAddToCollection, selected]);
-
-	// The screen's primary action: add the whole scanning session at once.
-	const handleAddAll = useCallback(() => {
-		pushAddToCollection(scans.map((s) => s.id));
-	}, [pushAddToCollection, scans]);
-
-	const handleMenuPress = useCallback(
-		(e: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>) => {
-			if (e.nativeEvent.index === 0) handleAddToCollection();
-			else if (e.nativeEvent.index === 1) handleDelete();
-		},
-		[handleAddToCollection, handleDelete],
-	);
-
-	const headerTitle = selectMode
-		? selected.size > 0
-			? `${selected.size} Selected`
-			: "Select cards"
-		: count > 0
-			? `${count} scanned`
-			: "Your Scans";
+		// Collections are Pro — gate before opening the picker, like the
+		// long-press quick-add on search (CardContextMenu).
+		if (!isPro) {
+			void presentProPaywallIfNeeded();
+			return;
+		}
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+		router.push({
+			pathname: "/add-to-collection",
+			params: {
+				cardIds: ids.join(","),
+				cardImages: ids
+					.map((id) => encodeURIComponent(scanById.get(id)?.image ?? ""))
+					.join(","),
+				fromReview: "1",
+			},
+		});
+	}, [ids, isPro, scanById]);
 
 	return (
 		<View style={styles.container}>
@@ -182,7 +160,10 @@ export default function ScanLibraryScreen() {
 			/>
 			<Stack.Screen
 				options={{
-					headerTitle,
+					headerTitle:
+						count > 0
+							? `Review ${count} ${count === 1 ? "Card" : "Cards"}`
+							: "Your Scans",
 					headerLeft: () => (
 						<HeaderIconButton
 							onPress={() => {
@@ -198,59 +179,6 @@ export default function ScanLibraryScreen() {
 							/>
 						</HeaderIconButton>
 					),
-					headerRight: () => {
-						if (count === 0) return null;
-						if (!selectMode) {
-							return (
-								<HeaderIconButton
-									onPress={() => {
-										Haptics.selectionAsync();
-										setSelectMode(true);
-									}}
-								>
-									<SymbolView
-										name="checkmark.circle"
-										size={22}
-										tintColor={t.accentOn}
-										weight="medium"
-									/>
-								</HeaderIconButton>
-							);
-						}
-						return (
-							<HeaderButtonGroup>
-								{selected.size > 0 && (
-									<ContextMenu
-										dropdownMenuMode
-										actions={[
-											{ title: "Add to Collection", systemIcon: "plus" },
-											{ title: "Delete", systemIcon: "trash", destructive: true },
-										]}
-										onPress={handleMenuPress}
-									>
-										<View style={headerGlassStyle}>
-											<SymbolView
-												name="ellipsis"
-												size={20}
-												tintColor={t.accentOn}
-												weight="medium"
-											/>
-										</View>
-									</ContextMenu>
-								)}
-								<HeaderIconButton
-									onPress={exitSelect}
-								>
-									<SymbolView
-										name="checkmark"
-										size={21}
-										tintColor={t.accentOn}
-										weight="semibold"
-									/>
-								</HeaderIconButton>
-							</HeaderButtonGroup>
-						);
-					},
 				}}
 			/>
 
@@ -274,66 +202,153 @@ export default function ScanLibraryScreen() {
 						Point the scanner at a card and it&apos;ll land here.
 					</Text>
 				</View>
+			) : isLoading ? (
+				<View style={styles.stateWrap}>
+					<ActivityIndicator size="small" color={t.text.secondary} />
+				</View>
+			) : isError ? (
+				<View style={[styles.stateWrap, { paddingHorizontal: spacing.screen }]}>
+					<ErrorState
+						title="Couldn't load prices"
+						message="Check your connection and try again."
+						onRetry={() => refetch()}
+					/>
+				</View>
 			) : (
 				<ScrollView
 					contentContainerStyle={[
-						styles.grid,
+						styles.list,
 						{
 							paddingTop: insets.top + 56,
-							// Clear the pinned "Add to collection" button below.
+							// Clear the pinned continue button below.
 							paddingBottom: insets.bottom + 96,
 						},
 					]}
 					showsVerticalScrollIndicator={false}
 				>
 					<Text style={[styles.subtitle, { color: t.text.secondary }]}>
-						Tap a card to review
+						Tap a card to set variant, condition, or grade
 					</Text>
-					{scans.map((card, index) => {
-						const isSelected = selected.has(card.id);
+					{ids.map((id) => {
+						const card = cardById.get(id);
+						const scan = scanById.get(id);
+						const config = configFor(id);
+						const price =
+							card && config ? scanConfigPrice(card, config) : undefined;
 						return (
 							<Animated.View
-								key={card.id}
-								// Stagger in like set-detail; on removal the card shrinks out
-								// and the rest slide up to fill the gap (LinearTransition).
-								entering={cardWaterfall(index)}
-								exiting={ZoomOut.duration(180)}
+								key={id}
+								// On removal the row fades out and the rest slide up to
+								// fill the gap (LinearTransition), like the old grid.
+								exiting={FadeOut.duration(150)}
 								layout={LinearTransition.duration(220)}
-								style={styles.tile}
 							>
-								<CardPressable
-									onPress={() => onTilePress(card)}
-									delayLongPress={300}
-									onLongPress={() => onTileLongPress(card)}
+								<ContextMenu
+									actions={[
+										{ title: "Remove", systemIcon: "trash", destructive: true },
+									]}
+									onPress={(e) => {
+										if (e.nativeEvent.index === 0) handleRemove(id);
+									}}
 								>
-									<Image
-										source={{ uri: card.image }}
-										style={styles.cardImage}
-										contentFit="contain"
-									/>
-									{selectMode && !isSelected && (
-										<View style={styles.greyOverlay} />
-									)}
-									{selectMode && (
-										<View
-											style={[
-												styles.check,
-												isSelected
-													? { backgroundColor: t.accent, borderColor: t.accent }
-													: { backgroundColor: "rgba(0,0,0,0.35)", borderColor: "#fff" },
-											]}
-										>
-											{isSelected && (
-												<SymbolView
-													name="checkmark"
-													size={13}
-													tintColor="#FFFFFF"
-													weight="bold"
-												/>
+									<CardPressable
+										onPress={() => openConfigure(id)}
+										pressScale={0.98}
+										baseColor={t.glass.elevatedFill}
+										pressedColor={t.glass.pressedFill}
+										style={[styles.row, { borderColor: t.glass.elevatedBorder }]}
+									>
+										<Image
+											source={{ uri: scan?.image }}
+											style={styles.thumb}
+											contentFit="contain"
+										/>
+										<View style={styles.rowInfo}>
+											<Text
+												style={[styles.rowName, { color: t.text.primary }]}
+												numberOfLines={1}
+											>
+												{card ? getCardDisplayName(card) : "…"}
+											</Text>
+											{card?.expansion && (
+												<Text
+													style={[styles.rowSet, { color: t.text.tertiary }]}
+													numberOfLines={1}
+												>
+													{getExpansionDisplayName(card.expansion)}
+													{getCardNumber(card) ? ` · ${getCardNumber(card)}` : ""}
+												</Text>
+											)}
+											{config && (
+												<Text
+													style={[styles.rowConfig, { color: t.text.secondary }]}
+													numberOfLines={1}
+												>
+													{scanConfigSummary(config)}
+													{" · "}
+													<Text style={{ color: t.text.primary }}>
+														{price !== undefined ? formatCurrency(price) : "—"}
+													</Text>
+												</Text>
 											)}
 										</View>
-									)}
-								</CardPressable>
+										{config && (
+											<View
+												style={[
+													styles.stepper,
+													{
+														backgroundColor: t.glass.surfaceFill,
+														borderColor: t.glass.surfaceBorder,
+													},
+												]}
+											>
+												<CardPressable
+													hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+													pressScale={1}
+													disabled={config.quantity <= 1}
+													onPress={() => setQuantity(id, -1)}
+													style={styles.stepperButton}
+												>
+													<SymbolView
+														name="minus"
+														size={12}
+														tintColor={
+															config.quantity <= 1
+																? t.text.tertiary
+																: t.text.primary
+														}
+														weight="semibold"
+													/>
+												</CardPressable>
+												<Text
+													style={[styles.stepperCount, { color: t.text.primary }]}
+												>
+													{config.quantity}
+												</Text>
+												<CardPressable
+													hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+													pressScale={1}
+													disabled={config.quantity >= MAX_QUANTITY}
+													onPress={() => setQuantity(id, 1)}
+													style={styles.stepperButton}
+												>
+													<SymbolView
+														name="plus"
+														size={12}
+														tintColor={t.text.primary}
+														weight="semibold"
+													/>
+												</CardPressable>
+											</View>
+										)}
+										<SymbolView
+											name="chevron.right"
+											size={13}
+											tintColor={t.text.tertiary}
+											weight="semibold"
+										/>
+									</CardPressable>
+								</ContextMenu>
 							</Animated.View>
 						);
 					})}
@@ -341,29 +356,28 @@ export default function ScanLibraryScreen() {
 			)}
 
 			{/* Primary action — full-width accent pill with glow, pinned above the
-			    home indicator. Hidden in select mode (the header menu takes over). */}
-			{count > 0 && !selectMode && (
+			    home indicator. */}
+			{count > 0 && !isLoading && !isError && (
 				<View
-					style={[styles.addAllWrap, { paddingBottom: insets.bottom + 12 }]}
+					style={[styles.continueWrap, { paddingBottom: insets.bottom + 12 }]}
 					pointerEvents="box-none"
 				>
 					<CardPressable
-						onPress={handleAddAll}
+						onPress={handleContinue}
 						style={[
-							styles.addAllButton,
+							styles.continueButton,
 							{ backgroundColor: t.accent },
 							t.buttonGlow,
 						]}
 					>
-						<SymbolView
-							name="checkmark"
-							size={15}
-							tintColor="#FFFFFF"
-							weight="semibold"
-						/>
-						<Text style={styles.addAllText}>
+						<Text style={styles.continueText}>
 							Add {count} to collection
 						</Text>
+						{totalValue > 0 && (
+							<Text style={styles.continueValue}>
+								{formatCurrency(totalValue)}
+							</Text>
+						)}
 					</CardPressable>
 				</View>
 			)}
@@ -373,7 +387,6 @@ export default function ScanLibraryScreen() {
 
 const styles = StyleSheet.create({
 	container: { flex: 1 },
-	headerRow: { flexDirection: "row", alignItems: "center", gap: 6 },
 	empty: {
 		flex: 1,
 		alignItems: "center",
@@ -383,9 +396,12 @@ const styles = StyleSheet.create({
 	},
 	emptyTitle: { fontSize: 20, fontWeight: "700", marginTop: 8 },
 	emptySubtitle: { fontSize: 15, textAlign: "center", lineHeight: 21 },
-	// Full-width line under the native "N scanned" title.
+	stateWrap: {
+		flex: 1,
+		alignItems: "center",
+		justifyContent: "center",
+	},
 	subtitle: {
-		width: "100%",
 		textAlign: "center",
 		fontSize: 12,
 		fontWeight: "500",
@@ -393,56 +409,67 @@ const styles = StyleSheet.create({
 		marginTop: 8,
 		marginBottom: 6,
 	},
-	addAllWrap: {
+	list: {
+		paddingHorizontal: spacing.screen,
+		gap: 8,
+	},
+	row: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 12,
+		paddingVertical: 10,
+		paddingHorizontal: 12,
+		borderRadius: 14,
+		borderWidth: 1,
+	},
+	thumb: { width: THUMB_WIDTH, height: THUMB_HEIGHT },
+	rowInfo: { flex: 1, gap: 2 },
+	rowName: { fontSize: 15, fontWeight: "600" },
+	rowSet: { fontSize: 12 },
+	rowConfig: { fontSize: 13, fontWeight: "500" },
+	stepper: {
+		flexDirection: "row",
+		alignItems: "center",
+		borderRadius: 999,
+		borderWidth: 1,
+		paddingHorizontal: 8,
+		height: 30,
+	},
+	stepperButton: {
+		paddingHorizontal: 4,
+		height: "100%",
+		justifyContent: "center",
+	},
+	stepperCount: {
+		fontSize: 13,
+		fontWeight: "700",
+		minWidth: 20,
+		textAlign: "center",
+		fontVariant: ["tabular-nums"],
+	},
+	continueWrap: {
 		position: "absolute",
 		left: spacing.screen,
 		right: spacing.screen,
 		bottom: 0,
 	},
-	addAllButton: {
+	continueButton: {
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "center",
-		gap: 8,
+		gap: 10,
 		height: 52,
 		borderRadius: 999,
 	},
-	addAllText: {
+	continueText: {
 		color: "#FFFFFF",
 		fontSize: 16,
 		fontWeight: "700",
 	},
-	grid: {
-		flexDirection: "row",
-		flexWrap: "wrap",
-		padding: PADDING,
-		columnGap: GAP,
-		rowGap: GAP,
-	},
-	tile: { width: imageWidth },
-	// No container radius — the artwork's own printed corners do the rounding
-	// (matches the card detail screen and the binder review tray).
-	cardImage: { width: imageWidth, height: imageHeight },
-	greyOverlay: {
-		position: "absolute",
-		top: 0,
-		left: 0,
-		width: imageWidth,
-		height: imageHeight,
-		// ≈ the card's printed corner (~4.5% of width) so the dim overlay
-		// doesn't show square corners over the art's transparent ones.
-		borderRadius: imageWidth * 0.045,
-		backgroundColor: "rgba(120,120,120,0.5)",
-	},
-	check: {
-		position: "absolute",
-		top: 6,
-		right: 6,
-		width: 24,
-		height: 24,
-		borderRadius: 12,
-		borderWidth: 2,
-		alignItems: "center",
-		justifyContent: "center",
+	continueValue: {
+		color: "rgba(255,255,255,0.8)",
+		fontSize: 15,
+		fontWeight: "600",
+		fontVariant: ["tabular-nums"],
 	},
 });

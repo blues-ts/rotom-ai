@@ -42,6 +42,8 @@ export interface AddCollectionCardInput {
   gradedCompany?: string;
   gradedGrade?: string;
   pricePaid?: number;
+  /** Copies to add (default 1) — the scan review screen's quantity stepper. */
+  quantity?: number;
 }
 
 // Insert-or-increment for one card config. Shared by the single add and the
@@ -63,8 +65,10 @@ async function upsertCollectionCard(
     gradedCompany,
     gradedGrade,
     pricePaid,
+    quantity,
   }: AddCollectionCardInput,
 ): Promise<void> {
+  const qty = Math.min(99, Math.max(1, Math.round(quantity ?? 1)));
   // Check if this exact config already exists
   const existing = await db.getFirstAsync<{ id: string }>(
     `SELECT id FROM collection_cards
@@ -75,13 +79,13 @@ async function upsertCollectionCard(
   if (existing) {
     if (pricePaid !== undefined) {
       await db.runAsync(
-        "UPDATE collection_cards SET quantity = quantity + 1, price_paid = ? WHERE id = ?",
-        [pricePaid, existing.id],
+        "UPDATE collection_cards SET quantity = quantity + ?, price_paid = ? WHERE id = ?",
+        [qty, pricePaid, existing.id],
       );
     } else {
       await db.runAsync(
-        "UPDATE collection_cards SET quantity = quantity + 1 WHERE id = ?",
-        [existing.id],
+        "UPDATE collection_cards SET quantity = quantity + ? WHERE id = ?",
+        [qty, existing.id],
       );
     }
   } else {
@@ -90,8 +94,8 @@ async function upsertCollectionCard(
     // only one row survives. Keep it unique per insert.
     const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     await db.runAsync(
-      "INSERT INTO collection_cards (id, collection_id, card_id, card_name, card_number, set_name, card_image_url, card_value, pricing_type, product_type, variant, condition, graded_company, graded_grade, quantity, price_paid, card_value_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
-      [id, collectionId, cardId, cardName, cardNumber ?? null, setName ?? null, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany ?? null, gradedGrade ?? null, pricePaid ?? null, new Date().toISOString()],
+      "INSERT INTO collection_cards (id, collection_id, card_id, card_name, card_number, set_name, card_image_url, card_value, pricing_type, product_type, variant, condition, graded_company, graded_grade, quantity, price_paid, card_value_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [id, collectionId, cardId, cardName, cardNumber ?? null, setName ?? null, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany ?? null, gradedGrade ?? null, qty, pricePaid ?? null, new Date().toISOString()],
     );
   }
 }

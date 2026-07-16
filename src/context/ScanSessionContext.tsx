@@ -7,6 +7,21 @@ import {
 	type ReactNode,
 } from "react";
 
+/**
+ * Pricing configuration chosen on the review screen before a batch add.
+ * `condition` is always the RAW condition — when pricingType is "Graded" the
+ * stored collection row gets condition "GRADED" instead (same convention as
+ * the card-detail add), so flipping back to Raw keeps the user's pick.
+ */
+export type ScanCardConfig = {
+	pricingType: "Raw" | "Graded";
+	variant: string;
+	condition: string;
+	gradedCompany?: string;
+	gradedGrade?: string;
+	quantity: number;
+};
+
 export type ScannedCard = {
 	id: string;
 	/** Thumbnail URL — already what the scanner shows / the card grid caches. */
@@ -15,6 +30,8 @@ export type ScannedCard = {
 	score: number;
 	/** Epoch ms of capture — newest first in the session. */
 	capturedAt: number;
+	/** Set on the review screen; absent means "use the card's defaults". */
+	config?: ScanCardConfig;
 };
 
 type ScanSessionContextValue = {
@@ -30,6 +47,8 @@ type ScanSessionContextValue = {
 	removeScan: (id: string) => void;
 	/** Remove several cards at once (multi-select delete). */
 	removeScans: (ids: string[]) => void;
+	/** Store the review screen's pricing choices for one scanned card. */
+	setScanConfig: (id: string, config: ScanCardConfig) => void;
 	clearSession: () => void;
 };
 
@@ -60,6 +79,12 @@ export function ScanSessionProvider({ children }: { children: ReactNode }) {
 		setScans((prev) => prev.filter((s) => !drop.has(s.id)));
 	}, []);
 
+	const setScanConfig = useCallback((id: string, config: ScanCardConfig) => {
+		setScans((prev) =>
+			prev.map((s) => (s.id === id ? { ...s, config } : s)),
+		);
+	}, []);
+
 	const clearSession = useCallback(() => setScans([]), []);
 
 	const value = useMemo<ScanSessionContextValue>(
@@ -69,9 +94,10 @@ export function ScanSessionProvider({ children }: { children: ReactNode }) {
 			addScan,
 			removeScan,
 			removeScans,
+			setScanConfig,
 			clearSession,
 		}),
-		[scans, addScan, removeScan, removeScans, clearSession],
+		[scans, addScan, removeScan, removeScans, setScanConfig, clearSession],
 	);
 
 	return (
