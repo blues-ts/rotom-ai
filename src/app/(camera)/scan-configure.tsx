@@ -3,7 +3,6 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { SheetDoneButton } from "@/components/SheetDoneButton";
 import { useRiverTheme } from "@/constants/theme";
-import { formatCurrency } from "@/lib/format";
 import {
 	CONDITION_LABELS,
 	formatVariantLabel,
@@ -26,6 +25,8 @@ import {
 	TabBar,
 	ToggleLabel,
 } from "@/components/PricingToggles";
+import SlidingPanels from "@/components/SlidingPanels";
+import TickerPrice from "@/components/TickerPrice";
 
 /**
  * Per-scan pricing configuration, opened from a review-screen row. Mirrors the
@@ -175,9 +176,18 @@ export default function ScanConfigureSheet() {
 								: (CONDITION_LABELS[config.condition] ?? config.condition)
 							: ""}
 					</Text>
-					<Text style={[styles.priceValue, { color: t.text.primary }]}>
-						{price !== undefined ? formatCurrency(price) : "No price"}
-					</Text>
+					{price !== undefined ? (
+						<TickerPrice
+							value={price}
+							fontSize={22}
+							textAlign="right"
+							style={[styles.priceValue, { color: t.text.primary }]}
+						/>
+					) : (
+						<Text style={[styles.priceValue, { color: t.text.primary }]}>
+							No price
+						</Text>
+					)}
 				</View>
 
 				{variantNames.length > 1 && config && (
@@ -205,26 +215,41 @@ export default function ScanConfigureSheet() {
 					</View>
 				)}
 
-				{config && config.pricingType === "Graded" && hasGraded ? (
-					<View>
-						<ToggleLabel>Grading Company</ToggleLabel>
-						<PillToggle
-							options={gradedCompanies}
-							selected={config.gradedCompany ?? ""}
-							onSelect={selectGradedCompany}
-						/>
-						{gradedGrades.length > 0 && (
-							<>
-								<ToggleLabel style={{ marginTop: 12 }}>Grade</ToggleLabel>
+				{config && hasGraded ? (
+					<SlidingPanels
+						activeTab={config.pricingType}
+						rawPanel={
+							<View>
+								<ToggleLabel>Condition</ToggleLabel>
 								<LabeledPillToggle
-									options={gradedGrades.map((g) => ({ label: g, value: g }))}
-									selected={config.gradedGrade ?? null}
-									onSelect={(g) => update({ gradedGrade: g })}
-									columns={5}
+									options={conditionOptions}
+									selected={config.condition}
+									onSelect={(c) => update({ condition: c })}
 								/>
-							</>
-						)}
-					</View>
+							</View>
+						}
+						gradedPanel={
+							<View>
+								<ToggleLabel>Grading Company</ToggleLabel>
+								<PillToggle
+									options={gradedCompanies}
+									selected={config.gradedCompany ?? ""}
+									onSelect={selectGradedCompany}
+								/>
+								{gradedGrades.length > 0 && (
+									<>
+										<ToggleLabel style={{ marginTop: 12 }}>Grade</ToggleLabel>
+										<LabeledPillToggle
+											options={gradedGrades.map((g) => ({ label: g, value: g }))}
+											selected={config.gradedGrade ?? null}
+											onSelect={(g) => update({ gradedGrade: g })}
+											columns={5}
+										/>
+									</>
+								)}
+							</View>
+						}
+					/>
 				) : config ? (
 					<View>
 						<ToggleLabel>Condition</ToggleLabel>
@@ -251,7 +276,9 @@ const styles = StyleSheet.create({
 	},
 	priceRow: {
 		flexDirection: "row",
-		alignItems: "baseline",
+		// Center, not baseline — the ticker is a TextInput and inputs don't
+		// participate in baseline alignment reliably.
+		alignItems: "center",
 		justifyContent: "space-between",
 	},
 	priceLabel: {

@@ -19,7 +19,6 @@ import Animated, {
 import ContextMenu from "react-native-context-menu-view";
 
 import { spacing, useRiverTheme } from "@/constants/theme";
-import { formatCurrency } from "@/lib/format";
 import {
 	getCardDisplayName,
 	getExpansionDisplayName,
@@ -40,6 +39,7 @@ import {
 import CardPressable from "@/components/CardPressable";
 import ErrorState from "@/components/ErrorState";
 import HeaderIconButton from "@/components/HeaderIconButton";
+import TickerPrice from "@/components/TickerPrice";
 
 const MAX_QUANTITY = 99;
 
@@ -280,16 +280,38 @@ export default function ScanLibraryScreen() {
 												</Text>
 											)}
 											{config && (
-												<Text
-													style={[styles.rowConfig, { color: t.text.secondary }]}
-													numberOfLines={1}
-												>
-													{scanConfigSummary(config)}
-													{" · "}
-													<Text style={{ color: t.text.primary }}>
-														{price !== undefined ? formatCurrency(price) : "—"}
+												<View style={styles.rowConfigLine}>
+													<Text
+														style={[
+															styles.rowConfig,
+															styles.rowConfigSummary,
+															{ color: t.text.secondary },
+														]}
+														numberOfLines={1}
+													>
+														{scanConfigSummary(config)}
+														{" · "}
 													</Text>
-												</Text>
+													{price !== undefined ? (
+														<TickerPrice
+															value={price}
+															fontSize={13}
+															style={[
+																styles.rowConfig,
+																{ color: t.text.primary },
+															]}
+														/>
+													) : (
+														<Text
+															style={[
+																styles.rowConfig,
+																{ color: t.text.primary },
+															]}
+														>
+															—
+														</Text>
+													)}
+												</View>
 											)}
 										</View>
 										{config && (
@@ -374,9 +396,12 @@ export default function ScanLibraryScreen() {
 							Add {count} to collection
 						</Text>
 						{totalValue > 0 && (
-							<Text style={styles.continueValue}>
-								{formatCurrency(totalValue)}
-							</Text>
+							<TickerPrice
+								value={totalValue}
+								fontSize={15}
+								textAlign="center"
+								style={styles.continueValue}
+							/>
 						)}
 					</CardPressable>
 				</View>
@@ -426,7 +451,11 @@ const styles = StyleSheet.create({
 	rowInfo: { flex: 1, gap: 2 },
 	rowName: { fontSize: 15, fontWeight: "600" },
 	rowSet: { fontSize: 12 },
+	// The price is a ticker (TextInput), which can't nest inside Text — the
+	// summary and price sit side by side in a row instead.
+	rowConfigLine: { flexDirection: "row", alignItems: "center" },
 	rowConfig: { fontSize: 13, fontWeight: "500" },
+	rowConfigSummary: { flexShrink: 1 },
 	stepper: {
 		flexDirection: "row",
 		alignItems: "center",

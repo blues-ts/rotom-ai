@@ -672,6 +672,7 @@ export default function CardDetail() {
 	// over this screen) edits the same state and the price/chart/chips below
 	// update live. Seeded from the route params once per card.
 	const {
+		cardId: configCardId,
 		variant,
 		setVariant,
 		pricingTab,
@@ -698,6 +699,13 @@ export default function CardDetail() {
 			pricePaid: initPricePaid || "",
 		});
 	}, [id]);
+
+	// The re-validation effects below must wait for the seed above to land in
+	// the context — on mount they'd otherwise read the provider's pre-seed
+	// defaults and stomp a saved collection config (variant reset to the first
+	// option when the card is cached; condition/tab reset to NM/Raw while the
+	// card is still loading).
+	const isSeeded = configCardId === id;
 
 	// Collection context
 	const {
@@ -754,11 +762,11 @@ export default function CardDetail() {
 	);
 
 	useEffect(() => {
-		if (variantNames.length === 0) return;
+		if (!isSeeded || variantNames.length === 0) return;
 		if (!variant || !variantNames.includes(variant)) {
 			setVariant(variantNames[0]);
 		}
-	}, [variantNames]);
+	}, [variantNames, isSeeded]);
 
 	// Derived: available grading companies and grades for the selected variant
 	const gradedOptions = useMemo(
@@ -777,18 +785,18 @@ export default function CardDetail() {
 
 	// Auto-select first company and highest grade (re-validating on variant change)
 	useEffect(() => {
-		if (gradedCompanies.length === 0) return;
+		if (!isSeeded || gradedCompanies.length === 0) return;
 		if (!gradedCompany || !gradedCompanies.includes(gradedCompany)) {
 			setGradedCompany(gradedCompanies[0]);
 		}
-	}, [gradedCompanies]);
+	}, [gradedCompanies, isSeeded]);
 
 	useEffect(() => {
-		if (gradedGrades.length === 0) return;
+		if (!isSeeded || gradedGrades.length === 0) return;
 		if (!gradedGrade || !gradedGrades.includes(gradedGrade)) {
 			setGradedGrade(gradedGrades[0]);
 		}
-	}, [gradedGrades]);
+	}, [gradedGrades, isSeeded]);
 
 	// Condition options for the selected variant
 	const conditionOptions = useMemo(() => {
@@ -802,10 +810,13 @@ export default function CardDetail() {
 	}, [card, variant]);
 
 	useEffect(() => {
+		// `card` gate: while the card is loading the options fall back to [NM],
+		// which would wrongly evict a saved LP/MP/HP condition.
+		if (!isSeeded || !card) return;
 		if (!conditionOptions.some((o) => o.value === rawCondition)) {
 			setRawCondition(conditionOptions[0].value);
 		}
-	}, [conditionOptions]);
+	}, [conditionOptions, isSeeded, card]);
 
 	// Determine if graded tab is available
 	const hasGraded = gradedCompanies.length > 0;
@@ -814,10 +825,13 @@ export default function CardDetail() {
 	// Graded tab is active — the sheet hides the tab bar then, so without this
 	// the hero would be stranded on "—" with no way back.
 	useEffect(() => {
+		// `card` gate: hasGraded is false while the card is loading, which would
+		// bounce a seeded Graded selection back to Raw before data arrives.
+		if (!isSeeded || !card) return;
 		if (!hasGraded && pricingTab === "Graded") {
 			setPricingTab("Raw");
 		}
-	}, [hasGraded, pricingTab, setPricingTab]);
+	}, [hasGraded, pricingTab, setPricingTab, isSeeded, card]);
 
 	// Get current prices
 	const rawPrice =
