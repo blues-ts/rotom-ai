@@ -75,6 +75,7 @@ import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { ProGate, ProUnlockPill, RedactBar } from "@/components/ProGate";
 import { LockedChartTeaser } from "@/components/LockedChartTeaser";
 import CardImage from "@/components/CardImage";
+import PeekZoom from "@/components/PeekZoom";
 import HeaderIconButton, {
 	HeaderButtonGroup,
 } from "@/components/HeaderIconButton";
@@ -1040,6 +1041,11 @@ export default function CardDetail() {
 		return () => clearTimeout(timer);
 	}, [chatHint.show, checkChatRowVisible]);
 
+	// While the card art is being pinch-zoomed, the page must not scroll —
+	// otherwise a two-finger pan drags the card AND the page in opposite
+	// directions and the zoom feels stiff.
+	const [zooming, setZooming] = useState(false);
+
 	// Scroll the detail view up so the estimate price stays visible above the
 	// configure sheet while options are changed.
 	const scrollRef = useRef<ScrollView>(null);
@@ -1286,6 +1292,7 @@ export default function CardDetail() {
 						style={styles.container}
 						contentContainerStyle={styles.content}
 						contentInsetAdjustmentBehavior="automatic"
+						scrollEnabled={!zooming}
 						showsVerticalScrollIndicator={false}
 						onScroll={chatHint.show ? checkChatRowVisible : undefined}
 						scrollEventThrottle={100}
@@ -1294,6 +1301,13 @@ export default function CardDetail() {
 						    element that just switches from the cached small thumbnail to
 						    the large image once the card data loads (no fade between). */}
 						<View style={styles.imageContainer}>
+							{/* Peek zoom: pinch magnifies the art in place and it springs
+							    back on release. */}
+							<PeekZoom
+							width={IMAGE_WIDTH}
+							height={IMAGE_HEIGHT}
+							onActiveChange={setZooming}
+						>
 							<CardImage
 								uri={cardImage ?? initImage ?? ""}
 								placeholder={cardImageSmall}
@@ -1346,6 +1360,7 @@ export default function CardDetail() {
 									</View>
 								}
 							/>
+							</PeekZoom>
 						</View>
 
 						{card ? (
@@ -2416,6 +2431,9 @@ const styles = StyleSheet.create({
 		shadowOpacity: 0.55,
 		shadowRadius: 40,
 		shadowOffset: { width: 0, height: 18 },
+		// Above the content below it, so the peek-zoomed art overflows over
+		// the price chart instead of sliding underneath.
+		zIndex: 10,
 	},
 	// Quantity badge
 	quantityBadge: {
