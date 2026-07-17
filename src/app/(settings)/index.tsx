@@ -21,7 +21,7 @@ import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
-import { LinearGradient } from "expo-linear-gradient";
+import ThemedBackground from "@/components/ThemedBackground";
 import HeaderFadeScrim from "@/components/HeaderFadeScrim";
 import { router, useLocalSearchParams } from "expo-router";
 import { SymbolView, type SFSymbol } from "expo-symbols";
@@ -274,12 +274,7 @@ export default function Settings() {
 	return (
 		<View style={styles.container}>
 			{/* Deep-water gradient — the one background every screen shares. */}
-			<LinearGradient
-				colors={t.background.colors}
-				locations={t.background.locations}
-				pointerEvents="none"
-				style={StyleSheet.absoluteFill}
-			/>
+			<ThemedBackground />
 			<ScrollView
 				contentContainerStyle={[
 					styles.content,

@@ -397,6 +397,12 @@ export default function Home() {
 						<Button
 							onPress={() => {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+								// Scanning is Pro — paywall instead of the scanner, same
+								// gate as the search header's camera button.
+								if (!isPro) {
+									void presentProPaywallIfNeeded();
+									return;
+								}
 								router.push("/(camera)");
 							}}
 							modifiers={[buttonStyle("plain")]}

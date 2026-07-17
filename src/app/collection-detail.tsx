@@ -11,6 +11,8 @@ import {
 	View,
 } from "react-native";
 import Animated, {
+	FadeIn,
+	FadeOut,
 	useAnimatedStyle,
 	useSharedValue,
 	withRepeat,
@@ -499,6 +501,12 @@ export default function CollectionDetail() {
 								borderColor: t.glass.surfaceBorder,
 							},
 							t.glass.shadow,
+							// Selection reads as an accent-glowing border, same as the
+							// scan review rows.
+							isSelected && {
+								borderColor: t.accent,
+								...t.buttonGlow,
+							},
 						]}
 					>
 						{item.cardImageUrl && item.productType === "sealed" ? (
@@ -579,10 +587,17 @@ export default function CollectionDetail() {
 						</View>
 
 						{selectMode && !isSelected && (
-							<View style={styles.greyOverlay} />
+							<Animated.View
+								entering={FadeIn.duration(180)}
+								exiting={FadeOut.duration(150)}
+								style={styles.greyOverlay}
+							/>
 						)}
 						{selectMode && (
-							<View
+							<Animated.View
+								// Fades with select mode, like the scan review screen.
+								entering={FadeIn.duration(180)}
+								exiting={FadeOut.duration(150)}
 								style={[
 									styles.check,
 									isSelected
@@ -598,7 +613,7 @@ export default function CollectionDetail() {
 										weight="bold"
 									/>
 								)}
-							</View>
+							</Animated.View>
 						)}
 					</View>
 				</CardPressable>

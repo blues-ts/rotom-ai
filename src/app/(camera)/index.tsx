@@ -23,6 +23,7 @@ import Animated, {
 	type SharedValue,
 } from "react-native-reanimated";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Rect } from "react-native-svg";
 import {
@@ -1017,14 +1018,19 @@ export default function CameraScreen() {
 	if (!hasPermission) {
 		return (
 			<View style={styles.container}>
+				<LinearGradient
+					colors={td.scannerBackground.colors}
+					locations={td.scannerBackground.locations}
+					style={StyleSheet.absoluteFill}
+				/>
 				<View style={styles.permissionContainer}>
 					<SymbolView
 						name="camera"
 						size={44}
-						tintColor="rgba(255,255,255,0.5)"
+						tintColor={td.text.tertiary}
 						weight="regular"
 					/>
-					<Text style={styles.permissionText}>
+					<Text style={[styles.permissionText, { color: td.text.secondary }]}>
 						Turn on the camera to scan your cards.
 					</Text>
 					<Pressable
@@ -1047,8 +1053,15 @@ export default function CameraScreen() {
 	if (!device) {
 		return (
 			<View style={styles.container}>
+				<LinearGradient
+					colors={td.scannerBackground.colors}
+					locations={td.scannerBackground.locations}
+					style={StyleSheet.absoluteFill}
+				/>
 				<View style={styles.permissionContainer}>
-					<Text style={styles.permissionText}>Starting camera…</Text>
+					<Text style={[styles.permissionText, { color: td.text.secondary }]}>
+						Starting camera…
+					</Text>
 				</View>
 			</View>
 		);
@@ -1484,8 +1497,8 @@ const styles = StyleSheet.create({
 		padding: 20,
 		gap: 16,
 	},
+	// color applied inline (colorway ice tint).
 	permissionText: {
-		color: "#999",
 		fontSize: 16,
 		textAlign: "center",
 	},

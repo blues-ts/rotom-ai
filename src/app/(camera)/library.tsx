@@ -1,6 +1,7 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
+	Alert,
 	ScrollView,
 	StyleSheet,
 	Text,
@@ -13,11 +14,10 @@ import { SymbolView } from "expo-symbols";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
+	FadeIn,
 	FadeOut,
 	LinearTransition,
 } from "react-native-reanimated";
-import ContextMenu from "react-native-context-menu-view";
-
 import { spacing, useRiverTheme } from "@/constants/theme";
 import {
 	getCardDisplayName,
@@ -38,7 +38,9 @@ import {
 } from "@/hooks/useScanReviewBatch";
 import CardPressable from "@/components/CardPressable";
 import ErrorState from "@/components/ErrorState";
-import HeaderIconButton from "@/components/HeaderIconButton";
+import HeaderIconButton, {
+	HeaderButtonGroup,
+} from "@/components/HeaderIconButton";
 import TickerPrice from "@/components/TickerPrice";
 
 const MAX_QUANTITY = 99;
@@ -51,12 +53,58 @@ export default function ScanLibraryScreen() {
 	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
 	const { isPro } = useRevenueCat();
-	const { scans, count, removeScan, setScanConfig } = useScanSession();
+	const { scans, count, removeScans, setScanConfig } = useScanSession();
+
+	// Multi-select: long-press a row (or the header check button) to enter,
+	// then remove or add-to-collection just the selection — same gestures as
+	// the collection grid.
+	const [selectMode, setSelectMode] = useState(false);
+	const [selected, setSelected] = useState<Set<string>>(new Set());
+
+	// Removing the last card leaves nothing to select — derived, so the header
+	// drops back to normal in the same render (no state-sync effect).
+	const inSelect = selectMode && count > 0;
+
+	const exitSelect = useCallback(() => {
+		setSelectMode(false);
+		setSelected(new Set());
+	}, []);
+
+	const toggle = useCallback((id: string) => {
+		Haptics.selectionAsync();
+		setSelected((prev) => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	}, []);
+
+	const onRowLongPress = useCallback(
+		(id: string) => {
+			if (inSelect) {
+				toggle(id);
+				return;
+			}
+			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+			setSelectMode(true);
+			setSelected(new Set([id]));
+		},
+		[inSelect, toggle],
+	);
 
 	const ids = useMemo(() => scans.map((s) => s.id), [scans]);
 	const scanById = useMemo(
 		() => new Map(scans.map((s) => [s.id, s])),
 		[scans],
+	);
+
+	// Selected ids can leave the session while this screen is covered (the
+	// add-to-collection sheet files them away on success) — only the ones
+	// still present count, so the header never offers actions on dead ids.
+	const liveSelected = useMemo(
+		() => new Set([...selected].filter((id) => scanById.has(id))),
+		[selected, scanById],
 	);
 
 	const { data: cards, isLoading, isError, refetch } = useScanReviewBatch(ids);
@@ -120,34 +168,61 @@ export default function ScanLibraryScreen() {
 		[configFor, cardById, scanById, setScanConfig, ids],
 	);
 
-	const handleRemove = useCallback(
-		(id: string) => {
+	const handleRemoveSelected = useCallback(() => {
+		const picked = [...liveSelected];
+		if (picked.length === 0) return;
+		Alert.alert(
+			`Remove ${picked.length} ${picked.length === 1 ? "card" : "cards"}?`,
+			"They'll be removed from this scanning session.",
+			[
+				{ text: "Cancel", style: "cancel" },
+				{
+					text: "Remove",
+					style: "destructive",
+					onPress: () => {
+						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+						removeScans(picked);
+						exitSelect();
+					},
+				},
+			],
+		);
+	}, [liveSelected, removeScans, exitSelect]);
+
+	const pushAddToCollection = useCallback(
+		(picked: string[]) => {
+			if (picked.length === 0) return;
+			// Collections are Pro — gate before opening the picker, like the
+			// long-press quick-add on search (CardContextMenu).
+			if (!isPro) {
+				void presentProPaywallIfNeeded();
+				return;
+			}
 			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-			removeScan(id);
+			// The selection survives the trip into the picker — scans stay in the
+			// session, so coming back finds the same cards still selected.
+			router.push({
+				pathname: "/add-to-collection",
+				params: {
+					cardIds: picked.join(","),
+					cardImages: picked
+						.map((id) => encodeURIComponent(scanById.get(id)?.image ?? ""))
+						.join(","),
+					fromReview: "1",
+				},
+			});
 		},
-		[removeScan],
+		[isPro, scanById],
 	);
 
+	// The screen's primary action: add the whole session at once.
 	const handleContinue = useCallback(() => {
-		if (ids.length === 0) return;
-		// Collections are Pro — gate before opening the picker, like the
-		// long-press quick-add on search (CardContextMenu).
-		if (!isPro) {
-			void presentProPaywallIfNeeded();
-			return;
-		}
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-		router.push({
-			pathname: "/add-to-collection",
-			params: {
-				cardIds: ids.join(","),
-				cardImages: ids
-					.map((id) => encodeURIComponent(scanById.get(id)?.image ?? ""))
-					.join(","),
-				fromReview: "1",
-			},
-		});
-	}, [ids, isPro, scanById]);
+		pushAddToCollection(ids);
+	}, [pushAddToCollection, ids]);
+
+	const handleAddSelected = useCallback(() => {
+		pushAddToCollection([...liveSelected]);
+	}, [pushAddToCollection, liveSelected]);
 
 	return (
 		<View style={styles.container}>
@@ -160,8 +235,11 @@ export default function ScanLibraryScreen() {
 			/>
 			<Stack.Screen
 				options={{
-					headerTitle:
-						count > 0
+					headerTitle: inSelect
+						? liveSelected.size > 0
+							? `${liveSelected.size} Selected`
+							: "Select Cards"
+						: count > 0
 							? `Review ${count} ${count === 1 ? "Card" : "Cards"}`
 							: "Your Scans",
 					headerLeft: () => (
@@ -179,6 +257,58 @@ export default function ScanLibraryScreen() {
 							/>
 						</HeaderIconButton>
 					),
+					headerRight: () => {
+						if (count === 0 || isLoading || isError) return null;
+						if (!inSelect) {
+							return (
+								<HeaderIconButton
+									onPress={() => {
+										Haptics.selectionAsync();
+										setSelectMode(true);
+									}}
+								>
+									<SymbolView
+										name="checkmark.circle"
+										size={22}
+										tintColor={t.accentOn}
+										weight="medium"
+									/>
+								</HeaderIconButton>
+							);
+						}
+						return (
+							<HeaderButtonGroup>
+								{liveSelected.size > 0 && (
+									<>
+										<HeaderIconButton onPress={handleAddSelected}>
+											<SymbolView
+												name="plus"
+												size={20}
+												tintColor={t.accentOn}
+												weight="medium"
+											/>
+										</HeaderIconButton>
+										<HeaderIconButton onPress={handleRemoveSelected}>
+											<SymbolView
+												name="trash"
+												size={19}
+												tintColor={t.loss}
+												weight="medium"
+											/>
+										</HeaderIconButton>
+									</>
+								)}
+								<HeaderIconButton onPress={exitSelect}>
+									<SymbolView
+										name="checkmark"
+										size={21}
+										tintColor={t.accentOn}
+										weight="semibold"
+									/>
+								</HeaderIconButton>
+							</HeaderButtonGroup>
+						);
+					},
 				}}
 			/>
 
@@ -227,7 +357,9 @@ export default function ScanLibraryScreen() {
 					showsVerticalScrollIndicator={false}
 				>
 					<Text style={[styles.subtitle, { color: t.text.secondary }]}>
-						Tap a card to set variant, condition, or grade
+						{inSelect
+							? "Tap cards to select them"
+							: "Tap a card to set variant, condition, or grade"}
 					</Text>
 					{ids.map((id) => {
 						const card = cardById.get(id);
@@ -235,6 +367,7 @@ export default function ScanLibraryScreen() {
 						const config = configFor(id);
 						const price =
 							card && config ? scanConfigPrice(card, config) : undefined;
+						const isSelected = liveSelected.has(id);
 						return (
 							<Animated.View
 								key={id}
@@ -243,134 +376,163 @@ export default function ScanLibraryScreen() {
 								exiting={FadeOut.duration(150)}
 								layout={LinearTransition.duration(220)}
 							>
-								<ContextMenu
-									actions={[
-										{ title: "Remove", systemIcon: "trash", destructive: true },
+								<CardPressable
+									onPress={() =>
+										inSelect ? toggle(id) : openConfigure(id)
+									}
+									delayLongPress={300}
+									onLongPress={() => onRowLongPress(id)}
+									pressScale={0.98}
+									baseColor={t.glass.elevatedFill}
+									pressedColor={t.glass.pressedFill}
+									// Selection reads as an accent-glowing border — the row
+									// itself doesn't change shape.
+									style={[
+										styles.row,
+										{ borderColor: t.glass.elevatedBorder },
+										isSelected && {
+											borderColor: t.accent,
+											...t.buttonGlow,
+										},
 									]}
-									onPress={(e) => {
-										if (e.nativeEvent.index === 0) handleRemove(id);
-									}}
 								>
-									<CardPressable
-										onPress={() => openConfigure(id)}
-										pressScale={0.98}
-										baseColor={t.glass.elevatedFill}
-										pressedColor={t.glass.pressedFill}
-										style={[styles.row, { borderColor: t.glass.elevatedBorder }]}
-									>
-										<Image
-											source={{ uri: scan?.image }}
-											style={styles.thumb}
-											contentFit="contain"
-										/>
-										<View style={styles.rowInfo}>
+									<Image
+										source={{ uri: scan?.image }}
+										style={styles.thumb}
+										contentFit="contain"
+									/>
+									<View style={styles.rowInfo}>
+										<Text
+											style={[styles.rowName, { color: t.text.primary }]}
+											numberOfLines={1}
+										>
+											{card ? getCardDisplayName(card) : "…"}
+										</Text>
+										{card?.expansion && (
 											<Text
-												style={[styles.rowName, { color: t.text.primary }]}
+												style={[styles.rowSet, { color: t.text.tertiary }]}
 												numberOfLines={1}
 											>
-												{card ? getCardDisplayName(card) : "…"}
+												{getExpansionDisplayName(card.expansion)}
+												{getCardNumber(card) ? ` · ${getCardNumber(card)}` : ""}
 											</Text>
-											{card?.expansion && (
+										)}
+										{config && (
+											<View style={styles.rowConfigLine}>
 												<Text
-													style={[styles.rowSet, { color: t.text.tertiary }]}
+													style={[
+														styles.rowConfig,
+														styles.rowConfigSummary,
+														{ color: t.text.secondary },
+													]}
 													numberOfLines={1}
 												>
-													{getExpansionDisplayName(card.expansion)}
-													{getCardNumber(card) ? ` · ${getCardNumber(card)}` : ""}
+													{scanConfigSummary(config)}
+													{" · "}
 												</Text>
-											)}
-											{config && (
-												<View style={styles.rowConfigLine}>
+												{price !== undefined ? (
+													<TickerPrice
+														value={price}
+														fontSize={13}
+														style={[
+															styles.rowConfig,
+															{ color: t.text.primary },
+														]}
+													/>
+												) : (
 													<Text
 														style={[
 															styles.rowConfig,
-															styles.rowConfigSummary,
-															{ color: t.text.secondary },
+															{ color: t.text.primary },
 														]}
-														numberOfLines={1}
 													>
-														{scanConfigSummary(config)}
-														{" · "}
+														—
 													</Text>
-													{price !== undefined ? (
-														<TickerPrice
-															value={price}
-															fontSize={13}
-															style={[
-																styles.rowConfig,
-																{ color: t.text.primary },
-															]}
-														/>
-													) : (
-														<Text
-															style={[
-																styles.rowConfig,
-																{ color: t.text.primary },
-															]}
-														>
-															—
-														</Text>
-													)}
-												</View>
-											)}
-										</View>
-										{config && (
-											<View
-												style={[
-													styles.stepper,
-													{
-														backgroundColor: t.glass.surfaceFill,
-														borderColor: t.glass.surfaceBorder,
-													},
-												]}
-											>
-												<CardPressable
-													hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
-													pressScale={1}
-													disabled={config.quantity <= 1}
-													onPress={() => setQuantity(id, -1)}
-													style={styles.stepperButton}
-												>
-													<SymbolView
-														name="minus"
-														size={12}
-														tintColor={
-															config.quantity <= 1
-																? t.text.tertiary
-																: t.text.primary
-														}
-														weight="semibold"
-													/>
-												</CardPressable>
-												<Text
-													style={[styles.stepperCount, { color: t.text.primary }]}
-												>
-													{config.quantity}
-												</Text>
-												<CardPressable
-													hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
-													pressScale={1}
-													disabled={config.quantity >= MAX_QUANTITY}
-													onPress={() => setQuantity(id, 1)}
-													style={styles.stepperButton}
-												>
-													<SymbolView
-														name="plus"
-														size={12}
-														tintColor={t.text.primary}
-														weight="semibold"
-													/>
-												</CardPressable>
+												)}
 											</View>
 										)}
-										<SymbolView
-											name="chevron.right"
-											size={13}
-											tintColor={t.text.tertiary}
-											weight="semibold"
-										/>
-									</CardPressable>
-								</ContextMenu>
+									</View>
+									{config && !inSelect && (
+										<Animated.View
+											// Fades away in select mode instead of popping out.
+											entering={FadeIn.duration(180)}
+											exiting={FadeOut.duration(150)}
+											style={[
+												styles.stepper,
+												{
+													backgroundColor: t.glass.surfaceFill,
+													borderColor: t.glass.surfaceBorder,
+												},
+											]}
+										>
+											<CardPressable
+												hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+												pressScale={1}
+												disabled={config.quantity <= 1}
+												onPress={() => setQuantity(id, -1)}
+												style={styles.stepperButton}
+											>
+												<SymbolView
+													name="minus"
+													size={12}
+													tintColor={
+														config.quantity <= 1
+															? t.text.tertiary
+															: t.text.primary
+													}
+													weight="semibold"
+												/>
+											</CardPressable>
+											<Text
+												style={[styles.stepperCount, { color: t.text.primary }]}
+											>
+												{config.quantity}
+											</Text>
+											<CardPressable
+												hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+												pressScale={1}
+												disabled={config.quantity >= MAX_QUANTITY}
+												onPress={() => setQuantity(id, 1)}
+												style={styles.stepperButton}
+											>
+												<SymbolView
+													name="plus"
+													size={12}
+													tintColor={t.text.primary}
+													weight="semibold"
+												/>
+											</CardPressable>
+										</Animated.View>
+									)}
+									{!inSelect && (
+										<Animated.View
+											entering={FadeIn.duration(180)}
+											exiting={FadeOut.duration(150)}
+										>
+											<SymbolView
+												name="chevron.right"
+												size={13}
+												tintColor={t.text.tertiary}
+												weight="semibold"
+											/>
+										</Animated.View>
+									)}
+									{/* Selected: an accent check takes the trailing slot the
+									    stepper + chevron vacated. */}
+									{inSelect && isSelected && (
+										<Animated.View
+											entering={FadeIn.duration(180)}
+											exiting={FadeOut.duration(150)}
+										>
+											<SymbolView
+												name="checkmark.circle.fill"
+												size={22}
+												tintColor={t.accent}
+												weight="semibold"
+											/>
+										</Animated.View>
+									)}
+								</CardPressable>
 							</Animated.View>
 						);
 					})}
@@ -379,8 +541,11 @@ export default function ScanLibraryScreen() {
 
 			{/* Primary action — full-width accent pill with glow, pinned above the
 			    home indicator. */}
-			{count > 0 && !isLoading && !isError && (
-				<View
+			{count > 0 && !isLoading && !isError && !inSelect && (
+				<Animated.View
+					// Fades with select mode, like the row steppers.
+					entering={FadeIn.duration(180)}
+					exiting={FadeOut.duration(150)}
 					style={[styles.continueWrap, { paddingBottom: insets.bottom + 12 }]}
 					pointerEvents="box-none"
 				>
@@ -404,7 +569,7 @@ export default function ScanLibraryScreen() {
 							/>
 						)}
 					</CardPressable>
-				</View>
+				</Animated.View>
 			)}
 		</View>
 	);
