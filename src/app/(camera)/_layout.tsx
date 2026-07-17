@@ -1,4 +1,4 @@
-import { palette, useRiverTheme } from "@/constants/theme";
+import { useRiverDarkTheme } from "@/constants/theme";
 import { useAuth } from "@clerk/clerk-expo";
 import { Redirect, router, Stack } from "expo-router";
 import { SymbolView } from "expo-symbols";
@@ -6,7 +6,8 @@ import * as Haptics from "expo-haptics";
 import HeaderIconButton from "@/components/HeaderIconButton";
 
 export default function CameraLayout() {
-	const t = useRiverTheme();
+	// The scanner is always dark; this still follows the Appearance colorway.
+	const t = useRiverDarkTheme();
 	const { isSignedIn, isLoaded } = useAuth();
 
 	if (!isLoaded) return null;
@@ -37,7 +38,7 @@ export default function CameraLayout() {
 						<SymbolView
 							name="xmark"
 							size={20}
-							tintColor={palette.accentSoft}
+							tintColor={t.accentOn}
 							weight="medium"
 						/>
 					</HeaderIconButton>

@@ -22,7 +22,13 @@ import { SymbolView } from "expo-symbols";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { darkTheme, palette, radius, typeScale } from "@/constants/theme";
+import {
+	darkTheme,
+	radius,
+	typeScale,
+	useRiverDarkTheme,
+	withAlpha,
+} from "@/constants/theme";
 import {
 	scanPriceLabel,
 	useScanPrices,
@@ -73,6 +79,8 @@ export default function BinderReviewOverlay({
 }) {
 	const insets = useSafeAreaInsets();
 	const trayRef = useRef<ScrollView>(null);
+	// Always-dark surface, but the accent follows the Appearance colorway.
+	const td = useRiverDarkTheme();
 
 	// Low-confidence guesses start excluded — the user confirms them after
 	// eyeballing the (fully visible) card in the photo.
@@ -178,7 +186,15 @@ export default function BinderReviewOverlay({
 	};
 
 	return (
-		<Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, rootStyle]}>
+		<Animated.View
+			style={[
+				StyleSheet.absoluteFill,
+				// Deep-water black from the colorway's darkest ramp stop, not flat
+				// gray — near-opaque so the live feed underneath fully recedes.
+				{ backgroundColor: withAlpha(td.background.colors[2], 0.97) },
+				rootStyle,
+			]}
+		>
 			{/* The analyzed frame — marks are children, so they ride the settle. */}
 			<Animated.View style={[styles.photo, photo, photoStyle]}>
 				{!!photoUri && (
@@ -191,7 +207,7 @@ export default function BinderReviewOverlay({
 
 				{detections.map((d, index) => {
 					const on = !excluded.has(index);
-					const accent = d.confident ? t.accent : AMBER;
+					const accent = d.confident ? td.accent : AMBER;
 					return (
 						<Animated.View
 							key={index}
@@ -255,7 +271,15 @@ export default function BinderReviewOverlay({
 					.duration(340)
 					.easing(Easing.out(Easing.cubic))
 					.reduceMotion(ReduceMotion.System)}
-				style={[styles.tray, { height: trayH, paddingBottom: insets.bottom }]}
+				style={[
+					styles.tray,
+					{
+						height: trayH,
+						paddingBottom: insets.bottom,
+						backgroundColor: td.glass.sheetFill,
+						borderColor: td.glass.surfaceBorder,
+					},
+				]}
 			>
 				<View style={styles.trayHeader}>
 					<Text style={styles.trayTitle}>
@@ -280,7 +304,7 @@ export default function BinderReviewOverlay({
 				>
 					{detections.map((d, index) => {
 						const on = !excluded.has(index);
-						const accent = d.confident ? t.accent : AMBER;
+						const accent = d.confident ? td.accent : AMBER;
 						return (
 							<Pressable
 								key={index}
@@ -322,7 +346,13 @@ export default function BinderReviewOverlay({
 
 				<View style={styles.footerButtons}>
 					<Pressable
-						style={styles.retakeButton}
+						style={[
+							styles.retakeButton,
+							{
+								backgroundColor: td.glass.elevatedFill,
+								borderColor: td.glass.elevatedBorder,
+							},
+						]}
 						onPress={() => depart(onRetake)}
 					>
 						<Text style={styles.retakeText}>Retake</Text>
@@ -330,6 +360,7 @@ export default function BinderReviewOverlay({
 					<Pressable
 						style={[
 							styles.confirmButton,
+							{ backgroundColor: td.accent, shadowColor: td.accent },
 							included.length === 0 && styles.confirmDisabled,
 						]}
 						disabled={included.length === 0}
@@ -354,9 +385,6 @@ export default function BinderReviewOverlay({
 }
 
 const styles = StyleSheet.create({
-	backdrop: {
-		backgroundColor: "rgba(8, 24, 38, 0.97)", // deep-water black, not flat gray
-	},
 	photo: {
 		position: "absolute",
 		overflow: "hidden",
@@ -416,16 +444,15 @@ const styles = StyleSheet.create({
 		fontSize: 13,
 		fontWeight: "500",
 	},
+	// backgroundColor + borderColor applied inline (colorway sheet glass).
 	tray: {
 		position: "absolute",
 		left: 0,
 		right: 0,
 		bottom: 0,
-		backgroundColor: t.glass.sheetFill,
 		borderTopLeftRadius: 28,
 		borderTopRightRadius: 28,
 		borderTopWidth: StyleSheet.hairlineWidth,
-		borderColor: t.glass.surfaceBorder,
 		paddingTop: 18,
 	},
 	trayHeader: {
@@ -517,26 +544,25 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 16,
 		paddingTop: 12,
 	},
+	// backgroundColor + borderColor applied inline (colorway glass).
 	retakeButton: {
 		flex: 1,
 		paddingVertical: 14,
 		borderRadius: radius.pill,
 		alignItems: "center",
-		backgroundColor: t.glass.elevatedFill,
 		borderWidth: 1,
-		borderColor: t.glass.elevatedBorder,
 	},
 	retakeText: {
 		color: t.text.primary,
 		fontSize: 16,
 		fontWeight: "600",
 	},
+	// backgroundColor + shadowColor applied inline (colorway accent).
 	confirmButton: {
 		flex: 2,
 		paddingVertical: 14,
 		borderRadius: radius.pill,
 		alignItems: "center",
-		backgroundColor: palette.accent,
 		...t.buttonGlow,
 	},
 	confirmDisabled: {

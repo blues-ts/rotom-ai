@@ -37,5 +37,53 @@
         <data android:scheme="riverai"/>
       </intent-filter>
     </activity>
+    <activity-alias android:name=".MainActivityLagoon" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_lagoon" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".MainActivityTwilight" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_twilight" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".MainActivitySunset" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_sunset" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".MainActivityMeadow" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_meadow" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".MainActivityRose" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_rose" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".MainActivityAmber" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_amber" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".MainActivityUltra" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_ultra" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".MainActivityGlacier" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_glacier" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
   </application>
 </manifest>

@@ -1985,13 +1985,13 @@ export default function CardDetail() {
 															yGutter={20}
 														>
 															<LineChart.Path
-																color={chart.line}
+																color={t.chartLine}
 																width={chart.strokeWidth}
 															>
-																<LineChart.Gradient color={chart.line} />
+																<LineChart.Gradient color={t.chartLine} />
 																<LineChart.Dot
 																	at={chartData.length - 1}
-																	color={chart.line}
+																	color={t.chartLine}
 																	size={chart.endDotRadius}
 																	hasPulse
 																	pulseBehaviour="while-inactive"

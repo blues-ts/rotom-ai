@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import CardPressable from "@/components/CardPressable";
 import * as Haptics from "expo-haptics";
-import { palette, typeScale, useRiverTheme } from "@/constants/theme";
+import { mixColor, typeScale, useRiverTheme } from "@/constants/theme";
 
 /**
  * Pill-style selection controls shared by the card-detail configure sheet (and
@@ -45,7 +45,9 @@ function Chip({
 			// would keep painting over it after an active/inactive flip.
 			pressScale={1}
 			baseColor={active ? t.accent : t.glass.elevatedFill}
-			pressedColor={active ? palette.accentDeep : t.glass.pressedFill}
+			pressedColor={
+				active ? mixColor(t.accent, "#000000", 0.2) : t.glass.pressedFill
+			}
 			style={[
 				styles.togglePill,
 				// Fixed basis, no grow: chips keep the same width even when a row

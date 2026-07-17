@@ -3,8 +3,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import RiverLogo from "@/components/RiverLogo";
-import { darkTheme } from "@/constants/theme";
+import RiverMark from "@/components/RiverMark";
+import { useRiverDarkTheme } from "@/constants/theme";
 import Animated, {
 	Easing,
 	useAnimatedStyle,
@@ -14,13 +14,19 @@ import Animated, {
 } from "react-native-reanimated";
 
 // Cold-start warm-up screen. Its first frame matches the native splash — solid
-// deep-water navy with the centered white River logo mark — so the native → JS
-// handoff is invisible. The full deep-water gradient then fades in over the
+// deep-water navy with the centered wave-orb River mark at the splash's 151pt
+// width — so the native → JS handoff is invisible. The full deep-water gradient then fades in over the
 // solid base while a halo blooms behind the mark, with a small spinner +
 // caption pinned to the bottom telling the user what's happening.
 //
-// Always deep water, even in light mode (like the scanner): the white logo
-// needs the dark ground, and the app cross-fades to the themed screen anyway.
+// Always deep water, even in light mode (like the scanner): the orb needs the
+// dark ground, and the app cross-fades to the themed screen anyway.
+//
+// The Appearance colorway applies here too, but the native splash art is
+// static River — so frame 1 is always River (base color + orb), and the
+// colorway arrives WITH the existing 600ms bloom: the themed gradient fades
+// in over the navy base and a themed orb cross-fades over the River orb.
+// The handoff stays invisible; the re-tint reads as part of the intro.
 //
 // On leaving we hand off immediately: the root Stack gives the (home) screen an
 // `animation: "fade"`, so navigation cross-fades this whole screen into the app —
@@ -38,6 +44,7 @@ export default function AppInitScreen({
 	onExitComplete?: () => void;
 }) {
 	const insets = useSafeAreaInsets();
+	const td = useRiverDarkTheme();
 
 	const gradientOpacity = useSharedValue(0);
 	const glowScale = useSharedValue(0.92);
@@ -75,8 +82,8 @@ export default function AppInitScreen({
 		<View style={styles.container}>
 			<Animated.View style={[StyleSheet.absoluteFill, gradientStyle]}>
 				<LinearGradient
-					colors={darkTheme.background.colors}
-					locations={darkTheme.background.locations}
+					colors={td.background.colors}
+					locations={td.background.locations}
 					pointerEvents="none"
 					style={StyleSheet.absoluteFill}
 				/>
@@ -84,11 +91,25 @@ export default function AppInitScreen({
 
 			<View style={styles.center} pointerEvents="none">
 				<Animated.View style={glowStyle}>
-					<Image source={GLOW} style={styles.glow} contentFit="contain" />
+					<Image
+						source={GLOW}
+						style={styles.glow}
+						contentFit="contain"
+						// The halo PNG is River-blue; re-tint it for other colorways
+						// (undefined keeps the original art untouched for River).
+						tintColor={td.colorway === "river" ? undefined : td.accent}
+					/>
 				</Animated.View>
 			</View>
 
-			<RiverLogo size={132} color="#FFFFFF" />
+			<View>
+				<RiverMark size={151} />
+				{td.colorway !== "river" && (
+					<Animated.View style={[StyleSheet.absoluteFill, gradientStyle]}>
+						<RiverMark size={151} colorway={td.colorway} />
+					</Animated.View>
+				)}
+			</View>
 
 			<Animated.View
 				style={[styles.footer, footerStyle, { bottom: insets.bottom + 28 }]}

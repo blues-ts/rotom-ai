@@ -10,6 +10,7 @@ import {
 	QUERY_CACHE_MAX_AGE,
 } from "@/config/storage";
 import { RevenueCatProvider, useRevenueCat } from "@/context/RevenueCatContext";
+import { ColorwayProvider } from "@/context/ColorwayContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { ToastProvider } from "@/context/ToastContext";
 import { ScanSessionProvider } from "@/context/ScanSessionContext";
@@ -50,8 +51,9 @@ SplashScreen.preventAutoHideAsync();
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 
 // This can render when providers have crashed, so it only leans on
-// useRiverTheme (plain useColorScheme, no context) and module imports —
-// no ThemeProvider, toasts, or CardPressable.
+// useRiverTheme (useColorScheme + a context with a safe River default, so it
+// works unprovided) and module imports — no ThemeProvider, toasts, or
+// CardPressable.
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 	const t = useRiverTheme();
 	if (__DEV__) {
@@ -444,35 +446,37 @@ export default function RootLayout() {
 			    useSafeAreaInsets() returns 0 on the first frame and jumps to the
 			    real inset a frame later, making header-offset content pop down. */}
 			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
-				<ThemeProvider>
-					<KeyboardProvider>
-						{persister ? (
-							<PersistQueryClientProvider
-								client={queryClient}
-								persistOptions={{
-									persister,
-									maxAge: QUERY_CACHE_MAX_AGE,
-									buster: QUERY_CACHE_BUSTER,
-									dehydrateOptions: {
-										// Whole-card-list payloads (up to ~1000 full card
-										// objects each) are cheap to refetch but expensive
-										// to deserialize on EVERY cold start — keep them
-										// in-memory only.
-										shouldDehydrateQuery: (query) =>
-											query.state.status === "success" &&
-											!HEAVY_QUERY_KEYS.has(String(query.queryKey[0])),
-									},
-								}}
-							>
-								{tree}
-							</PersistQueryClientProvider>
-						) : (
-							<QueryClientProvider client={queryClient}>
-								{tree}
-							</QueryClientProvider>
-						)}
-					</KeyboardProvider>
-				</ThemeProvider>
+				<ColorwayProvider>
+					<ThemeProvider>
+						<KeyboardProvider>
+							{persister ? (
+								<PersistQueryClientProvider
+									client={queryClient}
+									persistOptions={{
+										persister,
+										maxAge: QUERY_CACHE_MAX_AGE,
+										buster: QUERY_CACHE_BUSTER,
+										dehydrateOptions: {
+											// Whole-card-list payloads (up to ~1000 full card
+											// objects each) are cheap to refetch but expensive
+											// to deserialize on EVERY cold start — keep them
+											// in-memory only.
+											shouldDehydrateQuery: (query) =>
+												query.state.status === "success" &&
+												!HEAVY_QUERY_KEYS.has(String(query.queryKey[0])),
+										},
+									}}
+								>
+									{tree}
+								</PersistQueryClientProvider>
+							) : (
+								<QueryClientProvider client={queryClient}>
+									{tree}
+								</QueryClientProvider>
+							)}
+						</KeyboardProvider>
+					</ThemeProvider>
+				</ColorwayProvider>
 			</SafeAreaProvider>
 		</GestureHandlerRootView>
 	);

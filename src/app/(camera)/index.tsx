@@ -50,7 +50,7 @@ import {
 	type CameraRef,
 } from "react-native-vision-camera";
 
-import { darkTheme, palette } from "@/constants/theme";
+import { useRiverDarkTheme } from "@/constants/theme";
 import * as CardVision from "../../../modules/card-vision";
 import {
 	useScanSession,
@@ -118,8 +118,8 @@ const cardHeight = cardWidth / CARD_ASPECT_RATIO;
 const cardX = width / 2 - cardWidth / 2;
 const cardY = height * CARD_CENTER_Y_RATIO - cardHeight / 2;
 
-// Palette — signals layered over the live feed.
-const RIVER = palette.accent; // searching / scan (design-system accent)
+// Palette — signals layered over the live feed. The searching/scan accent
+// follows the Appearance colorway (useRiverDarkTheme) at render time.
 
 // Blue glow hugging the viewfinder. Drawn as concentric rounded-rect strokes
 // radiating OUTWARD from the hole with opacity falling off — each ring tracks
@@ -170,11 +170,11 @@ const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type ScanState = "preparing" | "searching" | "locking" | "found";
 
-const RETICLE_COLOR: Record<ScanState, string> = {
+// `found` is the colorway accent, resolved at render time.
+const RETICLE_COLOR: Record<Exclude<ScanState, "found">, string> = {
 	preparing: "rgba(255,255,255,0.35)",
 	searching: REST,
 	locking: AMBER,
-	found: RIVER,
 };
 
 // One viewfinder serves both modes: the hole morphs between card size and
@@ -287,11 +287,13 @@ const GlowRing = memo(function GlowRing({
 			ry: r + outset,
 		};
 	});
+	// `t` is ring geometry here; the theme gets its own name.
+	const theme = useRiverDarkTheme();
 	return (
 		<AnimatedRect
 			animatedProps={animatedProps}
 			fill="none"
-			stroke={RIVER}
+			stroke={theme.accent}
 			strokeOpacity={0.5 * Math.pow(1 - t, 1.7)}
 			strokeWidth={GLOW_STROKE}
 		/>
@@ -389,6 +391,8 @@ const FlockCard = memo(function FlockCard({
 export default function CameraScreen() {
 	const device = useCameraDevice("back");
 	const { hasPermission, requestPermission } = useCameraPermission();
+	// Scanner chrome is always dark but still follows the Appearance colorway.
+	const td = useRiverDarkTheme();
 	const photoOutput = usePhotoOutput({ qualityPrioritization: "speed" });
 	const cameraRef = useRef<CameraRef>(null);
 
@@ -1024,7 +1028,10 @@ export default function CameraScreen() {
 						Turn on the camera to scan your cards.
 					</Text>
 					<Pressable
-						style={styles.permissionButton}
+						style={[
+							styles.permissionButton,
+							{ backgroundColor: td.accent, shadowColor: td.accent },
+						]}
 						onPress={async () => {
 							const granted = await requestPermission();
 							if (!granted) Linking.openSettings();
@@ -1047,7 +1054,11 @@ export default function CameraScreen() {
 		);
 	}
 
-	const reticle = scanningPaused ? REST : RETICLE_COLOR[scanState];
+	const reticle = scanningPaused
+		? REST
+		: scanState === "found"
+			? td.accent
+			: RETICLE_COLOR[scanState];
 
 	return (
 		<View style={styles.container}>
@@ -1060,7 +1071,7 @@ export default function CameraScreen() {
 									<SymbolView
 										name={scanningPaused ? "play" : "pause"}
 										size={21}
-										tintColor={scanningPaused ? "#FFFFFF" : palette.accentSoft}
+										tintColor={scanningPaused ? "#FFFFFF" : td.accentOn}
 										weight="medium"
 									/>
 								</HeaderIconButton>
@@ -1069,7 +1080,7 @@ export default function CameraScreen() {
 								<SymbolView
 									name="square.stack"
 									size={21}
-									tintColor={palette.accentSoft}
+									tintColor={td.accentOn}
 									weight="medium"
 								/>
 								{count > 0 && (
@@ -1122,7 +1133,16 @@ export default function CameraScreen() {
 			    same lip language as the card-detail sheet. The body holds the tray
 			    (single) or the shutter (binder), with the alignment caption in the
 			    same slot while the tray is empty. */}
-			<Animated.View style={[styles.sheet, sheetStyle]}>
+			<Animated.View
+				style={[
+					styles.sheet,
+					{
+						borderColor: td.glass.surfaceBorder,
+						backgroundColor: td.glass.sheetFill,
+					},
+					sheetStyle,
+				]}
+			>
 				<View style={styles.sheetBody} pointerEvents="box-none">
 					<ScanTray
 						scans={scans}
@@ -1136,13 +1156,19 @@ export default function CameraScreen() {
 						style={[styles.captionOverlay, singleCaptionStyle]}
 						pointerEvents="none"
 					>
-						<Text style={styles.sheetCaption}>
+						<Text
+							style={[styles.sheetCaption, { color: td.text.secondary }]}
+						>
 							Align the card inside the frame
 						</Text>
 					</Animated.View>
 					<View style={styles.binderControls} pointerEvents="box-none">
 						<Animated.Text
-							style={[styles.sheetCaption, binderCaptionStyle]}
+							style={[
+								styles.sheetCaption,
+								{ color: td.text.secondary },
+								binderCaptionStyle,
+							]}
 							pointerEvents="none"
 						>
 							Align your cards inside the frame
@@ -1188,10 +1214,10 @@ export default function CameraScreen() {
 									mode === "binder"
 										? binderPhase === "analyzing"
 											? AMBER
-											: palette.accent
+											: td.accent
 										: scanningPaused || scanState === "preparing"
 											? "rgba(255,255,255,0.45)"
-											: palette.accent
+											: td.accent
 								}
 							/>
 							<UIText
@@ -1220,7 +1246,7 @@ export default function CameraScreen() {
 							<UIImage
 								systemName="info.circle"
 								size={20}
-								color={palette.accentSoft}
+								color={td.accentOn}
 								modifiers={[
 									frame({ width: 44, height: 44 }),
 									glassEffect({
@@ -1241,7 +1267,7 @@ export default function CameraScreen() {
 									modifiers={[
 										font({ size: 14, weight: "bold" }),
 										foregroundStyle(
-											scanLang === "ja" ? "#FFFFFF" : palette.accentSoft,
+											scanLang === "ja" ? "#FFFFFF" : td.accentOn,
 										),
 										frame({ width: 44, height: 44 }),
 										glassEffect({
@@ -1266,7 +1292,7 @@ export default function CameraScreen() {
 								<UIImage
 									systemName="square.grid.3x3"
 									size={20}
-									color={mode === "binder" ? "#FFFFFF" : palette.accentSoft}
+									color={mode === "binder" ? "#FFFFFF" : td.accentOn}
 									modifiers={[
 										frame({ width: 44, height: 44 }),
 										glassEffect({
@@ -1286,7 +1312,7 @@ export default function CameraScreen() {
 									torchEnabled ? "flashlight.on.fill" : "flashlight.off.fill"
 								}
 								size={20}
-								color={torchEnabled ? AMBER : palette.accentSoft}
+								color={torchEnabled ? AMBER : td.accentOn}
 								modifiers={[
 									frame({ width: 44, height: 44 }),
 									glassEffect({
@@ -1388,8 +1414,7 @@ const styles = StyleSheet.create({
 		borderTopLeftRadius: 28,
 		borderTopRightRadius: 28,
 		borderTopWidth: StyleSheet.hairlineWidth,
-		borderColor: darkTheme.glass.surfaceBorder,
-		backgroundColor: darkTheme.glass.sheetFill,
+		// borderColor + backgroundColor applied inline (colorway sheet glass).
 		paddingTop: SHEET_TOP_PAD,
 		// Lift the lip off the camera feed, same as the card-detail sheet.
 		shadowColor: "#000",
@@ -1420,11 +1445,11 @@ const styles = StyleSheet.create({
 		// cross-fade in place during the mode morph instead of jumping.
 		paddingBottom: 82,
 	},
+	// color applied inline (colorway ice tint).
 	sheetCaption: {
 		textAlign: "center",
 		fontSize: 13,
 		fontWeight: "500",
-		color: darkTheme.text.secondary,
 	},
 	binderControls: {
 		position: "absolute",
@@ -1464,12 +1489,11 @@ const styles = StyleSheet.create({
 		fontSize: 16,
 		textAlign: "center",
 	},
+	// backgroundColor + shadowColor applied inline (colorway accent).
 	permissionButton: {
-		backgroundColor: palette.accent,
 		paddingHorizontal: 24,
 		paddingVertical: 12,
 		borderRadius: 999,
-		shadowColor: "#3B9DF2",
 		shadowOpacity: 0.4,
 		shadowRadius: 12,
 		shadowOffset: { width: 0, height: 4 },

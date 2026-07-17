@@ -3,19 +3,19 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
-import { useRiverTheme } from "@/constants/theme";
+import { mixColor, useRiverTheme, withAlpha } from "@/constants/theme";
 
-// Badge fill is a screen-specific token from the handoff spec (Home hero).
-// Dark keeps the saturated blue gradient; light gets a soft accent wash so the
-// sprite doesn't sit in a heavy dark disc on the shallow-water background.
-const BADGE_GRADIENT_DARK = ["#2C7CC4", "#16548C"] as const;
-const BADGE_GRADIENT_LIGHT = [
-	"rgba(31, 127, 212, 0.18)",
-	"rgba(31, 127, 212, 0.10)",
-] as const;
-
+// Badge fill is a screen-specific token from the handoff spec (Home hero),
+// derived from the active colorway's accent so Appearance re-skins it. Dark
+// keeps a saturated darkened-accent gradient; light gets a soft accent wash so
+// the sprite doesn't sit in a heavy dark disc on the shallow-water background.
 export default function EmptyChat() {
 	const t = useRiverTheme();
+	const badgeGradient = (
+		t.isDark
+			? [mixColor(t.accent, "#000000", 0.2), mixColor(t.accent, "#000000", 0.45)]
+			: [withAlpha(t.accentOn, 0.18), withAlpha(t.accentOn, 0.1)]
+	) as [string, string];
 
 	return (
 		<Pressable style={styles.container} onPress={Keyboard.dismiss}>
@@ -24,7 +24,7 @@ export default function EmptyChat() {
 			    navigation and leave the header stuck at opacity 0. */}
 			<Animated.View entering={FadeInDown.duration(500)} style={styles.hero}>
 				<LinearGradient
-					colors={t.isDark ? BADGE_GRADIENT_DARK : BADGE_GRADIENT_LIGHT}
+					colors={badgeGradient}
 					style={[
 						styles.badge,
 						{

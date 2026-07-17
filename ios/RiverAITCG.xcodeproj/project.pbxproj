@@ -8,12 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		16C88CF849C839A0CF3DC442 /* libPods-RiverAITCG.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 74D03F234DF96F8C73070259 /* libPods-RiverAITCG.a */; };
+		1602D911DBD0612263FCDA60 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8014961DB46BDA07E37D8DEA /* PrivacyInfo.xcprivacy */; };
+		22A88BAF551140D6AB67502E /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = C855C68041FD3F3444FED7F7 /* ExpoModulesProvider.swift */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		A98867816E0827AF36BEAAEB /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = EB4E1939A1A2F836C2D3FBC3 /* PrivacyInfo.xcprivacy */; };
+		4110501B308544AAAEE3F99A /* apple-icon.icon in Resources */ = {isa = PBXBuildFile; fileRef = BAB9D207ED8845A695C5FA82 /* apple-icon.icon */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		E114E9F773A340E58EA29518 /* apple-icon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 8B320594815F4C8EAC7372E7 /* apple-icon.icon */; };
-		EE0178593CCB9CBB9A44BD88 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98949F422F65EC19D0E66C2B /* ExpoModulesProvider.swift */; };
+		C9ADE5317531372CF6BED087 /* libPods-RiverAITCG.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 2E744A53A45859EE0761D501 /* libPods-RiverAITCG.a */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -21,14 +21,14 @@
 		13B07F961A680F5B00A75B9A /* RiverAITCG.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RiverAITCG.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = RiverAITCG/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = RiverAITCG/Info.plist; sourceTree = "<group>"; };
-		74D03F234DF96F8C73070259 /* libPods-RiverAITCG.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-RiverAITCG.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		88B8EBE0CDC1DD16BFDE3404 /* Pods-RiverAITCG.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RiverAITCG.release.xcconfig"; path = "Target Support Files/Pods-RiverAITCG/Pods-RiverAITCG.release.xcconfig"; sourceTree = "<group>"; };
-		8B320594815F4C8EAC7372E7 /* apple-icon.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "apple-icon.icon"; path = "RiverAITCG/apple-icon.icon"; sourceTree = "<group>"; };
-		9458DD4DDC3871D251DCEFAB /* Pods-RiverAITCG.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RiverAITCG.debug.xcconfig"; path = "Target Support Files/Pods-RiverAITCG/Pods-RiverAITCG.debug.xcconfig"; sourceTree = "<group>"; };
-		98949F422F65EC19D0E66C2B /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-RiverAITCG/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		2E744A53A45859EE0761D501 /* libPods-RiverAITCG.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-RiverAITCG.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		35D9B962811F6C149DE1A86C /* Pods-RiverAITCG.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RiverAITCG.debug.xcconfig"; path = "Target Support Files/Pods-RiverAITCG/Pods-RiverAITCG.debug.xcconfig"; sourceTree = "<group>"; };
+		8014961DB46BDA07E37D8DEA /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = RiverAITCG/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		9F0D7A45ABC829D1D8D24A3E /* Pods-RiverAITCG.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RiverAITCG.release.xcconfig"; path = "Target Support Files/Pods-RiverAITCG/Pods-RiverAITCG.release.xcconfig"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = RiverAITCG/SplashScreen.storyboard; sourceTree = "<group>"; };
+		BAB9D207ED8845A695C5FA82 /* apple-icon.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "apple-icon.icon"; path = "RiverAITCG/apple-icon.icon"; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		EB4E1939A1A2F836C2D3FBC3 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = RiverAITCG/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		C855C68041FD3F3444FED7F7 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-RiverAITCG/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = RiverAITCG/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* RiverAITCG-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "RiverAITCG-Bridging-Header.h"; path = "RiverAITCG/RiverAITCG-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -39,13 +39,23 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				16C88CF849C839A0CF3DC442 /* libPods-RiverAITCG.a in Frameworks */,
+				C9ADE5317531372CF6BED087 /* libPods-RiverAITCG.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		10AE4F53184B21D306E9C49A /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				35D9B962811F6C149DE1A86C /* Pods-RiverAITCG.debug.xcconfig */,
+				9F0D7A45ABC829D1D8D24A3E /* Pods-RiverAITCG.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
 		13B07FAE1A68108700A75B9A /* RiverAITCG */ = {
 			isa = PBXGroup;
 			children = (
@@ -55,19 +65,35 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				8B320594815F4C8EAC7372E7 /* apple-icon.icon */,
-				EB4E1939A1A2F836C2D3FBC3 /* PrivacyInfo.xcprivacy */,
+				BAB9D207ED8845A695C5FA82 /* apple-icon.icon */,
+				8014961DB46BDA07E37D8DEA /* PrivacyInfo.xcprivacy */,
 			);
 			name = RiverAITCG;
+			sourceTree = "<group>";
+		};
+		2569D7EB192F21CBBFDC0386 /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				77AA6A6E9206A8835C3E971F /* RiverAITCG */,
+			);
+			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				74D03F234DF96F8C73070259 /* libPods-RiverAITCG.a */,
+				2E744A53A45859EE0761D501 /* libPods-RiverAITCG.a */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		77AA6A6E9206A8835C3E971F /* RiverAITCG */ = {
+			isa = PBXGroup;
+			children = (
+				C855C68041FD3F3444FED7F7 /* ExpoModulesProvider.swift */,
+			);
+			name = RiverAITCG;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -84,8 +110,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				886BD3D02F6EE62970E34342 /* Pods */,
-				DF81CD6D807A9C8B524BCBFC /* ExpoModulesProviders */,
+				10AE4F53184B21D306E9C49A /* Pods */,
+				2569D7EB192F21CBBFDC0386 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -100,24 +126,6 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		886BD3D02F6EE62970E34342 /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				9458DD4DDC3871D251DCEFAB /* Pods-RiverAITCG.debug.xcconfig */,
-				88B8EBE0CDC1DD16BFDE3404 /* Pods-RiverAITCG.release.xcconfig */,
-			);
-			name = Pods;
-			path = Pods;
-			sourceTree = "<group>";
-		};
-		9DE322F53F5F10EC49AAD323 /* RiverAITCG */ = {
-			isa = PBXGroup;
-			children = (
-				98949F422F65EC19D0E66C2B /* ExpoModulesProvider.swift */,
-			);
-			name = RiverAITCG;
-			sourceTree = "<group>";
-		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
 			isa = PBXGroup;
 			children = (
@@ -125,14 +133,6 @@
 			);
 			name = Supporting;
 			path = RiverAITCG/Supporting;
-			sourceTree = "<group>";
-		};
-		DF81CD6D807A9C8B524BCBFC /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				9DE322F53F5F10EC49AAD323 /* RiverAITCG */,
-			);
-			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -143,13 +143,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "RiverAITCG" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				4E4E8ACD403CE4FDD4351983 /* [Expo] Configure project */,
+				11B3F32D5B3E39F78A989AD2 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				AF59622B2EE56DFFD2BF4AFB /* [CP] Embed Pods Frameworks */,
+				5D4AD2D9E458144D627269B0 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -201,8 +201,8 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				E114E9F773A340E58EA29518 /* apple-icon.icon in Resources */,
-				A98867816E0827AF36BEAAEB /* PrivacyInfo.xcprivacy in Resources */,
+				4110501B308544AAAEE3F99A /* apple-icon.icon in Resources */,
+				1602D911DBD0612263FCDA60 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -248,7 +248,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		4E4E8ACD403CE4FDD4351983 /* [Expo] Configure project */ = {
+		11B3F32D5B3E39F78A989AD2 /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -272,49 +272,7 @@
 			shellPath = /bin/sh;
 			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-RiverAITCG/expo-configure-project.sh\"\n";
 		};
-		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-RiverAITCG/Pods-RiverAITCG-resources.sh",
-				"${PODS_CONFIGURATION_BUILD_DIR}/CardVision/CardVisionAssets.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/EXApplication/ExpoApplication_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/EXConstants.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/ExpoConstants_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoDevice/ExpoDevice_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoFileSystem/ExpoFileSystem_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoSystemUI/ExpoSystemUI_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/PurchasesHybridCommon/PurchasesHybridCommon.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/RNSVG/RNSVGFilters.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/React-Core/React-Core_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/React-cxxreact/React-cxxreact_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/RevenueCat/RevenueCat.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/RevenueCatUI/RevenueCat_RevenueCatUI.bundle",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/CardVisionAssets.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoApplication_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXConstants.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoConstants_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoDevice_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoFileSystem_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoSystemUI_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/PurchasesHybridCommon.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RNSVGFilters.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-Core_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-cxxreact_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RevenueCat.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RevenueCat_RevenueCatUI.bundle",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-RiverAITCG/Pods-RiverAITCG-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		AF59622B2EE56DFFD2BF4AFB /* [CP] Embed Pods Frameworks */ = {
+		5D4AD2D9E458144D627269B0 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -358,6 +316,48 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-RiverAITCG/Pods-RiverAITCG-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
+		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-RiverAITCG/Pods-RiverAITCG-resources.sh",
+				"${PODS_CONFIGURATION_BUILD_DIR}/CardVision/CardVisionAssets.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/EXApplication/ExpoApplication_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/EXConstants.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/ExpoConstants_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoDevice/ExpoDevice_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoFileSystem/ExpoFileSystem_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoSystemUI/ExpoSystemUI_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/PurchasesHybridCommon/PurchasesHybridCommon.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/RNSVG/RNSVGFilters.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/React-Core/React-Core_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/React-cxxreact/React-cxxreact_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/RevenueCat/RevenueCat.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/RevenueCatUI/RevenueCat_RevenueCatUI.bundle",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/CardVisionAssets.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoApplication_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXConstants.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoConstants_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoDevice_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoFileSystem_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoSystemUI_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/PurchasesHybridCommon.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RNSVGFilters.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-Core_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-cxxreact_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RevenueCat.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RevenueCat_RevenueCatUI.bundle",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-RiverAITCG/Pods-RiverAITCG-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -366,7 +366,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				EE0178593CCB9CBB9A44BD88 /* ExpoModulesProvider.swift in Sources */,
+				22A88BAF551140D6AB67502E /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -375,8 +375,9 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 9458DD4DDC3871D251DCEFAB /* Pods-RiverAITCG.debug.xcconfig */;
+			baseConfigurationReference = 35D9B962811F6C149DE1A86C /* Pods-RiverAITCG.debug.xcconfig */;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "Lagoon Twilight Sunset Meadow Rose Amber Ultra Glacier";
 				ASSETCATALOG_COMPILER_APPICON_NAME = "apple-icon";
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = RiverAITCG/RiverAITCG.entitlements;
@@ -415,8 +416,9 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 88B8EBE0CDC1DD16BFDE3404 /* Pods-RiverAITCG.release.xcconfig */;
+			baseConfigurationReference = 9F0D7A45ABC829D1D8D24A3E /* Pods-RiverAITCG.release.xcconfig */;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "Lagoon Twilight Sunset Meadow Rose Amber Ultra Glacier";
 				ASSETCATALOG_COMPILER_APPICON_NAME = "apple-icon";
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = RiverAITCG/RiverAITCG.entitlements;
@@ -451,6 +453,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "Lagoon Twilight Sunset Meadow Rose Amber Ultra Glacier";
 				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
 				CLANG_CXX_LIBRARY = "libc++";
@@ -522,6 +525,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "Lagoon Twilight Sunset Meadow Rose Amber Ultra Glacier";
 				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
 				CLANG_CXX_LIBRARY = "libc++";

@@ -15,6 +15,7 @@ import {
 } from "@/lib/collectionValueHistory";
 import { runAndStoreSqliteBenchmark } from "@/lib/devPerfBench";
 import { resetTapHoldHint } from "@/hooks/useTapHoldHint";
+import AppearanceSection from "@/components/AppearanceSection";
 import CardPressable from "@/components/CardPressable";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useQueryClient } from "@tanstack/react-query";
@@ -332,6 +333,9 @@ export default function Settings() {
 						/>
 					</SettingsCard>
 				</View>
+
+				{/* Appearance (Pro) */}
+				<AppearanceSection />
 
 				{/* Legal */}
 				<View style={styles.section}>

@@ -1,7 +1,7 @@
 import { StyleSheet, View } from "react-native";
 import { LineChart } from "react-native-wagmi-charts";
 
-import { chart } from "@/constants/theme";
+import { chart, useRiverTheme } from "@/constants/theme";
 import { ProUnlockPill } from "@/components/ProGate";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -32,16 +32,17 @@ export function LockedChartTeaser({
 	width: number;
 	ctaText?: string;
 }) {
+	const t = useRiverTheme();
 	return (
 		<View>
 			<View pointerEvents="none" style={[styles.chart, { height }]}>
 				<LineChart.Provider data={DECOY_SERIES}>
 					<LineChart height={height} width={width} yGutter={12}>
 						<LineChart.Path
-							color={chart.line}
+							color={t.chartLine}
 							width={chart.strokeWidth}
 						>
-							<LineChart.Gradient color={chart.line} />
+							<LineChart.Gradient color={t.chartLine} />
 						</LineChart.Path>
 					</LineChart>
 				</LineChart.Provider>

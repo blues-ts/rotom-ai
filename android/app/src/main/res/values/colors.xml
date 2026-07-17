@@ -1,5 +1,13 @@
 <resources>
   <color name="splashscreen_background">#0E2A47</color>
-  <color name="iconBackground">#E6F4FE</color>
+  <color name="iconBackground">#0F2140</color>
   <color name="colorPrimary">#023c69</color>
+  <color name="iconBackgroundGlacier">#1C2A38</color>
+  <color name="iconBackgroundUltra">#33103F</color>
+  <color name="iconBackgroundAmber">#402A0F</color>
+  <color name="iconBackgroundRose">#401024</color>
+  <color name="iconBackgroundMeadow">#0E3A22</color>
+  <color name="iconBackgroundSunset">#40200F</color>
+  <color name="iconBackgroundTwilight">#1E1A4A</color>
+  <color name="iconBackgroundLagoon">#0E3833</color>
 </resources>

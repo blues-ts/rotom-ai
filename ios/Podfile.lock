@@ -31,6 +31,8 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - ExpoAlternateAppIcons (8.0.0):
+    - ExpoModulesCore
   - ExpoAsset (56.0.17):
     - ExpoModulesCore
   - ExpoAudio (56.0.12):
@@ -2443,6 +2445,7 @@ DEPENDENCIES:
   - EXApplication (from `../node_modules/expo-application/ios`)
   - EXConstants (from `../node_modules/expo-constants/ios`)
   - Expo (from `../node_modules/expo`)
+  - ExpoAlternateAppIcons (from `../node_modules/expo-alternate-app-icons/ios`)
   - ExpoAsset (from `../node_modules/expo-asset/ios`)
   - ExpoAudio (from `../node_modules/expo-audio/ios`)
   - ExpoBlur (from `../node_modules/expo-blur/ios`)
@@ -2580,6 +2583,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-constants/ios"
   Expo:
     :path: "../node_modules/expo"
+  ExpoAlternateAppIcons:
+    :path: "../node_modules/expo-alternate-app-icons/ios"
   ExpoAsset:
     :path: "../node_modules/expo-asset/ios"
   ExpoAudio:
@@ -2823,6 +2828,7 @@ SPEC CHECKSUMS:
   EXApplication: e6040c92edc5522accd62852342e6b14742d42c0
   EXConstants: 1c400bb9969f4c9e5ab324553138b74ae47b9efe
   Expo: c82930e1c8b6f2e26308e364499773d3de12d55d
+  ExpoAlternateAppIcons: 8a7cb9b311700b92fb13652d1087beb2efdb9d84
   ExpoAsset: 1e436e9aee7015d5c6d203c1ddfe1adbb521a623
   ExpoAudio: 8c4882515dee2f71d519ee64bb05c14945a5e1a2
   ExpoBlur: caddd80171e5f8f3581ff3d865e99c6465047240

@@ -18,7 +18,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0F2140",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -36,6 +36,75 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-alternate-app-icons",
+        [
+          {
+            "name": "Lagoon",
+            "ios": "./assets/icons/lagoon.png",
+            "android": {
+              "foregroundImage": "./assets/icons/lagoon-android-foreground.png",
+              "backgroundColor": "#0E3833"
+            }
+          },
+          {
+            "name": "Twilight",
+            "ios": "./assets/icons/twilight.png",
+            "android": {
+              "foregroundImage": "./assets/icons/twilight-android-foreground.png",
+              "backgroundColor": "#1E1A4A"
+            }
+          },
+          {
+            "name": "Sunset",
+            "ios": "./assets/icons/sunset.png",
+            "android": {
+              "foregroundImage": "./assets/icons/sunset-android-foreground.png",
+              "backgroundColor": "#40200F"
+            }
+          },
+          {
+            "name": "Meadow",
+            "ios": "./assets/icons/meadow.png",
+            "android": {
+              "foregroundImage": "./assets/icons/meadow-android-foreground.png",
+              "backgroundColor": "#0E3A22"
+            }
+          },
+          {
+            "name": "Rose",
+            "ios": "./assets/icons/rose.png",
+            "android": {
+              "foregroundImage": "./assets/icons/rose-android-foreground.png",
+              "backgroundColor": "#401024"
+            }
+          },
+          {
+            "name": "Amber",
+            "ios": "./assets/icons/amber.png",
+            "android": {
+              "foregroundImage": "./assets/icons/amber-android-foreground.png",
+              "backgroundColor": "#402A0F"
+            }
+          },
+          {
+            "name": "Ultra",
+            "ios": "./assets/icons/ultra.png",
+            "android": {
+              "foregroundImage": "./assets/icons/ultra-android-foreground.png",
+              "backgroundColor": "#33103F"
+            }
+          },
+          {
+            "name": "Glacier",
+            "ios": "./assets/icons/glacier.png",
+            "android": {
+              "foregroundImage": "./assets/icons/glacier-android-foreground.png",
+              "backgroundColor": "#1C2A38"
+            }
+          }
+        ]
+      ],
       [
         "expo-splash-screen",
         {

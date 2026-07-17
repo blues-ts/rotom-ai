@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import { useRiverTheme } from "@/constants/theme";
 import { useTheme } from "@/context/ThemeContext";
 import type { Message } from "@/types/chat";
 import { ColoredRenderer } from "./ColoredRenderer";
@@ -15,6 +16,9 @@ interface ChatMessageProps {
 
 function ChatMessage({ message, onRetry }: ChatMessageProps) {
 	const { colors } = useTheme();
+	// Brand-colored pieces come from the River theme (follows the Appearance
+	// colorway); neutral markdown/text colors stay on the legacy chat palette.
+	const t = useRiverTheme();
 	const isUser = message.role === "user";
 
 	const renderer = useMemo(() => new ColoredRenderer(), []);
@@ -37,7 +41,7 @@ function ChatMessage({ message, onRetry }: ChatMessageProps) {
 				<View
 					style={[
 						styles.bubble,
-						{ backgroundColor: colors.primary },
+						{ backgroundColor: t.accent },
 					]}
 				>
 					<Text
