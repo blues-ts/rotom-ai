@@ -184,6 +184,15 @@ function withAlpha(color: string, alpha: number): string {
 	return color;
 }
 
+// Scrydex serves each card in small/medium/large; the path only differs in
+// its final segment. Non-Scrydex URLs pass through untouched.
+const SCRYDEX_SIZE_REGEX =
+	/^(https:\/\/images\.scrydex\.com\/[^#?]+)\/(?:small|medium)$/;
+function upgradeScrydexImageUrl(uri: string): string {
+	const m = uri.match(SCRYDEX_SIZE_REGEX);
+	return m ? `${m[1]}/large` : uri;
+}
+
 // No `g` flag: a global regex makes `.test()` stateful (it advances `lastIndex`),
 // which intermittently mis-fires across messages. `.split()` still splits every
 // match and keeps the capture group without it.
@@ -346,6 +355,13 @@ export class ColoredRenderer extends Renderer {
 			cardId = uri.substring(hashIndex + 8);
 			imageUrl = uri.substring(0, hashIndex);
 		}
+
+		// Chat renders card art near full message width, but owned-card URLs
+		// arrive via the collection snapshot as stored grid thumbnails
+		// (/small from the scanner flow, /medium after a price refresh) —
+		// upscaled ~7x they render blurry. Upgrading at render time also
+		// covers historical rows and any size the model echoes back.
+		imageUrl = upgradeScrydexImageUrl(imageUrl);
 
 		const image = (
 			<SkeletonCardImage key={this.getKey()} uri={imageUrl} alt={alt} />
