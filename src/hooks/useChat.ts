@@ -49,6 +49,17 @@ export interface LeadStore {
 	subscribe: (listener: () => void) => () => void;
 }
 
+// Reply buzz, played when a response STARTS (first token) and when it
+// completes. The iOS "error" notification haptic is three sharp, hard taps
+// in quick succession (the Face ID-failed pattern) — the exact "three quick
+// hard buzzes" feel. The motor Vibration API can't do quick (each buzz is a
+// fixed ~400ms), and impact taps are too soft. Exported so the Dev Tools
+// row can fire it in isolation.
+export function playResponseHaptic() {
+	if (__DEV__) console.log("[chat] playing response haptic");
+	void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+}
+
 function errorCopy(error: Error): string {
 	if (error.message === "Request timed out") {
 		return "The response took too long. Please try again.";
@@ -280,9 +291,9 @@ export function useChat() {
 			switch (event.type) {
 				case "text":
 					if (bufferRef.current.length === 0 && event.content) {
-						// First token: a small tick makes the reply feel alive
-						// the instant it starts.
-						void Haptics.selectionAsync();
+						// First token: same triple buzz as completion, so both
+						// ends of the reply announce themselves.
+						playResponseHaptic();
 					}
 					bufferRef.current += event.content;
 					startRevealLoop();
@@ -410,6 +421,7 @@ export function useChat() {
 				// still catching up): freeze at what's revealed, don't swap in
 				// the full answer.
 				if (stoppedRef.current) {
+					if (__DEV__) console.log("[chat] finalize: stopped-during-drain");
 					const partial = bufferRef.current.trim();
 					finalizeStream(
 						partial
@@ -430,6 +442,11 @@ export function useChat() {
 				// shows instead of a dead-end "complete" message.
 				const content =
 					fullMarkdownRef.current.trim() || bufferRef.current.trim();
+				if (__DEV__)
+					console.log(`[chat] finalize: success, content len=${content.length}`);
+				// Only a real completed reply buzzes — not errors, stops, or
+				// discarded streams.
+				if (content) playResponseHaptic();
 				finalizeStream({
 					id: (Date.now() + 1).toString(),
 					role: "assistant",
@@ -441,6 +458,11 @@ export function useChat() {
 				});
 			} catch (error) {
 				clearInactivityTimer();
+				if (__DEV__)
+					console.log(
+						`[chat] finalize: catch (aborted=${controller.signal.aborted} timedOut=${timedOut}):`,
+						error,
+					);
 
 				if (controller.signal.aborted && !timedOut) {
 					if (stoppedRef.current) {

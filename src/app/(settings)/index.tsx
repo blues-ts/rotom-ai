@@ -14,6 +14,7 @@ import {
 	seedCollectionValueHistory,
 } from "@/lib/collectionValueHistory";
 import { runAndStoreSqliteBenchmark } from "@/lib/devPerfBench";
+import { playResponseHaptic } from "@/hooks/useChat";
 import { resetTapHoldHint } from "@/hooks/useTapHoldHint";
 import AppearanceSection from "@/components/AppearanceSection";
 import CardPressable from "@/components/CardPressable";
@@ -420,6 +421,12 @@ export default function Settings() {
 									queryClient.invalidateQueries({
 										queryKey: ["collectionValueHistory"],
 									});
+								}}
+							/>
+							<SettingsRow
+								label="Test Reply Vibration"
+								onPress={() => {
+									playResponseHaptic();
 								}}
 							/>
 							<SettingsRow
