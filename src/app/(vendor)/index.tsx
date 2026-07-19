@@ -481,17 +481,32 @@ export default function VendorScreen() {
 								</Text>
 							</View>
 						) : (
-							<Animated.View
-								style={styles.list}
-								layout={LinearTransition.duration(300)}
-							>
-								{shelfRows.map((row) =>
-									renderShelfRow({
-										...row,
-										onPress: () => openShelf(row.groupId, row.name),
-									}),
-								)}
-							</Animated.View>
+							<View style={styles.groupsSection}>
+								{/* Same section header shape as Recent Sales. Until
+								    a group exists there's just the one For Sale row,
+								    so the title matches it. */}
+								<View style={styles.salesHeader}>
+									<Text
+										style={[
+											styles.salesTitle,
+											{ color: t.text.secondary },
+										]}
+									>
+										{groups.length > 0 ? "GROUPS" : "FOR SALE"}
+									</Text>
+								</View>
+								<Animated.View
+									style={styles.list}
+									layout={LinearTransition.duration(300)}
+								>
+									{shelfRows.map((row) =>
+										renderShelfRow({
+											...row,
+											onPress: () => openShelf(row.groupId, row.name),
+										}),
+									)}
+								</Animated.View>
+							</View>
 						)}
 
 					</>
@@ -540,10 +555,12 @@ const styles = StyleSheet.create({
 		fontSize: 10,
 	},
 	// Compact shelf rows resting on the gradient.
+	groupsSection: {
+		marginTop: 22,
+		paddingHorizontal: spacing.screen,
+	},
 	list: {
 		gap: 8,
-		marginTop: 18,
-		paddingHorizontal: spacing.screen,
 	},
 	shelfRow: {
 		flexDirection: "row",
