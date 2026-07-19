@@ -273,6 +273,68 @@ export function useVendorItems() {
     onError: onMutationError,
   });
 
+  // Multi-select batch: sell every picked listing at its asking price
+  // (market value when none is set) in one statement.
+  const markSoldMany = useMutation({
+    mutationFn: ({ ids }: { ids: string[] }) => {
+      if (ids.length === 0) return Promise.resolve();
+      const placeholders = ids.map(() => "?").join(",");
+      db.runSync(
+        `UPDATE vendor_items
+         SET status = 'sold', sold_price = COALESCE(asking_price, market_value), sold_at = ?
+         WHERE status = 'listed' AND id IN (${placeholders})`,
+        [new Date().toISOString(), ...ids],
+      );
+      return Promise.resolve();
+    },
+    onSuccess: (_data, { ids }) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      toast.show(
+        `Sold ${ids.length} ${ids.length === 1 ? "card" : "cards"}`,
+        "success",
+      );
+      invalidate();
+    },
+    onError: onMutationError,
+  });
+
+  const unmarkSoldMany = useMutation({
+    mutationFn: ({ ids }: { ids: string[] }) => {
+      if (ids.length === 0) return Promise.resolve();
+      const placeholders = ids.map(() => "?").join(",");
+      db.runSync(
+        `UPDATE vendor_items
+         SET status = 'listed', sold_price = NULL, sold_at = NULL
+         WHERE status = 'sold' AND id IN (${placeholders})`,
+        ids,
+      );
+      return Promise.resolve();
+    },
+    onSuccess: (_data, { ids }) => {
+      toast.show(
+        `Moved ${ids.length} ${ids.length === 1 ? "card" : "cards"} back to the shelf`,
+        "success",
+      );
+      invalidate();
+    },
+    onError: onMutationError,
+  });
+
+  const removeItems = useMutation({
+    mutationFn: ({ ids }: { ids: string[] }) => {
+      if (ids.length > 0) {
+        const placeholders = ids.map(() => "?").join(",");
+        db.runSync(
+          `DELETE FROM vendor_items WHERE id IN (${placeholders})`,
+          ids,
+        );
+      }
+      return Promise.resolve();
+    },
+    onSuccess: invalidate,
+    onError: onMutationError,
+  });
+
   const setQuantity = useMutation({
     mutationFn: ({ id, quantity }: { id: string; quantity: number }) => {
       const qty = Math.min(99, Math.max(1, Math.round(quantity)));
@@ -332,8 +394,11 @@ export function useVendorItems() {
     listCollectionRows,
     setAskingPrice,
     markSold,
+    markSoldMany,
     unmarkSold,
+    unmarkSoldMany,
     removeItem,
+    removeItems,
     setQuantity,
   };
 }

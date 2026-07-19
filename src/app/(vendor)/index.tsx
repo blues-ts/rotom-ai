@@ -1,5 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
+	Alert,
 	RefreshControl,
 	ScrollView,
 	StyleSheet,
@@ -46,10 +47,112 @@ export default function VendorScreen() {
 	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
 	const { isPro } = useRevenueCat();
-	const { listed, sold, summary, isError, refetch } = useVendorItems();
+	const {
+		listed,
+		sold,
+		summary,
+		isError,
+		refetch,
+		markSoldMany,
+		unmarkSoldMany,
+		removeItems,
+	} = useVendorItems();
 	const refreshPrices = useRefreshVendorPrices();
 
 	const [tab, setTab] = useState<"listed" | "sold">("listed");
+
+	// Multi-select: long-press a row to enter, then tap rows to toggle — same
+	// gestures as the scan library and collection grid. Selection is per-tab
+	// (cleared on switch), and only ids still present count, so a batch action
+	// can never touch dead rows.
+	const [selectMode, setSelectMode] = useState(false);
+	const [selected, setSelected] = useState<Set<string>>(new Set());
+
+	const rows = tab === "listed" ? listed : sold;
+	const inSelect = selectMode && rows.length > 0;
+
+	const exitSelect = useCallback(() => {
+		setSelectMode(false);
+		setSelected(new Set());
+	}, []);
+
+	const toggle = useCallback((id: string) => {
+		Haptics.selectionAsync();
+		setSelected((prev) => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	}, []);
+
+	const onRowLongPress = useCallback(
+		(id: string) => {
+			if (inSelect) {
+				toggle(id);
+				return;
+			}
+			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+			setSelectMode(true);
+			setSelected(new Set([id]));
+		},
+		[inSelect, toggle],
+	);
+
+	const liveSelected = useMemo(() => {
+		const present = new Set(rows.map((r) => r.id));
+		return new Set([...selected].filter((id) => present.has(id)));
+	}, [selected, rows]);
+
+	const handleSellSelected = useCallback(() => {
+		const picked = [...liveSelected];
+		if (picked.length === 0) return;
+		Alert.alert(
+			`Mark ${picked.length} sold?`,
+			"Each sells at its asking price — market price if none is set.",
+			[
+				{ text: "Cancel", style: "cancel" },
+				{
+					text: "Sell",
+					onPress: () => {
+						markSoldMany.mutate(
+							{ ids: picked },
+							{ onSuccess: exitSelect },
+						);
+					},
+				},
+			],
+		);
+	}, [liveSelected, markSoldMany, exitSelect]);
+
+	const handleUndoSelected = useCallback(() => {
+		const picked = [...liveSelected];
+		if (picked.length === 0) return;
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+		unmarkSoldMany.mutate({ ids: picked }, { onSuccess: exitSelect });
+	}, [liveSelected, unmarkSoldMany, exitSelect]);
+
+	const handleRemoveSelected = useCallback(() => {
+		const picked = [...liveSelected];
+		if (picked.length === 0) return;
+		Alert.alert(
+			`Remove ${picked.length} ${picked.length === 1 ? "card" : "cards"}?`,
+			tab === "sold"
+				? "These sales will leave your revenue total."
+				: "They'll be removed from your for-sale shelf.",
+			[
+				{ text: "Cancel", style: "cancel" },
+				{
+					text: "Remove",
+					style: "destructive",
+					onPress: () => {
+						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+						removeItems.mutate({ ids: picked }, { onSuccess: exitSelect });
+					},
+				},
+			],
+		);
+	}, [liveSelected, tab, removeItems, exitSelect]);
 
 	const openScanner = useCallback(() => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -71,8 +174,6 @@ export default function VendorScreen() {
 			params: { id: item.id, title: item.cardName },
 		});
 	}, []);
-
-	const rows = tab === "listed" ? listed : sold;
 
 	return (
 		<View style={styles.container}>
@@ -178,6 +279,8 @@ export default function VendorScreen() {
 										onPress={() => {
 											if (tab === key) return;
 											Haptics.selectionAsync();
+											// Selection is per-tab — leaving the tab drops it.
+											exitSelect();
 											setTab(key);
 										}}
 										pressScale={0.97}
@@ -248,13 +351,26 @@ export default function VendorScreen() {
 											layout={LinearTransition.duration(300)}
 										>
 											<CardPressable
-												onPress={() => openItemSheet(item)}
+												onPress={() =>
+													inSelect
+														? toggle(item.id)
+														: openItemSheet(item)
+												}
+												delayLongPress={300}
+												onLongPress={() => onRowLongPress(item.id)}
 												pressScale={0.98}
 												baseColor={t.glass.elevatedFill}
 												pressedColor={t.glass.pressedFill}
+												// Selection reads as an accent-glowing border —
+												// the row itself doesn't change shape.
 												style={[
 													styles.row,
 													{ borderColor: t.glass.elevatedBorder },
+													inSelect &&
+														liveSelected.has(item.id) && {
+															borderColor: t.accent,
+															...t.buttonGlow,
+														},
 												]}
 											>
 												<Image
@@ -353,6 +469,19 @@ export default function VendorScreen() {
 														</Text>
 													</View>
 												)}
+												{inSelect && liveSelected.has(item.id) && (
+													<Animated.View
+														entering={FadeIn.duration(180)}
+														exiting={FadeOut.duration(150)}
+													>
+														<SymbolView
+															name="checkmark.circle.fill"
+															size={22}
+															tintColor={t.accent}
+															weight="semibold"
+														/>
+													</Animated.View>
+												)}
 											</CardPressable>
 										</Animated.View>
 									);
@@ -364,29 +493,111 @@ export default function VendorScreen() {
 				)}
 			</ScrollView>
 
-			{/* Pinned scan pill — the fast path from shelf to scanner. The scan
-			    flow itself is untouched; scanned cards land here via the add
-			    sheet's Vending destination. */}
+			{/* Pinned bottom bar. Normally the scan pill (the fast path from
+			    shelf to scanner — the scan flow itself is untouched); in select
+			    mode it becomes the batch action bar. */}
 			<View
 				style={[styles.scanWrap, { paddingBottom: insets.bottom + 12 }]}
 				pointerEvents="box-none"
 			>
-				<CardPressable
-					onPress={openScanner}
-					style={[
-						styles.scanButton,
-						{ backgroundColor: t.accent },
-						t.buttonGlow,
-					]}
-				>
-					<SymbolView
-						name="camera.viewfinder"
-						size={18}
-						tintColor="#FFFFFF"
-						weight="semibold"
-					/>
-					<Text style={styles.scanText}>Scan cards to sell</Text>
-				</CardPressable>
+				{inSelect ? (
+					<Animated.View
+						entering={FadeIn.duration(180)}
+						exiting={FadeOut.duration(150)}
+						style={styles.actionBar}
+					>
+						<CardPressable
+							onPress={
+								tab === "listed" ? handleSellSelected : handleUndoSelected
+							}
+							disabled={liveSelected.size === 0}
+							style={[
+								styles.actionButton,
+								{
+									backgroundColor: t.accent,
+									opacity: liveSelected.size === 0 ? 0.5 : 1,
+								},
+								liveSelected.size > 0 && t.buttonGlow,
+							]}
+						>
+							<SymbolView
+								name={
+									tab === "listed"
+										? "dollarsign.circle"
+										: "arrow.uturn.backward"
+								}
+								size={17}
+								tintColor="#FFFFFF"
+								weight="semibold"
+							/>
+							<Text style={styles.actionText}>
+								{tab === "listed" ? "Sell" : "Undo"}
+								{liveSelected.size > 0 ? ` ${liveSelected.size}` : ""}
+							</Text>
+						</CardPressable>
+						<CardPressable
+							onPress={handleRemoveSelected}
+							disabled={liveSelected.size === 0}
+							style={[
+								styles.actionButton,
+								{
+									backgroundColor: t.loss,
+									opacity: liveSelected.size === 0 ? 0.5 : 1,
+								},
+							]}
+						>
+							<SymbolView
+								name="trash"
+								size={16}
+								tintColor="#FFFFFF"
+								weight="semibold"
+							/>
+							<Text style={styles.actionText}>Remove</Text>
+						</CardPressable>
+						<CardPressable
+							onPress={() => {
+								Haptics.selectionAsync();
+								exitSelect();
+							}}
+							style={[
+								styles.actionCancel,
+								{
+									backgroundColor: t.glass.sheetFill,
+									borderColor: t.glass.elevatedBorder,
+								},
+							]}
+						>
+							<SymbolView
+								name="xmark"
+								size={16}
+								tintColor={t.text.primary}
+								weight="semibold"
+							/>
+						</CardPressable>
+					</Animated.View>
+				) : (
+					<Animated.View
+						entering={FadeIn.duration(180)}
+						exiting={FadeOut.duration(150)}
+					>
+						<CardPressable
+							onPress={openScanner}
+							style={[
+								styles.scanButton,
+								{ backgroundColor: t.accent },
+								t.buttonGlow,
+							]}
+						>
+							<SymbolView
+								name="camera.viewfinder"
+								size={18}
+								tintColor="#FFFFFF"
+								weight="semibold"
+							/>
+							<Text style={styles.scanText}>Scan cards to sell</Text>
+						</CardPressable>
+					</Animated.View>
+				)}
 			</View>
 			<HeaderFadeScrim />
 		</View>
@@ -517,6 +728,34 @@ const styles = StyleSheet.create({
 		gap: 8,
 		height: 52,
 		borderRadius: 999,
+	},
+	// Select-mode batch bar — same pinned slot as the scan pill.
+	actionBar: {
+		flexDirection: "row",
+		gap: 8,
+	},
+	actionButton: {
+		flex: 1,
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "center",
+		gap: 6,
+		height: 52,
+		borderRadius: 999,
+	},
+	actionCancel: {
+		width: 52,
+		height: 52,
+		borderRadius: 26,
+		borderWidth: 1,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	actionText: {
+		color: "#FFFFFF",
+		fontSize: 15,
+		fontWeight: "700",
+		fontVariant: ["tabular-nums"],
 	},
 	scanText: {
 		color: "#FFFFFF",
