@@ -132,6 +132,17 @@ export default function VendorItemSheet() {
 						onPress: () => promptMarkSold(item),
 					},
 					{
+						label: "Move to group",
+						icon: "folder",
+						onPress: () =>
+							// Replaces this sheet — iOS won't stack two formSheets,
+							// and the picker is the next step of the same gesture.
+							router.replace({
+								pathname: "/vendor-group-sheet",
+								params: { ids: item.id },
+							}),
+					},
+					{
 						label: "Remove from shelf",
 						icon: "trash",
 						destructive: true,

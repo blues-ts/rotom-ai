@@ -18,13 +18,13 @@ import Animated, {
 	FadeOut,
 	LinearTransition,
 } from "react-native-reanimated";
-import { spacing, useRiverTheme } from "@/constants/theme";
+import { spacing, typeScale, useRiverTheme } from "@/constants/theme";
 import { formatCurrency } from "@/lib/format";
 import {
 	useRefreshVendorPrices,
 	useVendorItems,
 } from "@/hooks/useVendorItems";
-import type { VendorItem } from "@/types/vendor";
+import type { VendorGroup, VendorItem } from "@/types/vendor";
 import CardPressable from "@/components/CardPressable";
 import ErrorState from "@/components/ErrorState";
 import RefreshingPill from "@/components/RefreshingPill";
@@ -48,6 +48,9 @@ export default function VendorScreen() {
 	const {
 		listed,
 		sold,
+		groups,
+		renameGroup,
+		deleteGroup,
 		summary,
 		isError,
 		refetch,
@@ -152,6 +155,125 @@ export default function VendorScreen() {
 		);
 	}, [liveSelected, tab, removeItems, exitSelect]);
 
+
+	// Multi-select → group picker sheet (assigns on pick; selection survives
+	// the trip, so the rows glow in their new section on return).
+	const handleGroupSelected = useCallback(() => {
+		const picked = [...liveSelected];
+		if (picked.length === 0) return;
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		router.push({
+			pathname: "/vendor-group-sheet",
+			params: { ids: picked.join(",") },
+		});
+	}, [liveSelected]);
+
+	const groupNameById = useMemo(
+		() => new Map(groups.map((g) => [g.id, g.name])),
+		[groups],
+	);
+
+	// For Sale renders as group sections once any group exists (each group's
+	// items, then Ungrouped); Sold stays a flat receipt list. Flattened into
+	// one entry array so the whole thing stays a single LinearTransition list.
+	type ListEntry =
+		| { kind: "header"; key: string; group: VendorGroup | null; total: number }
+		| { kind: "item"; item: VendorItem };
+	const listEntries = useMemo((): ListEntry[] => {
+		if (tab === "sold" || groups.length === 0) {
+			return rows.map((item) => ({ kind: "item" as const, item }));
+		}
+		const shelfValue = (items: VendorItem[]) =>
+			items.reduce(
+				(sum, i) => sum + (i.askingPrice ?? i.marketValue) * i.quantity,
+				0,
+			);
+		const byGroup = new Map<string, VendorItem[]>();
+		const ungrouped: VendorItem[] = [];
+		for (const item of rows) {
+			if (item.groupId && groupNameById.has(item.groupId)) {
+				const members = byGroup.get(item.groupId) ?? [];
+				members.push(item);
+				byGroup.set(item.groupId, members);
+			} else {
+				ungrouped.push(item);
+			}
+		}
+		const entries: ListEntry[] = [];
+		for (const g of groups) {
+			const members = byGroup.get(g.id);
+			if (!members) continue;
+			entries.push({
+				kind: "header",
+				key: `h-${g.id}`,
+				group: g,
+				total: shelfValue(members),
+			});
+			for (const m of members) entries.push({ kind: "item", item: m });
+		}
+		if (ungrouped.length > 0) {
+			entries.push({
+				kind: "header",
+				key: "h-ungrouped",
+				group: null,
+				total: shelfValue(ungrouped),
+			});
+			for (const m of ungrouped) entries.push({ kind: "item", item: m });
+		}
+		return entries;
+	}, [tab, rows, groups, groupNameById]);
+
+	// Tap a group header to rename or delete it (cards fall back to
+	// Ungrouped on delete — the FK clears memberships, items stay).
+	const openGroupActions = useCallback(
+		(group: VendorGroup) => {
+			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+			Alert.alert(group.name, undefined, [
+				{
+					text: "Rename",
+					onPress: () => {
+						Alert.prompt(
+							"Rename group",
+							undefined,
+							[
+								{ text: "Cancel", style: "cancel" },
+								{
+									text: "Save",
+									onPress: (name?: string) => {
+										const trimmed = name?.trim();
+										if (!trimmed) return;
+										renameGroup.mutate({ id: group.id, name: trimmed });
+									},
+								},
+							],
+							"plain-text",
+							group.name,
+						);
+					},
+				},
+				{
+					text: "Delete group",
+					style: "destructive",
+					onPress: () => {
+						Alert.alert(
+							`Delete “${group.name}”?`,
+							"Its cards move to Ungrouped — nothing is removed from the shelf.",
+							[
+								{ text: "Cancel", style: "cancel" },
+								{
+									text: "Delete",
+									style: "destructive",
+									onPress: () => deleteGroup.mutate({ id: group.id }),
+								},
+							],
+						);
+					},
+				},
+				{ text: "Cancel", style: "cancel" },
+			]);
+		},
+		[renameGroup, deleteGroup],
+	);
 
 	// Options live in the vendor-item-sheet formSheet (same presentation as
 	// menu-sheet) — the row just hands over the item id and its name for the
@@ -302,7 +424,53 @@ export default function VendorScreen() {
 								style={styles.list}
 								layout={LinearTransition.duration(300)}
 							>
-								{rows.map((item) => {
+								{listEntries.map((entry) => {
+									if (entry.kind === "header") {
+										return (
+											<Animated.View
+												key={entry.key}
+												entering={FadeIn.duration(250)}
+												exiting={FadeOut.duration(200)}
+												layout={LinearTransition.duration(300)}
+											>
+												{/* Section header is an overline (design-system
+												    rule) with the shelf's asking total. Tap to
+												    rename/delete; Ungrouped isn't a real group. */}
+												<CardPressable
+													disabled={!entry.group}
+													onPress={() =>
+														entry.group &&
+														openGroupActions(entry.group)
+													}
+													pressScale={1}
+													baseColor="transparent"
+													pressedColor={t.glass.pressedFill}
+													style={styles.sectionHeader}
+												>
+													<Text
+														style={[
+															styles.sectionTitle,
+															{ color: t.text.secondary },
+														]}
+														numberOfLines={1}
+													>
+														{(
+															entry.group?.name ?? "Ungrouped"
+														).toUpperCase()}
+													</Text>
+													<Text
+														style={[
+															styles.sectionTotal,
+															{ color: t.text.secondary },
+														]}
+													>
+														{formatCurrency(entry.total)}
+													</Text>
+												</CardPressable>
+											</Animated.View>
+										);
+									}
+									const item = entry.item;
 									const soldDiff =
 										item.status === "sold"
 											? (item.soldPrice ?? 0) - item.marketValue
@@ -377,6 +545,11 @@ export default function VendorScreen() {
 														numberOfLines={1}
 													>
 														Market {formatCurrency(item.marketValue)}
+														{item.status === "sold" &&
+														item.groupId &&
+														groupNameById.has(item.groupId)
+															? ` · ${groupNameById.get(item.groupId)}`
+															: ""}
 														{item.status === "sold" && item.soldAt
 															? ` · ${soldDateLabel(item.soldAt)}`
 															: ""}
@@ -498,16 +671,35 @@ export default function VendorScreen() {
 								{liveSelected.size > 0 ? ` ${liveSelected.size}` : ""}
 							</Text>
 						</CardPressable>
-						{/* Destructive reads as loss-colored content on glass — solid
-						    fills stay reserved for the accent (design-system rule).
-						    sheetFill: no blur behind the floating bar, so a thin
-						    glass tint would let rows read through it. */}
+						{/* Circle buttons on near-opaque glass (sheetFill — no blur
+						    behind the floating bar). Destructive is loss-colored
+						    content; solid fills stay reserved for the accent. */}
+						{tab === "listed" && (
+							<CardPressable
+								onPress={handleGroupSelected}
+								disabled={liveSelected.size === 0}
+								style={[
+									styles.actionCancel,
+									{
+										backgroundColor: t.glass.sheetFill,
+										borderColor: t.glass.elevatedBorder,
+										opacity: liveSelected.size === 0 ? 0.5 : 1,
+									},
+								]}
+							>
+								<SymbolView
+									name="folder"
+									size={17}
+									tintColor={t.accentOn}
+									weight="semibold"
+								/>
+							</CardPressable>
+						)}
 						<CardPressable
 							onPress={handleRemoveSelected}
 							disabled={liveSelected.size === 0}
 							style={[
-								styles.actionButton,
-								styles.actionButtonGlass,
+								styles.actionCancel,
 								{
 									backgroundColor: t.glass.sheetFill,
 									borderColor: t.glass.elevatedBorder,
@@ -521,9 +713,6 @@ export default function VendorScreen() {
 								tintColor={t.loss}
 								weight="semibold"
 							/>
-							<Text style={[styles.actionText, { color: t.loss }]}>
-								Remove
-							</Text>
 						</CardPressable>
 						<CardPressable
 							onPress={() => {
@@ -607,6 +796,27 @@ const styles = StyleSheet.create({
 	list: {
 		gap: 8,
 	},
+	// Group section header — an overline (design-system rule), with the
+	// shelf's asking total on the trailing edge.
+	sectionHeader: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: 12,
+		marginTop: 8,
+		paddingVertical: 4,
+		paddingHorizontal: 4,
+		borderRadius: 8,
+	},
+	sectionTitle: {
+		...typeScale.overline,
+		flexShrink: 1,
+	},
+	sectionTotal: {
+		fontSize: 12,
+		fontWeight: "700",
+		fontVariant: ["tabular-nums"],
+	},
 	row: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -671,9 +881,6 @@ const styles = StyleSheet.create({
 		gap: 6,
 		height: 52,
 		borderRadius: 999,
-	},
-	actionButtonGlass: {
-		borderWidth: 1,
 	},
 	actionCancel: {
 		width: 52,

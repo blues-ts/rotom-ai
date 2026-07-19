@@ -12,7 +12,9 @@ let db: SQLite.SQLiteDatabase | null = null;
 //         collected; price refresh uses it to pick the right endpoint.
 //   4   — adds `vendor_items` (the vending/for-sale inventory: asking price,
 //         sold price, revenue tracking). Purely additive.
-const SCHEMA_VERSION = 4;
+//   5   — adds `vendor_groups` + vendor_items.group_id (named shelves:
+//         "$5 binder", "Display case"). Purely additive.
+const SCHEMA_VERSION = 5;
 
 export function getDatabase(): SQLite.SQLiteDatabase {
   if (!db) {
@@ -63,6 +65,12 @@ export function getDatabase(): SQLite.SQLiteDatabase {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_card
         ON collection_cards(collection_id, card_id, pricing_type, variant, condition, COALESCE(graded_company, ''), COALESCE(graded_grade, ''));
 
+      CREATE TABLE IF NOT EXISTS vendor_groups (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
       CREATE TABLE IF NOT EXISTS vendor_items (
         id TEXT PRIMARY KEY NOT NULL,
         card_id TEXT NOT NULL,
@@ -83,7 +91,8 @@ export function getDatabase(): SQLite.SQLiteDatabase {
         status TEXT NOT NULL DEFAULT 'listed',
         sold_price REAL,
         sold_at TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        group_id TEXT REFERENCES vendor_groups(id) ON DELETE SET NULL
       );
       CREATE INDEX IF NOT EXISTS idx_vendor_items_status
         ON vendor_items(status);
@@ -107,6 +116,17 @@ export function getDatabase(): SQLite.SQLiteDatabase {
     if (!columns.includes("product_type")) {
       db.execSync(
         "ALTER TABLE collection_cards ADD COLUMN product_type TEXT NOT NULL DEFAULT 'card';",
+      );
+    }
+
+    // v4 → v5: same column-presence detection for vendor_items created
+    // before groups existed.
+    const vendorColumns = db
+      .getAllSync<{ name: string }>("PRAGMA table_info(vendor_items)")
+      .map((c) => c.name);
+    if (!vendorColumns.includes("group_id")) {
+      db.execSync(
+        "ALTER TABLE vendor_items ADD COLUMN group_id TEXT REFERENCES vendor_groups(id) ON DELETE SET NULL;",
       );
     }
 

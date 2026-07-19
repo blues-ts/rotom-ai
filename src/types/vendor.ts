@@ -1,5 +1,12 @@
 export type VendorItemStatus = "listed" | "sold";
 
+/** A named shelf ("$5 binder", "Display case") vendor items can belong to. */
+export interface VendorGroup {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
 export interface VendorItem {
   id: string;
   cardId: string;
@@ -25,4 +32,6 @@ export interface VendorItem {
   soldPrice?: number;
   soldAt?: string;
   createdAt: string;
+  /** Group membership — sold receipts keep it for the "sold from" subtitle. */
+  groupId?: string;
 }

@@ -8,9 +8,10 @@ import { selectPrice, type PriceSelector } from "@/lib/scrydex";
 import type { ScrydexCard, ScrydexSealedProduct } from "@/types/scrydex";
 import { useToast } from "@/context/ToastContext";
 import { useRevenueCat } from "@/context/RevenueCatContext";
-import type { VendorItem } from "@/types/vendor";
+import type { VendorGroup, VendorItem } from "@/types/vendor";
 
 const VENDOR_KEY = ["vendorItems"] as const;
+const VENDOR_GROUPS_KEY = ["vendorGroups"] as const;
 
 interface VendorItemRow {
   id: string;
@@ -33,6 +34,7 @@ interface VendorItemRow {
   sold_price: number | null;
   sold_at: string | null;
   created_at: string;
+  group_id: string | null;
 }
 
 export interface AddVendorItemInput {
@@ -74,6 +76,7 @@ function mapRow(row: VendorItemRow): VendorItem {
     soldPrice: row.sold_price ?? undefined,
     soldAt: row.sold_at ?? undefined,
     createdAt: row.created_at,
+    groupId: row.group_id ?? undefined,
   };
 }
 
@@ -133,6 +136,9 @@ export function useVendorItems() {
 
   const invalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: VENDOR_KEY });
+    // Group deletes NULL out memberships via the FK, and assignments change
+    // section membership — refetch both together, always.
+    queryClient.invalidateQueries({ queryKey: VENDOR_GROUPS_KEY });
   }, [queryClient]);
 
   const query = useQuery({
@@ -146,6 +152,71 @@ export function useVendorItems() {
       return rows.map(mapRow);
     },
     staleTime: Infinity,
+  });
+
+  const groupsQuery = useQuery({
+    queryKey: VENDOR_GROUPS_KEY,
+    queryFn: async () => {
+      const rows = await db.getAllAsync<{
+        id: string;
+        name: string;
+        created_at: string;
+      }>("SELECT * FROM vendor_groups ORDER BY created_at ASC");
+      return rows.map(
+        (r): VendorGroup => ({ id: r.id, name: r.name, createdAt: r.created_at }),
+      );
+    },
+    staleTime: Infinity,
+  });
+
+  // Returns the new group's id so callers can create-and-assign in one tap.
+  const createGroup = useMutation({
+    mutationFn: (name: string) => {
+      const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      db.runSync("INSERT INTO vendor_groups (id, name) VALUES (?, ?)", [
+        id,
+        name,
+      ]);
+      return Promise.resolve(id);
+    },
+    onSuccess: invalidate,
+    onError: onMutationError,
+  });
+
+  const renameGroup = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => {
+      db.runSync("UPDATE vendor_groups SET name = ? WHERE id = ?", [name, id]);
+      return Promise.resolve();
+    },
+    onSuccess: invalidate,
+    onError: onMutationError,
+  });
+
+  // Members fall back to Ungrouped via the FK's ON DELETE SET NULL — the
+  // cards themselves (listed and sold) are untouched.
+  const deleteGroup = useMutation({
+    mutationFn: ({ id }: { id: string }) => {
+      db.runSync("DELETE FROM vendor_groups WHERE id = ?", [id]);
+      return Promise.resolve();
+    },
+    onSuccess: invalidate,
+    onError: onMutationError,
+  });
+
+  // groupId null = back to Ungrouped.
+  const assignToGroup = useMutation({
+    mutationFn: ({ ids, groupId }: { ids: string[]; groupId: string | null }) => {
+      if (ids.length > 0) {
+        const placeholders = ids.map(() => "?").join(",");
+        db.runSync(
+          `UPDATE vendor_items SET group_id = ? WHERE id IN (${placeholders})`,
+          [groupId, ...ids],
+        );
+      }
+      return Promise.resolve();
+    },
+    onSuccess: invalidate,
+    onError: onMutationError,
   });
 
   // Batch add (the add sheet's "Vending" destination) — one transaction, one
@@ -386,6 +457,11 @@ export function useVendorItems() {
     items,
     listed,
     sold,
+    groups: groupsQuery.data ?? [],
+    createGroup,
+    renameGroup,
+    deleteGroup,
+    assignToGroup,
     summary,
     isLoading: query.isLoading,
     isError: query.isError,
