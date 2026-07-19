@@ -425,13 +425,15 @@ export default function VendorScreen() {
 												    components the user owns, not mere sections.
 												    Tap to collapse/expand; the ellipsis opens the
 												    manage sheet (Ungrouped isn't a real group). */}
+												{/* No pressed fill: the header is bare on the
+												    sheet, so a fill would flash a surface that
+												    doesn't exist at rest — the tiny sink plus
+												    the chevron flip is the feedback. */}
 												<CardPressable
 													onPress={() =>
 														toggleSection(entry.sectionKey)
 													}
 													pressScale={0.99}
-													baseColor="transparent"
-													pressedColor={t.glass.pressedFill}
 													style={styles.sectionHeader}
 												>
 													<View style={styles.sectionInfo}>
