@@ -94,6 +94,9 @@ export default function VendorGroupOptionsSheet() {
 					{formatCurrency(shelfValue)} asking
 				</Text>
 			</View>
+			<View
+				style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]}
+			/>
 
 			<CardPressable
 				pressScale={1}
@@ -117,6 +120,9 @@ export default function VendorGroupOptionsSheet() {
 					/>
 				</View>
 			</CardPressable>
+			<View
+				style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]}
+			/>
 			<CardPressable
 				pressScale={1}
 				baseColor="transparent"
@@ -170,6 +176,10 @@ const styles = StyleSheet.create({
 	optionRow: {
 		borderRadius: 12,
 		marginHorizontal: 8,
+	},
+	divider: {
+		height: StyleSheet.hairlineWidth,
+		marginHorizontal: 20,
 	},
 	optionInner: {
 		flexDirection: "row",

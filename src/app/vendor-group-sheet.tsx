@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { SymbolView } from "expo-symbols";
@@ -98,12 +98,20 @@ export default function VendorGroupSheet() {
 
 	return (
 		<View style={[styles.container, { paddingBottom: insets.bottom + 16 }]}>
-			{rows.map((r) => {
+			{rows.map((r, idx) => {
 				const isOn =
 					r.groupId !== undefined && r.groupId === (currentGroupId ?? null);
 				return (
+					<Fragment key={r.key}>
+					{idx > 0 && (
+						<View
+							style={[
+								styles.divider,
+								{ backgroundColor: t.glass.surfaceBorder },
+							]}
+						/>
+					)}
 					<CardPressable
-						key={r.key}
 						pressScale={1}
 						baseColor="transparent"
 						pressedColor={t.glass.pressedFill}
@@ -147,6 +155,7 @@ export default function VendorGroupSheet() {
 							)}
 						</View>
 					</CardPressable>
+					</Fragment>
 				);
 			})}
 		</View>
@@ -160,6 +169,10 @@ const styles = StyleSheet.create({
 	optionRow: {
 		borderRadius: 12,
 		marginHorizontal: 8,
+	},
+	divider: {
+		height: StyleSheet.hairlineWidth,
+		marginHorizontal: 20,
 	},
 	optionInner: {
 		flexDirection: "row",

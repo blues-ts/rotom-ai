@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
@@ -200,10 +201,22 @@ export default function VendorItemSheet() {
 					</Text>
 				</View>
 			</View>
+			{/* Summary and options are different kinds of content — divide. */}
+			<View
+				style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]}
+			/>
 
-			{options.map((o) => (
+			{options.map((o, idx) => (
+				<Fragment key={o.label}>
+				{idx > 0 && (
+					<View
+						style={[
+							styles.divider,
+							{ backgroundColor: t.glass.surfaceBorder },
+						]}
+					/>
+				)}
 				<CardPressable
-					key={o.label}
 					pressScale={1}
 					baseColor="transparent"
 					pressedColor={t.glass.pressedFill}
@@ -230,6 +243,7 @@ export default function VendorItemSheet() {
 						/>
 					</View>
 				</CardPressable>
+				</Fragment>
 			))}
 		</View>
 	);
@@ -254,6 +268,10 @@ const styles = StyleSheet.create({
 	optionRow: {
 		borderRadius: 12,
 		marginHorizontal: 8,
+	},
+	divider: {
+		height: StyleSheet.hairlineWidth,
+		marginHorizontal: 20,
 	},
 	optionInner: {
 		flexDirection: "row",
