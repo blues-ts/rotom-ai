@@ -13,6 +13,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { spacing, useRiverTheme } from "@/constants/theme";
 import { formatCurrency } from "@/lib/format";
+import { SORT_OPTION_LABELS } from "@/lib/sortLabels";
 import { useVendorItems } from "@/hooks/useVendorItems";
 import type { VendorItem } from "@/types/vendor";
 import CardPressable from "@/components/CardPressable";
@@ -30,6 +31,10 @@ function soldDateLabel(soldAt?: string): string {
 	const d = new Date(soldAt);
 	return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
+
+// "date" is the query's own order (newest first — added for groups, sold for
+// receipts); the rest re-sort in memory.
+type ShelfSort = "date" | "nameAsc" | "valueDesc" | "valueAsc";
 
 /**
  * One shelf's card list — a group (or Ungrouped) from the vending home, or
@@ -96,6 +101,46 @@ export default function VendorShelfScreen() {
 				(i.cardNumber?.toLowerCase().includes(q) ?? false),
 		);
 	}, [items, query]);
+
+	const [sortBy, setSortBy] = useState<ShelfSort>("date");
+	const sortedItems = useMemo(() => {
+		if (sortBy === "date") return filteredItems;
+		// Sold receipts sort by what they went for; listings by asking
+		// (market when unpriced) — same value each row displays.
+		const value = (i: VendorItem) =>
+			isSold ? (i.soldPrice ?? 0) : (i.askingPrice ?? i.marketValue);
+		const arr = [...filteredItems];
+		switch (sortBy) {
+			case "nameAsc":
+				arr.sort((a, b) => a.cardName.localeCompare(b.cardName));
+				break;
+			case "valueDesc":
+				arr.sort((a, b) => value(b) - value(a));
+				break;
+			case "valueAsc":
+				arr.sort((a, b) => value(a) - value(b));
+				break;
+		}
+		return arr;
+	}, [filteredItems, sortBy, isSold]);
+
+	// One vocabulary with every other sort sheet (sortLabels).
+	const sortLabels: Record<ShelfSort, string> = {
+		date: isSold
+			? SORT_OPTION_LABELS.dateSold
+			: SORT_OPTION_LABELS.dateAdded,
+		nameAsc: SORT_OPTION_LABELS.name,
+		valueDesc: SORT_OPTION_LABELS.valueDesc,
+		valueAsc: SORT_OPTION_LABELS.valueAsc,
+	};
+	const sortActions = (Object.keys(sortLabels) as ShelfSort[]).map((o) => ({
+		label: sortLabels[o],
+		isOn: sortBy === o,
+		onPress: () => {
+			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+			setSortBy(o);
+		},
+	}));
 
 	// Multi-select: long-press a row to enter, then tap rows to toggle — same
 	// gestures as the scan library and collection grid.
@@ -435,7 +480,7 @@ export default function VendorShelfScreen() {
 						style={styles.list}
 						layout={LinearTransition.duration(300)}
 					>
-						{filteredItems.map((item) => renderItemRow(item))}
+						{sortedItems.map((item) => renderItemRow(item))}
 					</Animated.View>
 				)}
 			</ScrollView>
@@ -447,6 +492,8 @@ export default function VendorShelfScreen() {
 					value={query}
 					onChangeText={setQuery}
 					placeholder={isSold ? "Search sales" : "Search cards..."}
+					menuIcon="arrow.up.arrow.down"
+					menuActions={sortActions}
 				/>
 			)}
 

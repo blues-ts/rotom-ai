@@ -14,6 +14,7 @@ export const SORT_OPTION_LABELS = {
 	valueDesc: "Value (high–low)",
 	valueAsc: "Value (low–high)",
 	dateAdded: "Date added (newest)",
+	dateSold: "Date sold (newest)",
 	gridView: "Grid",
 	listView: "Compact list",
 } as const;
