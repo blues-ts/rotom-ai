@@ -257,7 +257,7 @@ export default function VendorScreen() {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 		Alert.prompt(
 			"New group",
-			"Name this shelf — like “$5 binder” or “Display case”.",
+			"Give your group a name.",
 			[
 				{ text: "Cancel", style: "cancel" },
 				{
