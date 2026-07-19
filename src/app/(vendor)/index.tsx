@@ -35,6 +35,12 @@ const MINI_THUMB_WIDTH = 26;
 const MINI_THUMB_HEIGHT = MINI_THUMB_WIDTH * (88 / 63);
 const MINI_THUMB_OVERLAP = 11;
 
+function soldDateLabel(soldAt?: string): string {
+	if (!soldAt) return "";
+	const d = new Date(soldAt);
+	return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 /** Top-3 thumbnails for a shelf row, richest first. */
 function topImages(items: VendorItem[]): string[] {
 	return [...items]
@@ -58,6 +64,10 @@ export default function VendorScreen() {
 	const refreshPrices = useRefreshVendorPrices();
 
 	const groupIds = useMemo(() => new Set(groups.map((g) => g.id)), [groups]);
+	const groupNameById = useMemo(
+		() => new Map(groups.map((g) => [g.id, g.name])),
+		[groups],
+	);
 
 	const shelfRows = useMemo(() => {
 		const byGroup = new Map<string, VendorItem[]>();
@@ -350,22 +360,138 @@ export default function VendorScreen() {
 										onPress: () => openShelf(row.groupId, row.name),
 									}),
 								)}
-								{sold.length > 0 &&
-									renderShelfRow({
-										key: "__sold__",
-										name: "Sold",
-										count: summary.soldCount,
-										total: summary.revenue,
-										images: [...sold]
-											.sort(
-												(a, b) =>
-													(b.soldPrice ?? 0) - (a.soldPrice ?? 0),
-											)
-											.slice(0, 3)
-											.map((i) => i.cardImageUrl),
-										onPress: openSold,
-									})}
 							</Animated.View>
+						)}
+
+						{/* Sold cards are a ledger, not a shelf — recent receipts
+						    under the inventory, with See All into the full list. */}
+						{sold.length > 0 && (
+							<View style={styles.salesSection}>
+								<View style={styles.salesHeader}>
+									<Text
+										style={[
+											styles.salesTitle,
+											{ color: t.text.secondary },
+										]}
+									>
+										RECENT SALES
+									</Text>
+									<CardPressable
+										onPress={openSold}
+										pressScale={1}
+										hitSlop={6}
+									>
+										<View style={styles.seeAll}>
+											<Text
+												style={[
+													styles.seeAllText,
+													{ color: t.accentOn },
+												]}
+											>
+												See All
+											</Text>
+											<SymbolView
+												name="chevron.right"
+												size={11}
+												tintColor={t.accentOn}
+												weight="semibold"
+											/>
+										</View>
+									</CardPressable>
+								</View>
+								<View style={styles.salesList}>
+									{sold.slice(0, 3).map((item) => {
+										const diff =
+											(item.soldPrice ?? 0) - item.marketValue;
+										return (
+											<CardPressable
+												key={item.id}
+												onPress={() => {
+													Haptics.impactAsync(
+														Haptics.ImpactFeedbackStyle.Light,
+													);
+													router.push({
+														pathname: "/vendor-item-sheet",
+														params: {
+															id: item.id,
+															title: item.cardName,
+														},
+													});
+												}}
+												pressScale={0.98}
+												baseColor={t.glass.elevatedFill}
+												pressedColor={t.glass.pressedFill}
+												style={[
+													styles.saleRow,
+													{
+														borderColor:
+															t.glass.elevatedBorder,
+													},
+												]}
+											>
+												<Image
+													source={{ uri: item.cardImageUrl }}
+													style={styles.saleThumb}
+													contentFit="contain"
+												/>
+												<View style={styles.saleInfo}>
+													<Text
+														style={[
+															styles.saleName,
+															{ color: t.text.primary },
+														]}
+														numberOfLines={1}
+													>
+														{item.cardName}
+														{item.quantity > 1
+															? `  ×${item.quantity}`
+															: ""}
+													</Text>
+													<Text
+														style={[
+															styles.saleMeta,
+															{ color: t.text.tertiary },
+														]}
+														numberOfLines={1}
+													>
+														{soldDateLabel(item.soldAt)}
+														{item.groupId &&
+														groupNameById.has(item.groupId)
+															? ` · ${groupNameById.get(item.groupId)}`
+															: ""}
+													</Text>
+												</View>
+												<View style={styles.saleTrailing}>
+													<Text
+														style={[
+															styles.salePrice,
+															{ color: t.text.primary },
+														]}
+													>
+														{formatCurrency(
+															item.soldPrice ?? 0,
+														)}
+													</Text>
+													<Text
+														style={[
+															styles.saleDiff,
+															{
+																color:
+																	diff >= 0
+																		? t.gain
+																		: t.loss,
+															},
+														]}
+													>
+														{diff >= 0 ? "+" : ""}
+														{formatCurrency(diff)}
+													</Text>
+												</View>
+											</CardPressable>
+										);
+									})}
+								</View>
+							</View>
 						)}
 					</>
 				)}
@@ -461,6 +587,72 @@ const styles = StyleSheet.create({
 	shelfValue: {
 		fontSize: 15,
 		fontWeight: "700",
+		fontVariant: ["tabular-nums"],
+	},
+	// Recent sales — ledger section under the shelves.
+	salesSection: {
+		marginTop: 22,
+		paddingHorizontal: spacing.screen,
+	},
+	salesHeader: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		marginBottom: 8,
+		paddingHorizontal: 2,
+	},
+	salesTitle: {
+		...typeScale.overline,
+	},
+	seeAll: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 3,
+	},
+	seeAllText: {
+		fontSize: 13,
+		fontWeight: "600",
+	},
+	salesList: {
+		gap: 8,
+	},
+	saleRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 12,
+		paddingVertical: 8,
+		paddingHorizontal: 12,
+		borderRadius: 14,
+		borderWidth: 1,
+	},
+	saleThumb: {
+		width: MINI_THUMB_WIDTH,
+		height: MINI_THUMB_HEIGHT,
+	},
+	saleInfo: {
+		flex: 1,
+		gap: 1,
+	},
+	saleName: {
+		fontSize: 14,
+		fontWeight: "600",
+	},
+	saleMeta: {
+		fontSize: 12,
+		fontWeight: "500",
+	},
+	saleTrailing: {
+		alignItems: "flex-end",
+		gap: 1,
+	},
+	salePrice: {
+		fontSize: 14,
+		fontWeight: "700",
+		fontVariant: ["tabular-nums"],
+	},
+	saleDiff: {
+		fontSize: 12,
+		fontWeight: "600",
 		fontVariant: ["tabular-nums"],
 	},
 	emptyState: {
