@@ -31,7 +31,7 @@ import CardPressable from "@/components/CardPressable";
 import ErrorState from "@/components/ErrorState";
 import RefreshingPill from "@/components/RefreshingPill";
 import HeaderFadeScrim from "@/components/HeaderFadeScrim";
-import TickerPrice from "@/components/TickerPrice";
+import VendorRevenueHero from "@/components/VendorRevenueHero";
 
 // Same compact thumb as the scan review rows — the row is about the prices.
 const THUMB_WIDTH = 44;
@@ -230,70 +230,9 @@ export default function VendorScreen() {
 					</View>
 				) : (
 					<>
-						{/* Revenue tracker — the vending hero. */}
-						<View
-							style={[
-								styles.revenueCard,
-								{
-									backgroundColor: t.glass.elevatedFill,
-									borderColor: t.glass.elevatedBorder,
-								},
-							]}
-						>
-							<Text style={[styles.revenueLabel, { color: t.text.secondary }]}>
-								Revenue
-							</Text>
-							<TickerPrice
-								value={summary.revenue}
-								fontSize={34}
-								style={[styles.revenueValue, { color: t.text.primary }]}
-							/>
-							<View style={styles.revenueStats}>
-								<View style={styles.revenueStat}>
-									<Text
-										style={[styles.statValue, { color: t.text.primary }]}
-									>
-										{summary.soldCount}
-									</Text>
-									<Text
-										style={[styles.statLabel, { color: t.text.tertiary }]}
-									>
-										sold
-									</Text>
-								</View>
-								<View style={styles.revenueStat}>
-									<Text
-										style={[
-											styles.statValue,
-											{
-												color:
-													summary.soldVsMarket >= 0 ? t.gain : t.loss,
-											},
-										]}
-									>
-										{summary.soldVsMarket >= 0 ? "+" : ""}
-										{formatCurrency(summary.soldVsMarket)}
-									</Text>
-									<Text
-										style={[styles.statLabel, { color: t.text.tertiary }]}
-									>
-										vs market
-									</Text>
-								</View>
-								<View style={styles.revenueStat}>
-									<Text
-										style={[styles.statValue, { color: t.text.primary }]}
-									>
-										{formatCurrency(summary.listedAskingValue)}
-									</Text>
-									<Text
-										style={[styles.statLabel, { color: t.text.tertiary }]}
-									>
-										on shelf
-									</Text>
-								</View>
-							</View>
-						</View>
+						{/* Revenue hero — mirrors the collections portfolio hero:
+						    bare on the gradient, chart from sale receipts. */}
+						<VendorRevenueHero sold={sold} summary={summary} />
 
 						{/* For Sale / Sold toggle. */}
 						<View style={styles.tabs}>
@@ -538,45 +477,6 @@ const styles = StyleSheet.create({
 	},
 	statePad: {
 		flex: 1,
-	},
-	revenueCard: {
-		borderRadius: 20,
-		borderWidth: 1,
-		paddingVertical: 18,
-		paddingHorizontal: 18,
-		alignItems: "center",
-		gap: 2,
-	},
-	revenueLabel: {
-		fontSize: 13,
-		fontWeight: "600",
-		textTransform: "uppercase",
-		letterSpacing: 0.6,
-	},
-	revenueValue: {
-		fontWeight: "700",
-		fontVariant: ["tabular-nums"],
-	},
-	revenueStats: {
-		flexDirection: "row",
-		justifyContent: "space-between",
-		alignSelf: "stretch",
-		marginTop: 14,
-		paddingHorizontal: 6,
-	},
-	revenueStat: {
-		alignItems: "center",
-		gap: 1,
-		flex: 1,
-	},
-	statValue: {
-		fontSize: 15,
-		fontWeight: "700",
-		fontVariant: ["tabular-nums"],
-	},
-	statLabel: {
-		fontSize: 12,
-		fontWeight: "500",
 	},
 	tabs: {
 		flexDirection: "row",
