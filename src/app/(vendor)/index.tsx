@@ -1,11 +1,16 @@
 import { useCallback, useMemo } from "react";
 import {
+	Alert,
+	Pressable,
 	RefreshControl,
 	ScrollView,
 	StyleSheet,
 	Text,
 	View,
 } from "react-native";
+import ReanimatedSwipeable, {
+	type SwipeableMethods,
+} from "react-native-gesture-handler/ReanimatedSwipeable";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import { router } from "expo-router";
@@ -60,7 +65,8 @@ function topImages(items: VendorItem[]): string[] {
 export default function VendorScreen() {
 	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
-	const { listed, sold, groups, summary, isError, refetch } = useVendorItems();
+	const { listed, sold, groups, deleteGroup, summary, isError, refetch } =
+		useVendorItems();
 	const refreshPrices = useRefreshVendorPrices();
 
 	const groupIds = useMemo(() => new Set(groups.map((g) => g.id)), [groups]);
@@ -166,12 +172,38 @@ export default function VendorScreen() {
 	const isEmpty =
 		listed.length === 0 && sold.length === 0 && groups.length === 0;
 
+	// Swipe-left delete on real group rows — same confirm + outcome as the
+	// options sheet's delete (cards drop to Ungrouped).
+	const confirmDeleteGroup = useCallback(
+		(groupId: string, name: string, methods: SwipeableMethods) => {
+			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+			Alert.alert(
+				`Delete “${name}”?`,
+				"Its cards move to Ungrouped — nothing is removed from your table.",
+				[
+					{
+						text: "Cancel",
+						style: "cancel",
+						onPress: () => methods.close(),
+					},
+					{
+						text: "Delete",
+						style: "destructive",
+						onPress: () => deleteGroup.mutate({ id: groupId }),
+					},
+				],
+			);
+		},
+		[deleteGroup],
+	);
+
 	const renderShelfRow = ({
 		key,
 		name,
 		count,
 		total,
 		images,
+		groupId,
 		onPress,
 	}: {
 		key: string;
@@ -179,14 +211,10 @@ export default function VendorScreen() {
 		count: number;
 		total: number;
 		images: string[];
+		groupId: string;
 		onPress: () => void;
-	}) => (
-		<Animated.View
-			key={key}
-			entering={FadeIn.duration(300)}
-			exiting={FadeOut.duration(200)}
-			layout={LinearTransition.duration(300)}
-		>
+	}) => {
+		const inner = (
 			<CardPressable
 				onPress={onPress}
 				pressScale={0.98}
@@ -244,8 +272,46 @@ export default function VendorScreen() {
 					weight="semibold"
 				/>
 			</CardPressable>
-		</Animated.View>
-	);
+		);
+		return (
+			<Animated.View
+				key={key}
+				entering={FadeIn.duration(300)}
+				exiting={FadeOut.duration(200)}
+				layout={LinearTransition.duration(300)}
+			>
+				{groupId !== "__ungrouped__" ? (
+					<ReanimatedSwipeable
+						friction={2}
+						rightThreshold={36}
+						overshootRight={false}
+						renderRightActions={(_progress, _translation, methods) => (
+							<Pressable
+								onPress={() =>
+									confirmDeleteGroup(groupId, name, methods)
+								}
+								style={[
+									styles.swipeDelete,
+									{ backgroundColor: t.loss },
+								]}
+							>
+								<SymbolView
+									name="trash"
+									size={18}
+									tintColor="#FFFFFF"
+									weight="semibold"
+								/>
+							</Pressable>
+						)}
+					>
+						{inner}
+					</ReanimatedSwipeable>
+				) : (
+					inner
+				)}
+			</Animated.View>
+		);
+	};
 
 	return (
 		<View style={styles.container}>
@@ -606,6 +672,15 @@ const styles = StyleSheet.create({
 		fontSize: 15,
 		fontWeight: "700",
 		fontVariant: ["tabular-nums"],
+	},
+	// Swipe-left action behind a group row — solid loss red, iOS-convention
+	// destructive swipe.
+	swipeDelete: {
+		width: 64,
+		marginLeft: 8,
+		borderRadius: 14,
+		alignItems: "center",
+		justifyContent: "center",
 	},
 	// Recent sales — ledger section under the shelves.
 	salesSection: {
