@@ -204,11 +204,7 @@ export default function VendorScreen() {
 			<ScrollView
 				contentContainerStyle={[
 					styles.content,
-					{
-						paddingTop: insets.top + 52,
-						// Clear the pinned scan pill below.
-						paddingBottom: insets.bottom + 108,
-					},
+					{ paddingTop: insets.top + 52 },
 				]}
 				showsVerticalScrollIndicator={false}
 				refreshControl={
@@ -233,6 +229,56 @@ export default function VendorScreen() {
 						{/* Revenue hero — mirrors the collections portfolio hero:
 						    bare on the gradient, chart from sale receipts. */}
 						<VendorRevenueHero sold={sold} summary={summary} />
+
+						{/* Everything below the hero rides on the sheet — same
+						    lifted-lip surface as the card detail screen. */}
+						<View
+							style={[
+								styles.sheet,
+								{
+									backgroundColor: t.glass.surfaceFill,
+									borderColor: t.glass.surfaceBorder,
+									// Clear the pinned scan pill below.
+									paddingBottom: insets.bottom + 108,
+								},
+							]}
+						>
+						{/* Stat strip — the sheet's headline row. */}
+						<View style={styles.statsRow}>
+							<View style={styles.stat}>
+								<Text style={[styles.statValue, { color: t.text.primary }]}>
+									{summary.soldCount}
+								</Text>
+								<Text style={[styles.statLabel, { color: t.text.tertiary }]}>
+									sold
+								</Text>
+							</View>
+							<View style={styles.stat}>
+								<Text
+									style={[
+										styles.statValue,
+										{
+											color:
+												summary.soldVsMarket >= 0 ? t.gain : t.loss,
+										},
+									]}
+								>
+									{summary.soldVsMarket >= 0 ? "+" : ""}
+									{formatCurrency(summary.soldVsMarket)}
+								</Text>
+								<Text style={[styles.statLabel, { color: t.text.tertiary }]}>
+									vs market
+								</Text>
+							</View>
+							<View style={styles.stat}>
+								<Text style={[styles.statValue, { color: t.text.primary }]}>
+									{formatCurrency(summary.listedAskingValue)}
+								</Text>
+								<Text style={[styles.statLabel, { color: t.text.tertiary }]}>
+									on shelf
+								</Text>
+							</View>
+						</View>
 
 						{/* For Sale / Sold toggle. */}
 						<View style={styles.tabs}>
@@ -434,6 +480,7 @@ export default function VendorScreen() {
 								})}
 							</Animated.View>
 						)}
+						</View>
 					</>
 				)}
 			</ScrollView>
@@ -473,10 +520,45 @@ const styles = StyleSheet.create({
 	},
 	content: {
 		flexGrow: 1,
-		paddingHorizontal: spacing.screen,
 	},
 	statePad: {
 		flex: 1,
+		paddingHorizontal: spacing.screen,
+	},
+	// Same lifted-lip surface as the card detail sheet: 28pt top radius,
+	// hairline lip, shadow up so the hero reads as floating above it.
+	sheet: {
+		borderTopLeftRadius: 28,
+		borderTopRightRadius: 28,
+		borderTopWidth: StyleSheet.hairlineWidth,
+		marginTop: 16,
+		paddingTop: 18,
+		paddingHorizontal: spacing.screen,
+		flexGrow: 1,
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: -8 },
+		shadowOpacity: 0.22,
+		shadowRadius: 18,
+		elevation: 12,
+	},
+	statsRow: {
+		flexDirection: "row",
+		justifyContent: "space-between",
+		paddingHorizontal: 6,
+	},
+	stat: {
+		alignItems: "center",
+		gap: 1,
+		flex: 1,
+	},
+	statValue: {
+		fontSize: 15,
+		fontWeight: "700",
+		fontVariant: ["tabular-nums"],
+	},
+	statLabel: {
+		fontSize: 12,
+		fontWeight: "500",
 	},
 	tabs: {
 		flexDirection: "row",

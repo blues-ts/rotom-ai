@@ -35,9 +35,8 @@ const PERIOD_DAYS: Record<Period, number | null> = {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
-// Rendered inside the vendor screen's padded scroll content, so the width
-// accounts for that padding instead of adding its own (unlike the
-// collections hero, which pads itself).
+// Hero on the stage — pads itself (like the collections hero); the sheet
+// below carries the rest of the screen.
 const CHART_WIDTH = SCREEN_WIDTH - spacing.screen * 2;
 const CHART_HEIGHT = 150;
 
@@ -202,40 +201,6 @@ function VendorRevenueHeroInner({
 				})}
 			</View>
 
-			{/* Vendor-specific stat strip the portfolio hero doesn't need —
-			    kept bare on the gradient, under the pills. */}
-			<View style={styles.statsRow}>
-				<View style={styles.stat}>
-					<Text style={[styles.statValue, { color: t.text.primary }]}>
-						{summary.soldCount}
-					</Text>
-					<Text style={[styles.statLabel, { color: t.text.tertiary }]}>
-						sold
-					</Text>
-				</View>
-				<View style={styles.stat}>
-					<Text
-						style={[
-							styles.statValue,
-							{ color: summary.soldVsMarket >= 0 ? t.gain : t.loss },
-						]}
-					>
-						{summary.soldVsMarket >= 0 ? "+" : ""}
-						{formatCurrency(summary.soldVsMarket)}
-					</Text>
-					<Text style={[styles.statLabel, { color: t.text.tertiary }]}>
-						vs market
-					</Text>
-				</View>
-				<View style={styles.stat}>
-					<Text style={[styles.statValue, { color: t.text.primary }]}>
-						{formatCurrency(summary.listedAskingValue)}
-					</Text>
-					<Text style={[styles.statLabel, { color: t.text.tertiary }]}>
-						on shelf
-					</Text>
-				</View>
-			</View>
 		</View>
 	);
 }
@@ -246,6 +211,7 @@ const styles = StyleSheet.create({
 	// Hero on the stage — no card chrome; the gradient below is the surface.
 	container: {
 		paddingTop: 8,
+		paddingHorizontal: spacing.screen,
 	},
 	title: {
 		...typeScale.overline,
@@ -319,25 +285,5 @@ const styles = StyleSheet.create({
 		fontSize: 11,
 		fontWeight: "700",
 		letterSpacing: 0.3,
-	},
-	statsRow: {
-		flexDirection: "row",
-		justifyContent: "space-between",
-		marginTop: 14,
-		paddingHorizontal: 6,
-	},
-	stat: {
-		alignItems: "center",
-		gap: 1,
-		flex: 1,
-	},
-	statValue: {
-		fontSize: 15,
-		fontWeight: "700",
-		fontVariant: ["tabular-nums"],
-	},
-	statLabel: {
-		fontSize: 12,
-		fontWeight: "500",
 	},
 });
