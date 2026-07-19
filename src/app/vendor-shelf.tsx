@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+	Alert,
+	ScrollView,
+	StyleSheet,
+	Text,
+	TextInput,
+	View,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import { router, Stack, useLocalSearchParams } from "expo-router";
@@ -83,6 +90,19 @@ export default function VendorShelfScreen() {
 		return listed.filter((i) => i.groupId === groupId);
 	}, [isSold, sold, listed, groupId, groupNameById]);
 
+	// Client-side filter over this shelf — name, set, or card number.
+	const [query, setQuery] = useState("");
+	const filteredItems = useMemo(() => {
+		const q = query.trim().toLowerCase();
+		if (!q) return items;
+		return items.filter(
+			(i) =>
+				i.cardName.toLowerCase().includes(q) ||
+				(i.setName?.toLowerCase().includes(q) ?? false) ||
+				(i.cardNumber?.toLowerCase().includes(q) ?? false),
+		);
+	}, [items, query]);
+
 	// Multi-select: long-press a row to enter, then tap rows to toggle — same
 	// gestures as the scan library and collection grid.
 	const [selectMode, setSelectMode] = useState(false);
@@ -117,10 +137,12 @@ export default function VendorShelfScreen() {
 		[inSelect, toggle],
 	);
 
+	// Only VISIBLE rows count — a selection made before typing a filter can't
+	// silently drag hidden rows into a batch action.
 	const liveSelected = useMemo(() => {
-		const present = new Set(items.map((r) => r.id));
+		const present = new Set(filteredItems.map((r) => r.id));
 		return new Set([...selected].filter((id) => present.has(id)));
-	}, [selected, items]);
+	}, [selected, filteredItems]);
 
 	const handleSellSelected = useCallback(() => {
 		const picked = [...liveSelected];
@@ -385,7 +407,38 @@ export default function VendorShelfScreen() {
 					},
 				]}
 				showsVerticalScrollIndicator={false}
+				keyboardShouldPersistTaps="handled"
+				keyboardDismissMode="on-drag"
 			>
+				{items.length > 0 && (
+					<View
+						style={[
+							styles.searchBar,
+							{
+								backgroundColor: t.glass.elevatedFill,
+								borderColor: t.glass.elevatedBorder,
+							},
+						]}
+					>
+						<SymbolView
+							name="magnifyingglass"
+							size={15}
+							tintColor={t.text.tertiary}
+							weight="medium"
+						/>
+						<TextInput
+							style={[styles.searchInput, { color: t.text.primary }]}
+							placeholder={isSold ? "Search sales" : "Search this group"}
+							placeholderTextColor={t.text.secondary}
+							value={query}
+							onChangeText={setQuery}
+							autoCorrect={false}
+							autoCapitalize="none"
+							clearButtonMode="while-editing"
+							returnKeyType="search"
+						/>
+					</View>
+				)}
 				{items.length === 0 ? (
 					<View style={styles.emptyState}>
 						<SymbolView
@@ -403,12 +456,18 @@ export default function VendorShelfScreen() {
 								: "Scan or search cards and pick Vending, or move cards here from another group."}
 						</Text>
 					</View>
+				) : filteredItems.length === 0 ? (
+					<View style={styles.noMatches}>
+						<Text style={[styles.noMatchesText, { color: t.text.secondary }]}>
+							No cards match “{query.trim()}”
+						</Text>
+					</View>
 				) : (
 					<Animated.View
 						style={styles.list}
 						layout={LinearTransition.duration(300)}
 					>
-						{items.map((item) => renderItemRow(item))}
+						{filteredItems.map((item) => renderItemRow(item))}
 					</Animated.View>
 				)}
 			</ScrollView>
@@ -526,6 +585,30 @@ const styles = StyleSheet.create({
 	content: {
 		flexGrow: 1,
 		paddingHorizontal: spacing.screen,
+	},
+	// Elevated glass search pill above the rows.
+	searchBar: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
+		paddingHorizontal: 14,
+		borderRadius: 999,
+		borderWidth: 1,
+		height: 40,
+		marginBottom: 10,
+	},
+	searchInput: {
+		flex: 1,
+		fontSize: 15,
+		paddingVertical: 0,
+	},
+	noMatches: {
+		alignItems: "center",
+		paddingVertical: 40,
+	},
+	noMatchesText: {
+		fontSize: 14,
+		fontWeight: "500",
 	},
 	list: {
 		gap: 8,
