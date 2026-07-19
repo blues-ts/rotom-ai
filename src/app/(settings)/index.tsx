@@ -33,9 +33,11 @@ import {
 	Linking,
 	ScrollView,
 	StyleSheet,
+	Switch,
 	Text,
 	View,
 } from "react-native";
+import { setVendingEnabled, useVendingEnabled } from "@/lib/vendorPrefs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function SettingsCard({ children }: { children: React.ReactNode }) {
@@ -162,6 +164,7 @@ export default function Settings() {
 	const queryClient = useQueryClient();
 	const toast = useToast();
 	const [crashTest, setCrashTest] = useState(false);
+	const vendingEnabled = useVendingEnabled();
 
 	// Dev-only: `riverai:///(settings)?bench=1` auto-runs the SQLite benchmark
 	// so it can be triggered headlessly (simctl openurl) and read back from the
@@ -333,6 +336,49 @@ export default function Settings() {
 				{/* Appearance (Pro) */}
 				<AppearanceSection />
 
+				{/* Features */}
+				<View style={styles.section}>
+					<Text style={[styles.overline, { color: t.text.secondary }]}>
+						Features
+					</Text>
+					<SettingsCard>
+						<View style={styles.row}>
+							<View
+								style={[
+									styles.iconChip,
+									{ backgroundColor: t.accentIconFill },
+								]}
+							>
+								<SymbolView
+									name="storefront"
+									size={18}
+									tintColor={t.accentOn}
+									weight="medium"
+								/>
+							</View>
+							<Text
+								style={[styles.label, { color: t.text.primary }]}
+								numberOfLines={1}
+							>
+								Vending
+							</Text>
+							<Switch
+								value={vendingEnabled}
+								onValueChange={(next) => {
+									Haptics.selectionAsync();
+									setVendingEnabled(next);
+								}}
+								trackColor={{ true: t.accent }}
+							/>
+						</View>
+					</SettingsCard>
+					<Text style={[styles.sectionFootnote, { color: t.text.tertiary }]}>
+						Track cards you&apos;re selling — groups, asking prices, and
+						revenue. Turning this off hides the vending screens; your
+						items are kept.
+					</Text>
+				</View>
+
 				{/* Legal */}
 				<View style={styles.section}>
 					<Text style={[styles.overline, { color: t.text.secondary }]}>
@@ -496,6 +542,11 @@ const styles = StyleSheet.create({
 	},
 	section: {
 		gap: 8,
+	},
+	sectionFootnote: {
+		fontSize: 12,
+		lineHeight: 17,
+		paddingHorizontal: 4,
 	},
 	overline: {
 		...typeScale.overline,

@@ -28,6 +28,9 @@ import {
 	useRefreshVendorPrices,
 	useVendorItems,
 } from "@/hooks/useVendorItems";
+import { useVendingEnabled } from "@/lib/vendorPrefs";
+import { useRevenueCat } from "@/context/RevenueCatContext";
+import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 
 // Sentinel "collection id" for the pinned Vending destination row — real
 // collection ids are Date.now() strings, so this can't collide.
@@ -68,6 +71,8 @@ export default function AddToCollection() {
   const refreshPrices = useRefreshCollectionPrices();
   const { addVendorItems, listCollectionRows } = useVendorItems();
   const refreshVendorPrices = useRefreshVendorPrices();
+  const vendingEnabled = useVendingEnabled();
+  const { isPro } = useRevenueCat();
   const toast = useToast();
   // Batch adds come from the scanner library — clear those cards from the
   // session once they've landed in a collection.
@@ -271,6 +276,12 @@ export default function AddToCollection() {
   // (card detail / search) modes.
   const handleSelectVendor = useCallback(async () => {
     if (addedId) return;
+    // Vending is Pro — gate before anything mutates (same pattern as the
+    // scan library's add gate: paywall now, tap again once unlocked).
+    if (!isPro) {
+      void presentProPaywallIfNeeded();
+      return;
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setAddedId(VENDOR_DEST_ID);
     // Multi-select from a collection: list those rows for sale. They keep
@@ -331,7 +342,7 @@ export default function AddToCollection() {
         onError: () => setAddedId(null),
       },
     );
-  }, [addedId, isMove, isBatch, moveIds, listCollectionRows, resolveBatchInputs, addVendorItems, finishBatchAdd, refreshVendorPrices, cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade]);
+  }, [addedId, isPro, isMove, isBatch, moveIds, listCollectionRows, resolveBatchInputs, addVendorItems, finishBatchAdd, refreshVendorPrices, cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade]);
 
   const handleSelect = useCallback(
     (collectionId: string) => {
@@ -405,7 +416,9 @@ export default function AddToCollection() {
       />
       {/* Vending is a fixed destination above the collections — scan-to-sell,
           quick-listing, and collection multi-select all reuse this sheet
-          without touching the scan flow. */}
+          without touching the scan flow. Hidden entirely when the Settings
+          toggle disables the vending flow. */}
+      {vendingEnabled && (
       <CardPressable
           onPress={() => void handleSelectVendor()}
           disabled={!!addedId}
@@ -466,6 +479,7 @@ export default function AddToCollection() {
             weight="semibold"
           />
         </CardPressable>
+      )}
       {targetCollections.length === 0 ? (
         <View style={styles.empty}>
           <Text style={[styles.emptyText, { color: t.text.secondary }]}>

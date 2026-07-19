@@ -15,6 +15,7 @@ import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { ToastProvider } from "@/context/ToastContext";
 import { ScanSessionProvider } from "@/context/ScanSessionContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
+import { useVendingEnabled } from "@/lib/vendorPrefs";
 import { maybeRunSqliteBenchmarkFromFlag } from "@/lib/devPerfBench";
 import { ClerkLoaded, ClerkProvider } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
@@ -187,6 +188,7 @@ function AppContent() {
 	const { theme, colors } = useTheme();
 	const t = useRiverTheme();
 	const { isPro } = useRevenueCat();
+	const vendingEnabled = useVendingEnabled();
 
 	// Warm the expansions list + set logos in the background at launch.
 	usePrefetchExpansions();
@@ -254,20 +256,27 @@ function AppContent() {
 							headerRight: () => (
 								<HeaderButtonGroup>
 									{/* Vending shelf lives beside the add button — the
-									    vendor tool's nav entry point. */}
-									<HeaderIconButton
-										onPress={() => {
-											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-											router.push("/(vendor)");
-										}}
-									>
-										<SymbolView
-											name="storefront"
-											size={20}
-											tintColor={t.accentOn}
-											weight="medium"
-										/>
-									</HeaderIconButton>
+									    vendor tool's nav entry point. Hidden by the
+									    Settings toggle; the flow itself is Pro. */}
+									{vendingEnabled && (
+										<HeaderIconButton
+											onPress={() => {
+												Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+												if (!isPro) {
+													void presentProPaywallIfNeeded();
+													return;
+												}
+												router.push("/(vendor)");
+											}}
+										>
+											<SymbolView
+												name="storefront"
+												size={20}
+												tintColor={t.accentOn}
+												weight="medium"
+											/>
+										</HeaderIconButton>
+									)}
 									<HeaderIconButton
 										onPress={() => {
 											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
