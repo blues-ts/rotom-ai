@@ -30,6 +30,7 @@ import ErrorState from "@/components/ErrorState";
 import RefreshingPill from "@/components/RefreshingPill";
 import HeaderFadeScrim from "@/components/HeaderFadeScrim";
 import SegmentedChips from "@/components/SegmentedChips";
+import SlidingPanels from "@/components/SlidingPanels";
 import VendorRevenueHero from "@/components/VendorRevenueHero";
 
 // Same compact thumb as the scan review rows — the row is about the prices.
@@ -201,8 +202,10 @@ export default function VendorScreen() {
 		  }
 		| { kind: "item"; item: VendorItem };
 	const listEntries = useMemo((): ListEntry[] => {
-		if (tab === "sold" || groups.length === 0) {
-			return rows.map((item) => ({ kind: "item" as const, item }));
+		// Always built from the listed shelf — the Sold panel renders its own
+		// flat list, and both panels stay mounted for the tab slide.
+		if (groups.length === 0) {
+			return listed.map((item) => ({ kind: "item" as const, item }));
 		}
 		const shelfValue = (items: VendorItem[]) =>
 			items.reduce(
@@ -213,7 +216,7 @@ export default function VendorScreen() {
 			items.reduce((sum, i) => sum + i.quantity, 0);
 		const byGroup = new Map<string, VendorItem[]>();
 		const ungrouped: VendorItem[] = [];
-		for (const item of rows) {
+		for (const item of listed) {
 			if (item.groupId && groupNameById.has(item.groupId)) {
 				const members = byGroup.get(item.groupId) ?? [];
 				members.push(item);
@@ -249,7 +252,7 @@ export default function VendorScreen() {
 			pushSection("__ungrouped__", null, ungrouped);
 		}
 		return entries;
-	}, [tab, rows, groups, groupNameById, collapsedSections]);
+	}, [listed, groups, groupNameById, collapsedSections]);
 
 	// Same prompt the group picker uses — create an empty shelf up front,
 	// before any cards are assigned to it.
@@ -293,6 +296,131 @@ export default function VendorScreen() {
 			params: { id: item.id, title: item.cardName },
 		});
 	}, []);
+
+	// One row renderer for both sliding panels (listed and sold).
+	const renderItemRow = (item: VendorItem) => {
+		const soldDiff =
+			item.status === "sold" ? (item.soldPrice ?? 0) - item.marketValue : 0;
+		return (
+			<Animated.View
+				key={item.id}
+				entering={FadeIn.duration(250)}
+				exiting={FadeOut.duration(200)}
+				layout={LinearTransition.duration(300)}
+			>
+				<CardPressable
+					onPress={() => (inSelect ? toggle(item.id) : openItemSheet(item))}
+					delayLongPress={300}
+					onLongPress={() => onRowLongPress(item.id)}
+					pressScale={0.98}
+					baseColor={t.glass.elevatedFill}
+					pressedColor={t.glass.pressedFill}
+					// Selection reads as an accent-glowing border — the row itself
+					// doesn't change shape.
+					style={[
+						styles.row,
+						{ borderColor: t.glass.elevatedBorder },
+						inSelect &&
+							liveSelected.has(item.id) && {
+								borderColor: t.accent,
+								...t.buttonGlow,
+							},
+					]}
+				>
+					<Image
+						source={{ uri: item.cardImageUrl }}
+						style={styles.thumb}
+						contentFit="contain"
+					/>
+					<View style={styles.rowInfo}>
+						<Text
+							style={[styles.rowName, { color: t.text.primary }]}
+							numberOfLines={1}
+						>
+							{item.cardName}
+							{item.quantity > 1 ? `  ×${item.quantity}` : ""}
+						</Text>
+						{(item.setName || item.cardNumber) && (
+							<Text
+								style={[styles.rowSet, { color: t.text.tertiary }]}
+								numberOfLines={1}
+							>
+								{item.setName}
+								{item.cardNumber
+									? `${item.setName ? " · " : ""}${item.cardNumber}`
+									: ""}
+							</Text>
+						)}
+						<Text
+							style={[styles.rowMarket, { color: t.text.secondary }]}
+							numberOfLines={1}
+						>
+							Market {formatCurrency(item.marketValue)}
+							{item.status === "sold" &&
+							item.groupId &&
+							groupNameById.has(item.groupId)
+								? ` · ${groupNameById.get(item.groupId)}`
+								: ""}
+							{item.status === "sold" && item.soldAt
+								? ` · ${soldDateLabel(item.soldAt)}`
+								: ""}
+						</Text>
+					</View>
+					{item.status === "listed" ? (
+						<View style={styles.rowTrailing}>
+							<Text
+								style={[
+									styles.rowPrice,
+									{
+										color: item.askingPrice
+											? t.text.primary
+											: t.accentOn,
+									},
+								]}
+							>
+								{item.askingPrice !== undefined
+									? formatCurrency(item.askingPrice)
+									: "Set price"}
+							</Text>
+							<Text
+								style={[styles.rowPriceLabel, { color: t.text.tertiary }]}
+							>
+								asking
+							</Text>
+						</View>
+					) : (
+						<View style={styles.rowTrailing}>
+							<Text style={[styles.rowPrice, { color: t.text.primary }]}>
+								{formatCurrency(item.soldPrice ?? 0)}
+							</Text>
+							<Text
+								style={[
+									styles.rowPriceLabel,
+									{ color: soldDiff >= 0 ? t.gain : t.loss },
+								]}
+							>
+								{soldDiff >= 0 ? "+" : ""}
+								{formatCurrency(soldDiff)}
+							</Text>
+						</View>
+					)}
+					{inSelect && liveSelected.has(item.id) && (
+						<Animated.View
+							entering={FadeIn.duration(180)}
+							exiting={FadeOut.duration(150)}
+						>
+							<SymbolView
+								name="checkmark.circle.fill"
+								size={22}
+								tintColor={t.accent}
+								weight="semibold"
+							/>
+						</Animated.View>
+					)}
+				</CardPressable>
+			</Animated.View>
+		);
+	};
 
 	return (
 		<View style={styles.container}>
@@ -427,32 +555,36 @@ export default function VendorScreen() {
 							</CardPressable>
 						</View>
 
-						{rows.length === 0 &&
-						!(tab === "listed" && groups.length > 0) ? (
-							<View style={styles.emptyState}>
-								<SymbolView
-									name={tab === "listed" ? "storefront" : "dollarsign.circle"}
-									size={44}
-									tintColor={t.text.tertiary}
-									weight="regular"
-								/>
-								<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
-									{tab === "listed" ? "Nothing For Sale" : "No Sales Yet"}
-								</Text>
-								<Text
-									style={[styles.emptySubtitle, { color: t.text.secondary }]}
-								>
-									{tab === "listed"
-										? "Scan or search cards and pick Vending to put them on the shelf — or select cards in a collection and move them here."
-										: "Mark a listed card sold and it'll show up here."}
-								</Text>
-							</View>
-						) : (
-							<Animated.View
-								style={styles.list}
-								layout={LinearTransition.duration(300)}
-							>
-								{listEntries.map((entry) => {
+						{/* Tab switch rides the card-detail Raw/Graded slider
+						    (SlidingPanels): the outgoing panel slides left, the incoming
+						    enters from the right, and the frame height eases between. */}
+						<SlidingPanels
+							activeTab={tab === "sold" ? "Graded" : "Raw"}
+							rawPanel={
+								listed.length === 0 && groups.length === 0 ? (
+									<View style={styles.emptyState}>
+										<SymbolView
+											name="storefront"
+											size={44}
+											tintColor={t.text.tertiary}
+											weight="regular"
+										/>
+										<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
+											Nothing For Sale
+										</Text>
+										<Text
+											style={[styles.emptySubtitle, { color: t.text.secondary }]}
+										>
+											Scan or search cards and pick Vending to put them on the
+											shelf — or select cards in a collection and move them here.
+										</Text>
+									</View>
+								) : (
+									<Animated.View
+										style={styles.list}
+										layout={LinearTransition.duration(300)}
+									>
+										{listEntries.map((entry) => {
 									if (entry.kind === "header") {
 										const isCollapsed = collapsedSections.has(
 											entry.sectionKey,
@@ -535,161 +667,39 @@ export default function VendorScreen() {
 											</Animated.View>
 										);
 									}
-									const item = entry.item;
-									const soldDiff =
-										item.status === "sold"
-											? (item.soldPrice ?? 0) - item.marketValue
-											: 0;
-									return (
-										<Animated.View
-											key={item.id}
-											entering={FadeIn.duration(250)}
-											exiting={FadeOut.duration(200)}
-											layout={LinearTransition.duration(300)}
+											return renderItemRow(entry.item);
+										})}
+									</Animated.View>
+								)
+							}
+							gradedPanel={
+								sold.length === 0 ? (
+									<View style={styles.emptyState}>
+										<SymbolView
+											name="dollarsign.circle"
+											size={44}
+											tintColor={t.text.tertiary}
+											weight="regular"
+										/>
+										<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
+											No Sales Yet
+										</Text>
+										<Text
+											style={[styles.emptySubtitle, { color: t.text.secondary }]}
 										>
-											<CardPressable
-												onPress={() =>
-													inSelect
-														? toggle(item.id)
-														: openItemSheet(item)
-												}
-												delayLongPress={300}
-												onLongPress={() => onRowLongPress(item.id)}
-												pressScale={0.98}
-												baseColor={t.glass.elevatedFill}
-												pressedColor={t.glass.pressedFill}
-												// Selection reads as an accent-glowing border —
-												// the row itself doesn't change shape.
-												style={[
-													styles.row,
-													{ borderColor: t.glass.elevatedBorder },
-													inSelect &&
-														liveSelected.has(item.id) && {
-															borderColor: t.accent,
-															...t.buttonGlow,
-														},
-												]}
-											>
-												<Image
-													source={{ uri: item.cardImageUrl }}
-													style={styles.thumb}
-													contentFit="contain"
-												/>
-												<View style={styles.rowInfo}>
-													<Text
-														style={[
-															styles.rowName,
-															{ color: t.text.primary },
-														]}
-														numberOfLines={1}
-													>
-														{item.cardName}
-														{item.quantity > 1
-															? `  ×${item.quantity}`
-															: ""}
-													</Text>
-													{(item.setName || item.cardNumber) && (
-														<Text
-															style={[
-																styles.rowSet,
-																{ color: t.text.tertiary },
-															]}
-															numberOfLines={1}
-														>
-															{item.setName}
-															{item.cardNumber
-																? `${item.setName ? " · " : ""}${item.cardNumber}`
-																: ""}
-														</Text>
-													)}
-													<Text
-														style={[
-															styles.rowMarket,
-															{ color: t.text.secondary },
-														]}
-														numberOfLines={1}
-													>
-														Market {formatCurrency(item.marketValue)}
-														{item.status === "sold" &&
-														item.groupId &&
-														groupNameById.has(item.groupId)
-															? ` · ${groupNameById.get(item.groupId)}`
-															: ""}
-														{item.status === "sold" && item.soldAt
-															? ` · ${soldDateLabel(item.soldAt)}`
-															: ""}
-													</Text>
-												</View>
-												{item.status === "listed" ? (
-													<View style={styles.rowTrailing}>
-														<Text
-															style={[
-																styles.rowPrice,
-																{
-																	color: item.askingPrice
-																		? t.text.primary
-																		: t.accentOn,
-																},
-															]}
-														>
-															{item.askingPrice !== undefined
-																? formatCurrency(item.askingPrice)
-																: "Set price"}
-														</Text>
-														<Text
-															style={[
-																styles.rowPriceLabel,
-																{ color: t.text.tertiary },
-															]}
-														>
-															asking
-														</Text>
-													</View>
-												) : (
-													<View style={styles.rowTrailing}>
-														<Text
-															style={[
-																styles.rowPrice,
-																{ color: t.text.primary },
-															]}
-														>
-															{formatCurrency(item.soldPrice ?? 0)}
-														</Text>
-														<Text
-															style={[
-																styles.rowPriceLabel,
-																{
-																	color:
-																		soldDiff >= 0
-																			? t.gain
-																			: t.loss,
-																},
-															]}
-														>
-															{soldDiff >= 0 ? "+" : ""}
-															{formatCurrency(soldDiff)}
-														</Text>
-													</View>
-												)}
-												{inSelect && liveSelected.has(item.id) && (
-													<Animated.View
-														entering={FadeIn.duration(180)}
-														exiting={FadeOut.duration(150)}
-													>
-														<SymbolView
-															name="checkmark.circle.fill"
-															size={22}
-															tintColor={t.accent}
-															weight="semibold"
-														/>
-													</Animated.View>
-												)}
-											</CardPressable>
-										</Animated.View>
-									);
-								})}
-							</Animated.View>
-						)}
+											Mark a listed card sold and it&apos;ll show up here.
+										</Text>
+									</View>
+								) : (
+									<Animated.View
+										style={styles.list}
+										layout={LinearTransition.duration(300)}
+									>
+										{sold.map((item) => renderItemRow(item))}
+									</Animated.View>
+								)
+							}
+						/>
 
 						</View>
 					</>
