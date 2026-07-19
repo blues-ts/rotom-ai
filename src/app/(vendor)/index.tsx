@@ -385,7 +385,9 @@ export default function VendorScreen() {
 						</View>
 
 						{/* For Sale / Sold toggle — the design system's segmented pill
-						    (solid accent = selected, glass track = off). */}
+						    (solid accent = selected, glass track = off) — with the
+						    new-group button beside it. Always rendered so the row
+						    never shifts between tabs. */}
 						<View style={styles.tabs}>
 							<SegmentedChips
 								options={[
@@ -406,6 +408,23 @@ export default function VendorScreen() {
 									setTab(v);
 								}}
 							/>
+							<CardPressable
+								onPress={promptCreateGroup}
+								pressScale={0.95}
+								baseColor={t.glass.elevatedFill}
+								pressedColor={t.glass.pressedFill}
+								style={[
+									styles.newGroupButton,
+									{ borderColor: t.glass.elevatedBorder },
+								]}
+							>
+								<SymbolView
+									name="folder.badge.plus"
+									size={16}
+									tintColor={t.accentOn}
+									weight="medium"
+								/>
+							</CardPressable>
 						</View>
 
 						{rows.length === 0 &&
@@ -672,42 +691,6 @@ export default function VendorScreen() {
 							</Animated.View>
 						)}
 
-						{/* Create a shelf before any cards are on it — same prompt
-						    the group picker's "New group…" row uses. Tertiary
-						    action: glass row, accent-soft content. */}
-						{tab === "listed" && !inSelect && (
-							<Animated.View
-								entering={FadeIn.duration(180)}
-								exiting={FadeOut.duration(150)}
-								layout={LinearTransition.duration(300)}
-							>
-								<CardPressable
-									onPress={promptCreateGroup}
-									pressScale={0.98}
-									baseColor={t.glass.surfaceFill}
-									pressedColor={t.glass.pressedFill}
-									style={[
-										styles.createGroupRow,
-										{ borderColor: t.glass.surfaceBorder },
-									]}
-								>
-									<SymbolView
-										name="plus"
-										size={15}
-										tintColor={t.accentOn}
-										weight="semibold"
-									/>
-									<Text
-										style={[
-											styles.createGroupText,
-											{ color: t.accentOn },
-										]}
-									>
-										New Group
-									</Text>
-								</CardPressable>
-							</Animated.View>
-						)}
 						</View>
 					</>
 				)}
@@ -872,9 +855,22 @@ const styles = StyleSheet.create({
 		fontWeight: "500",
 	},
 	tabs: {
+		flexDirection: "row",
 		alignItems: "center",
+		justifyContent: "space-between",
+		gap: 10,
 		marginTop: 16,
 		marginBottom: 12,
+	},
+	// Compact circle beside the segmented pill — same elevated-glass recipe
+	// as chips, accent-soft icon (tertiary action, not a primary CTA).
+	newGroupButton: {
+		width: 38,
+		height: 38,
+		borderRadius: 19,
+		borderWidth: 1,
+		alignItems: "center",
+		justifyContent: "center",
 	},
 	list: {
 		gap: 8,
@@ -903,20 +899,6 @@ const styles = StyleSheet.create({
 		fontSize: 13,
 		fontWeight: "500",
 		fontVariant: ["tabular-nums"],
-	},
-	createGroupRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		gap: 6,
-		marginTop: 12,
-		paddingVertical: 13,
-		borderRadius: 14,
-		borderWidth: 1,
-	},
-	createGroupText: {
-		fontSize: 15,
-		fontWeight: "600",
 	},
 	row: {
 		flexDirection: "row",
