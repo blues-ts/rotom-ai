@@ -301,6 +301,23 @@ function AppContent() {
 						headerTintColor: t.accentOn,
 						headerShadowVisible: false,
 						headerLeft: () => <HeaderBackButton />,
+						// Search is the second way onto the shelf (beside the scan
+						// pill): find a card, then pick Vending in the add sheet.
+						headerRight: () => (
+							<HeaderIconButton
+								onPress={() => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+									router.push("/(search)");
+								}}
+							>
+								<SymbolView
+									name="magnifyingglass"
+									size={20}
+									tintColor={t.accentOn}
+									weight="medium"
+								/>
+							</HeaderIconButton>
+						),
 					}}
 				/>
 				<Stack.Screen

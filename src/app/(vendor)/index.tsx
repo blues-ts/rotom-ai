@@ -358,7 +358,7 @@ export default function VendorScreen() {
 									style={[styles.emptySubtitle, { color: t.text.secondary }]}
 								>
 									{tab === "listed"
-										? "Scan cards and pick Vending to put them on the shelf."
+										? "Scan or search cards and pick Vending to put them on the shelf — or select cards in a collection and move them here."
 										: "Mark a listed card sold and it'll show up here."}
 								</Text>
 							</View>

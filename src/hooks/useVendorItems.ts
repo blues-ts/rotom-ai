@@ -168,6 +168,62 @@ export function useVendorItems() {
     onError: onMutationError,
   });
 
+  // "From collections": list existing collection_cards rows for sale. The
+  // rows STAY in their collection — the shelf is a sales layer, not a move —
+  // so nothing here touches the collections tables or their query keys.
+  const listCollectionRows = useMutation({
+    mutationFn: async ({ ids }: { ids: string[] }) => {
+      if (ids.length === 0) return 0;
+      const placeholders = ids.map(() => "?").join(",");
+      const rows = await db.getAllAsync<{
+        card_id: string;
+        card_name: string;
+        card_number: string | null;
+        set_name: string | null;
+        card_image_url: string;
+        card_value: number;
+        pricing_type: string;
+        product_type: string;
+        variant: string;
+        condition: string;
+        graded_company: string | null;
+        graded_grade: string | null;
+        quantity: number;
+      }>(
+        `SELECT * FROM collection_cards WHERE id IN (${placeholders})`,
+        ids,
+      );
+      await db.withTransactionAsync(async () => {
+        for (const row of rows) {
+          await upsertVendorItem(db, {
+            cardId: row.card_id,
+            cardName: row.card_name,
+            cardNumber: row.card_number ?? undefined,
+            setName: row.set_name ?? undefined,
+            cardImageUrl: row.card_image_url,
+            marketValue: row.card_value,
+            pricingType: row.pricing_type,
+            productType: row.product_type,
+            variant: row.variant,
+            condition: row.condition,
+            gradedCompany: row.graded_company ?? undefined,
+            gradedGrade: row.graded_grade ?? undefined,
+            quantity: row.quantity,
+          });
+        }
+      });
+      return rows.length;
+    },
+    onSuccess: (count) => {
+      toast.show(
+        `Listed ${count} ${count === 1 ? "card" : "cards"} for sale`,
+        "success",
+      );
+      invalidate();
+    },
+    onError: onMutationError,
+  });
+
   const setAskingPrice = useMutation({
     mutationFn: ({ id, askingPrice }: { id: string; askingPrice: number | null }) => {
       db.runSync("UPDATE vendor_items SET asking_price = ? WHERE id = ?", [
@@ -273,6 +329,7 @@ export function useVendorItems() {
     isError: query.isError,
     refetch: query.refetch,
     addVendorItems,
+    listCollectionRows,
     setAskingPrice,
     markSold,
     unmarkSold,

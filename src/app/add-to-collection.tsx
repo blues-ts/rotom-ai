@@ -66,7 +66,7 @@ export default function AddToCollection() {
 
   const { collections, addCardToCollection, addCardsToCollection, moveCardRows } = useCollections();
   const refreshPrices = useRefreshCollectionPrices();
-  const { addVendorItems } = useVendorItems();
+  const { addVendorItems, listCollectionRows } = useVendorItems();
   const refreshVendorPrices = useRefreshVendorPrices();
   const toast = useToast();
   // Batch adds come from the scanner library — clear those cards from the
@@ -273,6 +273,18 @@ export default function AddToCollection() {
     if (addedId) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setAddedId(VENDOR_DEST_ID);
+    // Multi-select from a collection: list those rows for sale. They keep
+    // their place in the collection — the shelf is a sales layer on top.
+    if (isMove) {
+      listCollectionRows.mutate(
+        { ids: moveIds },
+        {
+          onSuccess: () => setTimeout(() => router.back(), 450),
+          onError: () => setAddedId(null),
+        },
+      );
+      return;
+    }
     if (isBatch) {
       try {
         const inputs = (await resolveBatchInputs()).map(
@@ -319,7 +331,7 @@ export default function AddToCollection() {
         onError: () => setAddedId(null),
       },
     );
-  }, [addedId, isBatch, resolveBatchInputs, addVendorItems, finishBatchAdd, refreshVendorPrices, cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade]);
+  }, [addedId, isMove, isBatch, moveIds, listCollectionRows, resolveBatchInputs, addVendorItems, finishBatchAdd, refreshVendorPrices, cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade]);
 
   const handleSelect = useCallback(
     (collectionId: string) => {
@@ -391,10 +403,10 @@ export default function AddToCollection() {
               : "Add to Collection",
         }}
       />
-      {/* Vending is a fixed destination above the collections — scan-to-sell
-          and quick-listing reuse this sheet without touching the scan flow. */}
-      {!isMove && (
-        <CardPressable
+      {/* Vending is a fixed destination above the collections — scan-to-sell,
+          quick-listing, and collection multi-select all reuse this sheet
+          without touching the scan flow. */}
+      <CardPressable
           onPress={() => void handleSelectVendor()}
           disabled={!!addedId}
           pressScale={0.98}
@@ -436,7 +448,9 @@ export default function AddToCollection() {
             <Text style={[styles.collectionCount, { color: t.text.secondary }]}>
               {addedId === VENDOR_DEST_ID
                 ? "Listed for sale"
-                : "Put on your for-sale shelf"}
+                : isMove
+                  ? "List for sale · stays in this collection"
+                  : "Put on your for-sale shelf"}
             </Text>
           </View>
           <SymbolView
@@ -452,7 +466,6 @@ export default function AddToCollection() {
             weight="semibold"
           />
         </CardPressable>
-      )}
       {targetCollections.length === 0 ? (
         <View style={styles.empty}>
           <Text style={[styles.emptyText, { color: t.text.secondary }]}>
