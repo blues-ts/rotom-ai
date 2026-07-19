@@ -14,6 +14,7 @@ import {
 	seedCollectionValueHistory,
 } from "@/lib/collectionValueHistory";
 import { runAndStoreSqliteBenchmark } from "@/lib/devPerfBench";
+import { seedDevCollections } from "@/lib/devSeedCollections";
 import { playResponseHaptic } from "@/hooks/useChat";
 import { resetTapHoldHint } from "@/hooks/useTapHoldHint";
 import AppearanceSection from "@/components/AppearanceSection";
@@ -447,6 +448,39 @@ export default function Settings() {
 									await SecureStore.deleteItemAsync("onboarding_complete");
 									await signOut();
 									router.replace("/(onboarding)/welcome");
+								}}
+							/>
+							<SettingsRow
+								label="Seed Demo Collections"
+								onPress={async () => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+									toast.show("Seeding demo collections…");
+									try {
+										const result = await seedDevCollections(api);
+										queryClient.invalidateQueries({ queryKey: ["collections"] });
+										queryClient.invalidateQueries({ queryKey: ["collectionSnapshot"] });
+										queryClient.invalidateQueries({ queryKey: ["collection"] });
+										queryClient.invalidateQueries({ queryKey: ["collectionCards"] });
+										queryClient.invalidateQueries({
+											queryKey: ["collectionValueHistory"],
+										});
+										const parts = [`Added ${result.added} cards`];
+										if (result.skipped > 0) {
+											parts.push(`${result.skipped} already seeded`);
+										}
+										if (result.missing.length > 0) {
+											parts.push(`${result.missing.length} unresolved`);
+											console.log(
+												"[seed] unresolved card ids:",
+												result.missing.join(", "),
+											);
+										}
+										toast.show(parts.join(" · "), "success");
+									} catch (e) {
+										toast.show(
+											e instanceof Error ? e.message : "Seeding failed.",
+										);
+									}
 								}}
 							/>
 							<SettingsRow
