@@ -16,7 +16,9 @@ import { formatCurrency } from "@/lib/format";
 import { useVendorItems } from "@/hooks/useVendorItems";
 import type { VendorItem } from "@/types/vendor";
 import CardPressable from "@/components/CardPressable";
-import HeaderIconButton from "@/components/HeaderIconButton";
+import HeaderIconButton, {
+	HeaderButtonGroup,
+} from "@/components/HeaderIconButton";
 
 // Same compact thumb as the scan review rows — the row is about the prices.
 const THUMB_WIDTH = 44;
@@ -331,8 +333,26 @@ export default function VendorShelfScreen() {
 							(groupId === "__ungrouped__"
 								? "Ungrouped"
 								: (name ?? ""))),
-					headerRight: group
-						? () => (
+					headerRight: () => (
+						<HeaderButtonGroup>
+							{/* Explicit route into multi-select (long-press still
+							    works) — hidden while selecting; the bar's ✕ exits. */}
+							{items.length > 0 && !inSelect && (
+								<HeaderIconButton
+									onPress={() => {
+										Haptics.selectionAsync();
+										setSelectMode(true);
+									}}
+								>
+									<SymbolView
+										name="checkmark.circle"
+										size={22}
+										tintColor={t.accentOn}
+										weight="medium"
+									/>
+								</HeaderIconButton>
+							)}
+							{group && (
 								<HeaderIconButton
 									onPress={() => {
 										Haptics.impactAsync(
@@ -351,8 +371,9 @@ export default function VendorShelfScreen() {
 										weight="medium"
 									/>
 								</HeaderIconButton>
-							)
-						: undefined,
+							)}
+						</HeaderButtonGroup>
+					),
 				}}
 			/>
 			<ScrollView
