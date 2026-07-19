@@ -329,42 +329,8 @@ export default function VendorScreen() {
 							))}
 						</View>
 
-						{/* 3 — Shelves: compact rows, one per group (+ Sold). */}
-						{isEmpty ? (
-							<View style={styles.emptyState}>
-								<SymbolView
-									name="storefront"
-									size={44}
-									tintColor={t.text.tertiary}
-									weight="regular"
-								/>
-								<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
-									Nothing For Sale
-								</Text>
-								<Text
-									style={[styles.emptySubtitle, { color: t.text.secondary }]}
-								>
-									Scan or search cards and pick Vending to put them on
-									your table — or select cards in a collection and move
-									them here.
-								</Text>
-							</View>
-						) : (
-							<Animated.View
-								style={styles.list}
-								layout={LinearTransition.duration(300)}
-							>
-								{shelfRows.map((row) =>
-									renderShelfRow({
-										...row,
-										onPress: () => openShelf(row.groupId, row.name),
-									}),
-								)}
-							</Animated.View>
-						)}
-
-						{/* Sold cards are a ledger, not a shelf — recent receipts
-						    under the inventory, with See All into the full list. */}
+						{/* 3 — Recent sales: the ledger, right under the stats
+						    it explains, with See All into the full list. */}
 						{sold.length > 0 && (
 							<View style={styles.salesSection}>
 								<View style={styles.salesHeader}>
@@ -493,6 +459,41 @@ export default function VendorScreen() {
 								</View>
 							</View>
 						)}
+
+						{/* 4 — Shelves: compact rows, one per group. */}
+						{isEmpty ? (
+							<View style={styles.emptyState}>
+								<SymbolView
+									name="storefront"
+									size={44}
+									tintColor={t.text.tertiary}
+									weight="regular"
+								/>
+								<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
+									Nothing For Sale
+								</Text>
+								<Text
+									style={[styles.emptySubtitle, { color: t.text.secondary }]}
+								>
+									Scan or search cards and pick Vending to put them on
+									your table — or select cards in a collection and move
+									them here.
+								</Text>
+							</View>
+						) : (
+							<Animated.View
+								style={styles.list}
+								layout={LinearTransition.duration(300)}
+							>
+								{shelfRows.map((row) =>
+									renderShelfRow({
+										...row,
+										onPress: () => openShelf(row.groupId, row.name),
+									}),
+								)}
+							</Animated.View>
+						)}
+
 					</>
 				)}
 			</ScrollView>
