@@ -365,19 +365,31 @@ export default function CollectionDetail() {
 		);
 	}, [collection, nameParam, id, deleteCollection]);
 
-	// Hand the selected rows to the move sheet. Selection clears now rather
-	// than on the sheet's success — the rows vanish from this list once moved,
-	// so a lingering selection would point at dead ids.
+	// Hand the selected rows to the move sheet. The selection SURVIVES the
+	// trip: cancelling keeps it, and listing for Vending (which copies) comes
+	// back to the same cards still selected. Rows that actually move away are
+	// pruned from the set by the effect below, so nothing points at dead ids.
 	const handleMoveSelected = useCallback(() => {
 		const ids = [...selected];
 		if (ids.length === 0) return;
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-		exitSelect();
 		router.push({
 			pathname: "/add-to-collection",
 			params: { moveFromCollectionId: id, moveRowIds: ids.join(",") },
 		});
-	}, [selected, id, exitSelect]);
+	}, [selected, id]);
+
+	// Selection can outlive its rows (a move relocates them, a delete from
+	// another screen drops them) — reconcile against the live card list so
+	// the header count and batch actions only ever see rows that exist.
+	useEffect(() => {
+		setSelected((prev) => {
+			if (prev.size === 0) return prev;
+			const present = new Set((cards ?? []).map((c) => c.id));
+			const next = new Set([...prev].filter((rowId) => present.has(rowId)));
+			return next.size === prev.size ? prev : next;
+		});
+	}, [cards]);
 
 	const handleDeleteSelected = useCallback(() => {
 		const ids = [...selected];
