@@ -48,17 +48,33 @@ export default function MenuSheet() {
 					}}
 				>
 					<View style={styles.optionInner}>
-						<Text
-							style={[
-								styles.optionLabel,
-								{
-									color: a.isOn ? t.text.primary : t.text.body,
-									fontWeight: a.isOn ? "700" : "500",
-								},
-							]}
-						>
-							{a.label}
-						</Text>
+						<View style={styles.optionLead}>
+							{a.icon && (
+								<SymbolView
+									name={a.icon}
+									size={17}
+									tintColor={
+										a.destructive ? t.loss : t.text.secondary
+									}
+									weight="medium"
+								/>
+							)}
+							<Text
+								style={[
+									styles.optionLabel,
+									{
+										color: a.destructive
+											? t.loss
+											: a.isOn
+												? t.text.primary
+												: t.text.body,
+										fontWeight: a.isOn ? "700" : "500",
+									},
+								]}
+							>
+								{a.label}
+							</Text>
+						</View>
 						{a.isOn && (
 							<SymbolView
 								name="checkmark"
@@ -94,6 +110,12 @@ const styles = StyleSheet.create({
 		justifyContent: "space-between",
 		paddingHorizontal: 12,
 		paddingVertical: 14,
+	},
+	optionLead: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 10,
+		flexShrink: 1,
 	},
 	optionLabel: {
 		fontSize: 16,

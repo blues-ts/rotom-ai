@@ -9,6 +9,10 @@ import { useRiverTheme } from "@/constants/theme";
 export interface LegacyMenuAction {
 	label: string;
 	isOn?: boolean;
+	/** Leading glyph on the menu-sheet row (no-op in the action sheet). */
+	icon?: SFSymbol;
+	/** Destructive styling: loss-red row / action-sheet destructive slot. */
+	destructive?: boolean;
 	onPress: () => void;
 }
 
@@ -41,6 +45,9 @@ export function LegacyToolbarMenu({
 					"Cancel",
 				],
 				cancelButtonIndex: actions.length,
+				destructiveButtonIndex: actions.some((a) => a.destructive)
+					? actions.findIndex((a) => a.destructive)
+					: undefined,
 			},
 			(index) => {
 				if (index != null && index < actions.length) {

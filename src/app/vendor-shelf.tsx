@@ -251,13 +251,35 @@ export default function VendorShelfScreen() {
 		setMenuSheetActions(
 			isSold
 				? [
-						{ label: "Undo Sale", onPress: handleUndoSelected },
-						{ label: "Delete Sale", onPress: handleRemoveSelected },
+						{
+							label: "Undo Sale",
+							icon: "arrow.uturn.backward",
+							onPress: handleUndoSelected,
+						},
+						{
+							label: "Delete Sale",
+							icon: "trash",
+							destructive: true,
+							onPress: handleRemoveSelected,
+						},
 					]
 				: [
-						{ label: "Mark Sold", onPress: handleSellSelected },
-						{ label: "Move to Group", onPress: handleGroupSelected },
-						{ label: "Remove from Table", onPress: handleRemoveSelected },
+						{
+							label: "Mark Sold",
+							icon: "dollarsign.circle",
+							onPress: handleSellSelected,
+						},
+						{
+							label: "Move to Group",
+							icon: "folder",
+							onPress: handleGroupSelected,
+						},
+						{
+							label: "Remove from Table",
+							icon: "trash",
+							destructive: true,
+							onPress: handleRemoveSelected,
+						},
 					],
 		);
 		router.push({
