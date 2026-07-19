@@ -1,12 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-	Alert,
-	ScrollView,
-	StyleSheet,
-	Text,
-	TextInput,
-	View,
-} from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import { router, Stack, useLocalSearchParams } from "expo-router";
@@ -23,6 +16,7 @@ import { formatCurrency } from "@/lib/format";
 import { useVendorItems } from "@/hooks/useVendorItems";
 import type { VendorItem } from "@/types/vendor";
 import CardPressable from "@/components/CardPressable";
+import FloatingSearchBar from "@/components/FloatingSearchBar";
 import HeaderIconButton, {
 	HeaderButtonGroup,
 } from "@/components/HeaderIconButton";
@@ -348,13 +342,14 @@ export default function VendorShelfScreen() {
 			/>
 			<Stack.Screen
 				options={{
-					// Live group name so a rename shows immediately on return.
+					// Live group name so a rename shows immediately on return; the
+					// ungrouped pseudo-shelf takes whatever the home row was
+					// called ("For Sale" until groups exist, then "Ungrouped").
 					headerTitle: isSold
 						? "Sold"
 						: (group?.name ??
-							(groupId === "__ungrouped__"
-								? "Ungrouped"
-								: (name ?? ""))),
+							name ??
+							(groupId === "__ungrouped__" ? "Ungrouped" : "")),
 					headerRight: () => (
 						<HeaderButtonGroup>
 							{/* Explicit route into multi-select (long-press still
@@ -403,42 +398,15 @@ export default function VendorShelfScreen() {
 					styles.content,
 					{
 						paddingTop: insets.top + 52,
-						paddingBottom: insets.bottom + (inSelect ? 108 : 24),
+						// Clear whichever bar floats at the bottom — the search
+						// capsule normally, the batch bar in select mode.
+						paddingBottom: insets.bottom + 110,
 					},
 				]}
 				showsVerticalScrollIndicator={false}
 				keyboardShouldPersistTaps="handled"
 				keyboardDismissMode="on-drag"
 			>
-				{items.length > 0 && (
-					<View
-						style={[
-							styles.searchBar,
-							{
-								backgroundColor: t.glass.elevatedFill,
-								borderColor: t.glass.elevatedBorder,
-							},
-						]}
-					>
-						<SymbolView
-							name="magnifyingglass"
-							size={15}
-							tintColor={t.text.tertiary}
-							weight="medium"
-						/>
-						<TextInput
-							style={[styles.searchInput, { color: t.text.primary }]}
-							placeholder={isSold ? "Search sales" : "Search this group"}
-							placeholderTextColor={t.text.secondary}
-							value={query}
-							onChangeText={setQuery}
-							autoCorrect={false}
-							autoCapitalize="none"
-							clearButtonMode="while-editing"
-							returnKeyType="search"
-						/>
-					</View>
-				)}
 				{items.length === 0 ? (
 					<View style={styles.emptyState}>
 						<SymbolView
@@ -471,6 +439,16 @@ export default function VendorShelfScreen() {
 					</Animated.View>
 				)}
 			</ScrollView>
+
+			{/* The app-standard floating search capsule — hidden in select mode,
+			    where the batch bar owns the bottom slot. */}
+			{items.length > 0 && !inSelect && (
+				<FloatingSearchBar
+					value={query}
+					onChangeText={setQuery}
+					placeholder={isSold ? "Search sales" : "Search cards..."}
+				/>
+			)}
 
 			{/* Pinned batch action bar — select mode only. */}
 			<View
@@ -585,22 +563,6 @@ const styles = StyleSheet.create({
 	content: {
 		flexGrow: 1,
 		paddingHorizontal: spacing.screen,
-	},
-	// Elevated glass search pill above the rows.
-	searchBar: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 8,
-		paddingHorizontal: 14,
-		borderRadius: 999,
-		borderWidth: 1,
-		height: 40,
-		marginBottom: 10,
-	},
-	searchInput: {
-		flex: 1,
-		fontSize: 15,
-		paddingVertical: 0,
 	},
 	noMatches: {
 		alignItems: "center",
