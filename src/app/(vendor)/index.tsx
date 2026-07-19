@@ -122,7 +122,7 @@ export default function VendorScreen() {
 			},
 			{
 				key: "market",
-				label: "Table Market Value",
+				label: "Market Value",
 				value: formatCurrency(summary.listedMarketValue),
 			},
 			{ key: "sold", label: "Sold", value: String(summary.soldCount) },
