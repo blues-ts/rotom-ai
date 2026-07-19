@@ -7,39 +7,49 @@ import {
 	View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
+import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
-import { spacing, useRiverTheme } from "@/constants/theme";
+import Animated, {
+	FadeIn,
+	FadeOut,
+	LinearTransition,
+} from "react-native-reanimated";
+import { spacing, typeScale, useRiverTheme } from "@/constants/theme";
 import { formatCurrency } from "@/lib/format";
 import {
 	useRefreshVendorPrices,
 	useVendorItems,
 } from "@/hooks/useVendorItems";
 import type { VendorItem } from "@/types/vendor";
-import CollectionCard from "@/components/CollectionCard";
+import CardPressable from "@/components/CardPressable";
 import ErrorState from "@/components/ErrorState";
 import RefreshingPill from "@/components/RefreshingPill";
 import HeaderFadeScrim from "@/components/HeaderFadeScrim";
 import VendorRevenueHero from "@/components/VendorRevenueHero";
 
-/** Top-4 thumbnails for a shelf card, richest first — same idea as the
- *  collections list (which orders by card_value). */
+// Mini stacked thumbs on the shelf rows — card ratio, tightly overlapped.
+const MINI_THUMB_WIDTH = 26;
+const MINI_THUMB_HEIGHT = MINI_THUMB_WIDTH * (88 / 63);
+const MINI_THUMB_OVERLAP = 11;
+
+/** Top-3 thumbnails for a shelf row, richest first. */
 function topImages(items: VendorItem[]): string[] {
 	return [...items]
 		.sort(
 			(a, b) =>
 				(b.askingPrice ?? b.marketValue) - (a.askingPrice ?? a.marketValue),
 		)
-		.slice(0, 4)
+		.slice(0, 3)
 		.map((i) => i.cardImageUrl);
 }
 
 /**
- * Vending home — the collections-index mirror: revenue hero + stat strip on
- * the stage, then each group as a tappable shelf card (plus Ungrouped and
- * Sold). Card management lives one level down on /vendor-shelf.
+ * Vending home — dashboard order: revenue chart, then the stats grid, then
+ * compact shelf rows per group (+ Ungrouped and Sold). Card management
+ * lives one level down on /vendor-shelf.
  */
 export default function VendorScreen() {
 	const t = useRiverTheme();
@@ -49,7 +59,7 @@ export default function VendorScreen() {
 
 	const groupIds = useMemo(() => new Set(groups.map((g) => g.id)), [groups]);
 
-	const shelfCards = useMemo(() => {
+	const shelfRows = useMemo(() => {
 		const byGroup = new Map<string, VendorItem[]>();
 		const ungrouped: VendorItem[] = [];
 		for (const item of listed) {
@@ -69,7 +79,7 @@ export default function VendorScreen() {
 		const cardCount = (items: VendorItem[]) =>
 			items.reduce((sum, i) => sum + i.quantity, 0);
 
-		const cards = groups.map((g) => {
+		const rows = groups.map((g) => {
 			const members = byGroup.get(g.id) ?? [];
 			return {
 				key: g.id,
@@ -81,7 +91,7 @@ export default function VendorScreen() {
 			};
 		});
 		if (ungrouped.length > 0 || groups.length === 0) {
-			cards.push({
+			rows.push({
 				// With no groups yet, everything listed lives here — call it
 				// "For Sale" until grouping enters the picture.
 				key: "__ungrouped__",
@@ -92,25 +102,140 @@ export default function VendorScreen() {
 				groupId: "__ungrouped__",
 			});
 		}
-		return cards;
+		return rows;
 	}, [listed, groups, groupIds]);
 
-	const openShelf = useCallback(
-		(groupId: string, name: string) => {
-			router.push({
-				pathname: "/vendor-shelf",
-				params: { mode: "group", groupId, name },
-			});
-		},
-		[],
-	);
+	// The stats grid's six tiles — everything derivable from the summary.
+	const stats = useMemo(() => {
+		const avgSale =
+			summary.soldCount > 0 ? summary.revenue / summary.soldCount : 0;
+		return [
+			{
+				key: "forSale",
+				label: "For Sale",
+				value: String(summary.listedCount),
+			},
+			{
+				key: "asking",
+				label: "Asking Total",
+				value: formatCurrency(summary.listedAskingValue),
+			},
+			{
+				key: "market",
+				label: "Market Value",
+				value: formatCurrency(summary.listedMarketValue),
+			},
+			{ key: "sold", label: "Sold", value: String(summary.soldCount) },
+			{
+				key: "vsMarket",
+				label: "Vs Market",
+				value: `${summary.soldVsMarket >= 0 ? "+" : ""}${formatCurrency(summary.soldVsMarket)}`,
+				color: summary.soldVsMarket >= 0 ? t.gain : t.loss,
+			},
+			{
+				key: "avgSale",
+				label: "Avg Sale",
+				value: formatCurrency(avgSale),
+			},
+		];
+	}, [summary, t.gain, t.loss]);
+
+	const openShelf = useCallback((groupId: string, name: string) => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		router.push({
+			pathname: "/vendor-shelf",
+			params: { mode: "group", groupId, name },
+		});
+	}, []);
 
 	const openSold = useCallback(() => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 		router.push({ pathname: "/vendor-shelf", params: { mode: "sold" } });
 	}, []);
 
 	const isEmpty =
 		listed.length === 0 && sold.length === 0 && groups.length === 0;
+
+	const renderShelfRow = ({
+		key,
+		name,
+		count,
+		total,
+		images,
+		onPress,
+	}: {
+		key: string;
+		name: string;
+		count: number;
+		total: number;
+		images: string[];
+		onPress: () => void;
+	}) => (
+		<Animated.View
+			key={key}
+			entering={FadeIn.duration(300)}
+			exiting={FadeOut.duration(200)}
+			layout={LinearTransition.duration(300)}
+		>
+			<CardPressable
+				onPress={onPress}
+				pressScale={0.98}
+				baseColor={t.glass.elevatedFill}
+				pressedColor={t.glass.pressedFill}
+				style={[styles.shelfRow, { borderColor: t.glass.elevatedBorder }]}
+			>
+				{images.length > 0 ? (
+					<View style={styles.thumbStack}>
+						{images.map((uri, i) => (
+							<Image
+								key={`${uri}-${i}`}
+								source={{ uri }}
+								style={[
+									styles.miniThumb,
+									{
+										left: i * MINI_THUMB_OVERLAP,
+										zIndex: images.length - i,
+									},
+								]}
+								contentFit="contain"
+							/>
+						))}
+					</View>
+				) : (
+					<View
+						style={[styles.rowIcon, { backgroundColor: t.accentIconFill }]}
+					>
+						<SymbolView
+							name="folder"
+							size={16}
+							tintColor={t.accentOn}
+							weight="semibold"
+						/>
+					</View>
+				)}
+				<View style={styles.shelfInfo}>
+					<Text
+						style={[styles.shelfName, { color: t.text.primary }]}
+						numberOfLines={1}
+					>
+						{name}
+					</Text>
+					<Text style={[styles.shelfCount, { color: t.text.tertiary }]}>
+						{count} {count === 1 ? "card" : "cards"}
+					</Text>
+				</View>
+				<Text style={[styles.shelfValue, { color: t.text.primary }]}>
+					{formatCurrency(total)}
+				</Text>
+				<SymbolView
+					name="chevron.right"
+					size={13}
+					tintColor={t.text.tertiary}
+					weight="semibold"
+				/>
+			</CardPressable>
+		</Animated.View>
+	);
 
 	return (
 		<View style={styles.container}>
@@ -150,47 +275,47 @@ export default function VendorScreen() {
 					</View>
 				) : (
 					<>
-						{/* Revenue hero — mirrors the collections portfolio hero:
-						    bare on the gradient, chart from sale receipts. */}
+						{/* 1 — Revenue hero (chart + range pills). */}
 						<VendorRevenueHero sold={sold} summary={summary} />
 
-						{/* Stat strip — under the range pills, on the stage. */}
-						<View style={styles.statsRow}>
-							<View style={styles.stat}>
-								<Text style={[styles.statValue, { color: t.text.primary }]}>
-									{summary.soldCount}
-								</Text>
-								<Text style={[styles.statLabel, { color: t.text.tertiary }]}>
-									sold
-								</Text>
-							</View>
-							<View style={styles.stat}>
-								<Text
+						{/* 2 — Stats grid: glass tiles, three per row. */}
+						<View style={styles.statsGrid}>
+							{stats.map((s) => (
+								<View
+									key={s.key}
 									style={[
-										styles.statValue,
+										styles.statTile,
 										{
-											color:
-												summary.soldVsMarket >= 0 ? t.gain : t.loss,
+											backgroundColor: t.glass.surfaceFill,
+											borderColor: t.glass.surfaceBorder,
 										},
 									]}
 								>
-									{summary.soldVsMarket >= 0 ? "+" : ""}
-									{formatCurrency(summary.soldVsMarket)}
-								</Text>
-								<Text style={[styles.statLabel, { color: t.text.tertiary }]}>
-									vs market
-								</Text>
-							</View>
-							<View style={styles.stat}>
-								<Text style={[styles.statValue, { color: t.text.primary }]}>
-									{formatCurrency(summary.listedAskingValue)}
-								</Text>
-								<Text style={[styles.statLabel, { color: t.text.tertiary }]}>
-									on shelf
-								</Text>
-							</View>
+									<Text
+										style={[
+											styles.statTileValue,
+											{ color: s.color ?? t.text.primary },
+										]}
+										numberOfLines={1}
+										adjustsFontSizeToFit
+										minimumFontScale={0.7}
+									>
+										{s.value}
+									</Text>
+									<Text
+										style={[
+											styles.statTileLabel,
+											{ color: t.text.tertiary },
+										]}
+										numberOfLines={1}
+									>
+										{s.label.toUpperCase()}
+									</Text>
+								</View>
+							))}
 						</View>
 
+						{/* 3 — Shelves: compact rows, one per group (+ Sold). */}
 						{isEmpty ? (
 							<View style={styles.emptyState}>
 								<SymbolView
@@ -215,42 +340,27 @@ export default function VendorScreen() {
 								style={styles.list}
 								layout={LinearTransition.duration(300)}
 							>
-								{shelfCards.map((c) => (
-									<Animated.View
-										key={c.key}
-										entering={FadeIn.duration(300)}
-										exiting={FadeOut.duration(200)}
-										layout={LinearTransition.duration(300)}
-									>
-										<CollectionCard
-											name={c.name}
-											cardCount={c.count}
-											totalValue={c.total}
-											cardImages={c.images}
-											onPress={() => openShelf(c.groupId, c.name)}
-										/>
-									</Animated.View>
-								))}
-								{sold.length > 0 && (
-									<Animated.View
-										entering={FadeIn.duration(300)}
-										layout={LinearTransition.duration(300)}
-									>
-										<CollectionCard
-											name="Sold"
-											cardCount={summary.soldCount}
-											totalValue={summary.revenue}
-											cardImages={[...sold]
-												.sort(
-													(a, b) =>
-														(b.soldPrice ?? 0) - (a.soldPrice ?? 0),
-												)
-												.slice(0, 4)
-												.map((i) => i.cardImageUrl)}
-											onPress={openSold}
-										/>
-									</Animated.View>
+								{shelfRows.map((row) =>
+									renderShelfRow({
+										...row,
+										onPress: () => openShelf(row.groupId, row.name),
+									}),
 								)}
+								{sold.length > 0 &&
+									renderShelfRow({
+										key: "__sold__",
+										name: "Sold",
+										count: summary.soldCount,
+										total: summary.revenue,
+										images: [...sold]
+											.sort(
+												(a, b) =>
+													(b.soldPrice ?? 0) - (a.soldPrice ?? 0),
+											)
+											.slice(0, 3)
+											.map((i) => i.cardImageUrl),
+										onPress: openSold,
+									})}
 							</Animated.View>
 						)}
 					</>
@@ -272,31 +382,82 @@ const styles = StyleSheet.create({
 		flex: 1,
 		paddingHorizontal: spacing.screen,
 	},
-	statsRow: {
+	// Stats grid — three glass tiles per row, the dashboard's headline block.
+	statsGrid: {
 		flexDirection: "row",
-		justifyContent: "space-between",
-		marginTop: 14,
-		paddingHorizontal: spacing.screen + 6,
+		flexWrap: "wrap",
+		gap: 8,
+		marginTop: 16,
+		paddingHorizontal: spacing.screen,
 	},
-	stat: {
-		alignItems: "center",
-		gap: 1,
-		flex: 1,
+	statTile: {
+		flexBasis: "30%",
+		flexGrow: 1,
+		borderRadius: 16,
+		borderWidth: 1,
+		paddingVertical: 12,
+		paddingHorizontal: 12,
+		gap: 3,
 	},
-	statValue: {
-		fontSize: 15,
+	statTileValue: {
+		fontSize: 17,
 		fontWeight: "700",
 		fontVariant: ["tabular-nums"],
 	},
-	statLabel: {
+	statTileLabel: {
+		...typeScale.overline,
+		fontSize: 10,
+	},
+	// Compact shelf rows resting on the gradient.
+	list: {
+		gap: 8,
+		marginTop: 18,
+		paddingHorizontal: spacing.screen,
+	},
+	shelfRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 12,
+		paddingVertical: 10,
+		paddingHorizontal: 12,
+		borderRadius: 14,
+		borderWidth: 1,
+	},
+	// Overlapping mini card stack — width fits 3 thumbs at the fixed overlap.
+	thumbStack: {
+		width: MINI_THUMB_WIDTH + 2 * MINI_THUMB_OVERLAP,
+		height: MINI_THUMB_HEIGHT,
+	},
+	miniThumb: {
+		position: "absolute",
+		top: 0,
+		width: MINI_THUMB_WIDTH,
+		height: MINI_THUMB_HEIGHT,
+		borderRadius: 3,
+	},
+	rowIcon: {
+		width: MINI_THUMB_WIDTH + 2 * MINI_THUMB_OVERLAP,
+		height: MINI_THUMB_HEIGHT,
+		borderRadius: 10,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	shelfInfo: {
+		flex: 1,
+		gap: 2,
+	},
+	shelfName: {
+		fontSize: 15,
+		fontWeight: "600",
+	},
+	shelfCount: {
 		fontSize: 12,
 		fontWeight: "500",
 	},
-	// Shelf cards rest directly on the gradient, like the collections list.
-	list: {
-		gap: 14,
-		marginTop: 18,
-		paddingHorizontal: spacing.screen,
+	shelfValue: {
+		fontSize: 15,
+		fontWeight: "700",
+		fontVariant: ["tabular-nums"],
 	},
 	emptyState: {
 		flex: 1,
