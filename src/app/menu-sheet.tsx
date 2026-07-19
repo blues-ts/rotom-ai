@@ -48,39 +48,37 @@ export default function MenuSheet() {
 					}}
 				>
 					<View style={styles.optionInner}>
-						<View style={styles.optionLead}>
-							{a.icon && (
-								<SymbolView
-									name={a.icon}
-									size={17}
-									tintColor={
-										a.destructive ? t.loss : t.text.secondary
-									}
-									weight="medium"
-								/>
-							)}
-							<Text
-								style={[
-									styles.optionLabel,
-									{
-										color: a.destructive
-											? t.loss
-											: a.isOn
-												? t.text.primary
-												: t.text.body,
-										fontWeight: a.isOn ? "700" : "500",
-									},
-								]}
-							>
-								{a.label}
-							</Text>
-						</View>
+						<Text
+							style={[
+								styles.optionLabel,
+								{
+									color: a.destructive
+										? t.loss
+										: a.isOn
+											? t.text.primary
+											: t.text.body,
+									fontWeight: a.isOn ? "700" : "500",
+								},
+							]}
+						>
+							{a.label}
+						</Text>
 						{a.isOn && (
 							<SymbolView
 								name="checkmark"
 								size={15}
 								tintColor={t.accent}
 								weight="semibold"
+							/>
+						)}
+						{/* Trailing glyph — the UIMenu / vendor-sheet convention
+						    (label left, icon on the far edge). */}
+						{a.icon && (
+							<SymbolView
+								name={a.icon}
+								size={17}
+								tintColor={a.destructive ? t.loss : t.text.secondary}
+								weight="medium"
 							/>
 						)}
 					</View>
@@ -107,17 +105,12 @@ const styles = StyleSheet.create({
 	optionInner: {
 		flexDirection: "row",
 		alignItems: "center",
-		justifyContent: "space-between",
+		gap: 10,
 		paddingHorizontal: 12,
 		paddingVertical: 14,
 	},
-	optionLead: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 10,
-		flexShrink: 1,
-	},
 	optionLabel: {
+		flex: 1,
 		fontSize: 16,
 	},
 });
