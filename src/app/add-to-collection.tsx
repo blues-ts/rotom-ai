@@ -463,7 +463,7 @@ export default function AddToCollection() {
                 ? "Listed for sale"
                 : isMove
                   ? "List for sale · stays in this collection"
-                  : "Put on your for-sale shelf"}
+                  : "Put on your table"}
             </Text>
           </View>
           <SymbolView

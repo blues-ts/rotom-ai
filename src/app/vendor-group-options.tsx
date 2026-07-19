@@ -57,7 +57,7 @@ export default function VendorGroupOptionsSheet() {
 	const confirmDelete = () => {
 		Alert.alert(
 			`Delete “${group.name}”?`,
-			"Its cards move to Ungrouped — nothing is removed from the shelf.",
+			"Its cards move to Ungrouped — nothing is removed from your table.",
 			[
 				{ text: "Cancel", style: "cancel" },
 				{

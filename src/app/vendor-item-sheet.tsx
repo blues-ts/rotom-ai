@@ -95,7 +95,7 @@ export default function VendorItemSheet() {
 			`Remove ${it.cardName}?`,
 			it.status === "sold"
 				? "This sale will leave your revenue total."
-				: "It'll be removed from your for-sale shelf.",
+				: "It'll be removed from your table.",
 			[
 				{ text: "Cancel", style: "cancel" },
 				{
@@ -143,7 +143,7 @@ export default function VendorItemSheet() {
 							}),
 					},
 					{
-						label: "Remove from shelf",
+						label: "Remove from table",
 						icon: "trash",
 						destructive: true,
 						onPress: () => confirmRemove(item),

@@ -383,7 +383,7 @@ export function useVendorItems() {
     },
     onSuccess: (_data, { ids }) => {
       toast.show(
-        `Moved ${ids.length} ${ids.length === 1 ? "card" : "cards"} back to the shelf`,
+        `Moved ${ids.length} ${ids.length === 1 ? "card" : "cards"} back to your table`,
         "success",
       );
       invalidate();

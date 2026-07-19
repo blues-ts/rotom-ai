@@ -152,7 +152,7 @@ export default function VendorShelfScreen() {
 			`Remove ${picked.length} ${picked.length === 1 ? "card" : "cards"}?`,
 			isSold
 				? "These sales will leave your revenue total."
-				: "They'll be removed from your for-sale shelf.",
+				: "They'll be removed from your table.",
 			[
 				{ text: "Cancel", style: "cancel" },
 				{

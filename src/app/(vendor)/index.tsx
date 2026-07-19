@@ -122,13 +122,13 @@ export default function VendorScreen() {
 			},
 			{
 				key: "market",
-				label: "Market Value",
+				label: "Table Market Value",
 				value: formatCurrency(summary.listedMarketValue),
 			},
 			{ key: "sold", label: "Sold", value: String(summary.soldCount) },
 			{
 				key: "vsMarket",
-				label: "Vs Market",
+				label: "Sold vs Market",
 				value: `${summary.soldVsMarket >= 0 ? "+" : ""}${formatCurrency(summary.soldVsMarket)}`,
 				color: summary.soldVsMarket >= 0 ? t.gain : t.loss,
 			},
@@ -268,7 +268,7 @@ export default function VendorScreen() {
 				{isError ? (
 					<View style={styles.statePad}>
 						<ErrorState
-							title="Couldn't load your shelf"
+							title="Couldn't load your table"
 							message="Something went wrong reading your vending items."
 							onRetry={() => refetch()}
 						/>
@@ -308,6 +308,10 @@ export default function VendorScreen() {
 											{ color: t.text.tertiary },
 										]}
 										numberOfLines={1}
+										// "TABLE MARKET VALUE" outgrows a third-width
+										// tile — shrink rather than truncate.
+										adjustsFontSizeToFit
+										minimumFontScale={0.75}
 									>
 										{s.label.toUpperCase()}
 									</Text>
@@ -331,7 +335,7 @@ export default function VendorScreen() {
 									style={[styles.emptySubtitle, { color: t.text.secondary }]}
 								>
 									Scan or search cards and pick Vending to put them on
-									the shelf — or select cards in a collection and move
+									your table — or select cards in a collection and move
 									them here.
 								</Text>
 							</View>
