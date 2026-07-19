@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { Fragment, useRef } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
@@ -23,9 +23,17 @@ export default function MenuSheet() {
 
 	return (
 		<View style={[styles.container, { paddingBottom: insets.bottom + 16 }]}>
-			{actions.map((a) => (
+			{actions.map((a, idx) => (
+				<Fragment key={a.label}>
+				{idx > 0 && (
+					<View
+						style={[
+							styles.divider,
+							{ backgroundColor: t.glass.surfaceBorder },
+						]}
+					/>
+				)}
 				<CardPressable
-					key={a.label}
 					pressScale={1}
 					baseColor="transparent"
 					pressedColor={t.glass.pressedFill}
@@ -61,6 +69,7 @@ export default function MenuSheet() {
 						)}
 					</View>
 				</CardPressable>
+				</Fragment>
 			))}
 		</View>
 	);
@@ -73,6 +82,11 @@ const styles = StyleSheet.create({
 	optionRow: {
 		borderRadius: 12,
 		marginHorizontal: 8,
+	},
+	// Inset hairline between options — same recipe as the vendor sheets.
+	divider: {
+		height: StyleSheet.hairlineWidth,
+		marginHorizontal: 20,
 	},
 	optionInner: {
 		flexDirection: "row",
