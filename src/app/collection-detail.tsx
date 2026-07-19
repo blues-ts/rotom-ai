@@ -180,6 +180,13 @@ export default function CollectionDetail() {
 		isError: cardsError,
 		refetch: refetchCards,
 	} = useCollectionCards(id);
+	// Selection can outlive its rows (a move relocates them) — only ids still
+	// present count, so the header count and batch actions never see dead rows.
+	// This is what lets the selection survive the move sheet round-trip.
+	const liveSelected = useMemo(() => {
+		const present = new Set((cards ?? []).map((c) => c.id));
+		return new Set([...selected].filter((rowId) => present.has(rowId)));
+	}, [selected, cards]);
 	const [filterQuery, setFilterQuery] = useState("");
 	const [sortBy, setSortBy] = useState<SortOption>("valueDesc");
 
@@ -370,29 +377,17 @@ export default function CollectionDetail() {
 	// back to the same cards still selected. Rows that actually move away are
 	// pruned from the set by the effect below, so nothing points at dead ids.
 	const handleMoveSelected = useCallback(() => {
-		const ids = [...selected];
+		const ids = [...liveSelected];
 		if (ids.length === 0) return;
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 		router.push({
 			pathname: "/add-to-collection",
 			params: { moveFromCollectionId: id, moveRowIds: ids.join(",") },
 		});
-	}, [selected, id]);
-
-	// Selection can outlive its rows (a move relocates them, a delete from
-	// another screen drops them) — reconcile against the live card list so
-	// the header count and batch actions only ever see rows that exist.
-	useEffect(() => {
-		setSelected((prev) => {
-			if (prev.size === 0) return prev;
-			const present = new Set((cards ?? []).map((c) => c.id));
-			const next = new Set([...prev].filter((rowId) => present.has(rowId)));
-			return next.size === prev.size ? prev : next;
-		});
-	}, [cards]);
+	}, [liveSelected, id]);
 
 	const handleDeleteSelected = useCallback(() => {
-		const ids = [...selected];
+		const ids = [...liveSelected];
 		if (ids.length === 0) return;
 		Alert.alert(
 			`Delete ${ids.length} ${ids.length === 1 ? "card" : "cards"}?`,
@@ -409,7 +404,7 @@ export default function CollectionDetail() {
 				},
 			],
 		);
-	}, [selected, removeCardRows, id, exitSelect]);
+	}, [liveSelected, removeCardRows, id, exitSelect]);
 
 	const renderItem = useCallback(
 		({ item, index }: { item: CollectionCard; index: number }) => {
@@ -418,7 +413,7 @@ export default function CollectionDetail() {
 			// as the set tiles and set-detail cards.
 			const firstAppearance = !animatedIdsRef.current.has(item.id);
 			if (firstAppearance) animatedIdsRef.current.add(item.id);
-			const isSelected = selected.has(item.id);
+			const isSelected = liveSelected.has(item.id);
 			const isGraded =
 				item.productType !== "sealed" &&
 				item.pricingType === "Graded" &&
@@ -632,7 +627,7 @@ export default function CollectionDetail() {
 			</Animated.View>
 			);
 		},
-		[t, prefetchDetail, selectMode, selected, toggleSelected],
+		[t, prefetchDetail, selectMode, liveSelected, toggleSelected],
 	);
 
 	// One list drives both the iOS 26 toolbar menu and the legacy FAB sheet.
@@ -660,8 +655,8 @@ export default function CollectionDetail() {
 							style={[styles.headerTitle, { color: t.accentOn }]}
 						>
 							{selectMode
-								? selected.size > 0
-									? `${selected.size} Selected`
+								? liveSelected.size > 0
+									? `${liveSelected.size} Selected`
 									: "Select cards"
 								: (collection?.name ?? nameParam ?? "")}
 						</Text>
@@ -670,7 +665,7 @@ export default function CollectionDetail() {
 					headerRight: () =>
 						selectMode ? (
 							<HeaderButtonGroup>
-								{selected.size > 0 && (
+								{liveSelected.size > 0 && (
 									<>
 										<HeaderIconButton onPress={handleMoveSelected}>
 											<SymbolView
@@ -797,7 +792,7 @@ export default function CollectionDetail() {
 						keyExtractor={(item) => item.id}
 						numColumns={COLUMNS}
 						renderItem={renderItem}
-						extraData={selectMode ? selected : null}
+						extraData={selectMode ? liveSelected : null}
 						ListHeaderComponent={summaryHeader ?? summarySkeleton}
 						contentContainerStyle={[styles.grid, { paddingTop: topPadding }]}
 						columnWrapperStyle={styles.row}
