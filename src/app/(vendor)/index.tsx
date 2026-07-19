@@ -20,8 +20,6 @@ import Animated, {
 } from "react-native-reanimated";
 import { spacing, useRiverTheme } from "@/constants/theme";
 import { formatCurrency } from "@/lib/format";
-import { useRevenueCat } from "@/context/RevenueCatContext";
-import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import {
 	useRefreshVendorPrices,
 	useVendorItems,
@@ -46,7 +44,6 @@ function soldDateLabel(soldAt?: string): string {
 export default function VendorScreen() {
 	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
-	const { isPro } = useRevenueCat();
 	const {
 		listed,
 		sold,
@@ -154,15 +151,6 @@ export default function VendorScreen() {
 		);
 	}, [liveSelected, tab, removeItems, exitSelect]);
 
-	const openScanner = useCallback(() => {
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-		// Scanning is Pro — same gate as every other scanner entry.
-		if (!isPro) {
-			void presentProPaywallIfNeeded();
-			return;
-		}
-		router.push("/(camera)");
-	}, [isPro]);
 
 	// Options live in the vendor-item-sheet formSheet (same presentation as
 	// menu-sheet) — the row just hands over the item id and its name for the
@@ -222,8 +210,9 @@ export default function VendorScreen() {
 								{
 									backgroundColor: t.glass.surfaceFill,
 									borderColor: t.glass.surfaceBorder,
-									// Clear the pinned scan pill below.
-									paddingBottom: insets.bottom + 108,
+									// Clear the batch action bar while selecting; a slim
+									// margin otherwise (no pinned pill anymore).
+									paddingBottom: insets.bottom + (inSelect ? 108 : 24),
 								},
 							]}
 						>
@@ -493,14 +482,13 @@ export default function VendorScreen() {
 				)}
 			</ScrollView>
 
-			{/* Pinned bottom bar. Normally the scan pill (the fast path from
-			    shelf to scanner — the scan flow itself is untouched); in select
-			    mode it becomes the batch action bar. */}
+			{/* Pinned batch action bar — select mode only (scanning lives in the
+			    header's camera button). */}
 			<View
 				style={[styles.scanWrap, { paddingBottom: insets.bottom + 12 }]}
 				pointerEvents="box-none"
 			>
-				{inSelect ? (
+				{inSelect && (
 					<Animated.View
 						entering={FadeIn.duration(180)}
 						exiting={FadeOut.duration(150)}
@@ -573,28 +561,6 @@ export default function VendorScreen() {
 								tintColor={t.text.primary}
 								weight="semibold"
 							/>
-						</CardPressable>
-					</Animated.View>
-				) : (
-					<Animated.View
-						entering={FadeIn.duration(180)}
-						exiting={FadeOut.duration(150)}
-					>
-						<CardPressable
-							onPress={openScanner}
-							style={[
-								styles.scanButton,
-								{ backgroundColor: t.accent },
-								t.buttonGlow,
-							]}
-						>
-							<SymbolView
-								name="camera.viewfinder"
-								size={18}
-								tintColor="#FFFFFF"
-								weight="semibold"
-							/>
-							<Text style={styles.scanText}>Scan cards to sell</Text>
 						</CardPressable>
 					</Animated.View>
 				)}
@@ -721,15 +687,7 @@ const styles = StyleSheet.create({
 		right: spacing.screen,
 		bottom: 0,
 	},
-	scanButton: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		gap: 8,
-		height: 52,
-		borderRadius: 999,
-	},
-	// Select-mode batch bar — same pinned slot as the scan pill.
+	// Select-mode batch bar — pinned above the home indicator.
 	actionBar: {
 		flexDirection: "row",
 		gap: 8,
@@ -756,10 +714,5 @@ const styles = StyleSheet.create({
 		fontSize: 15,
 		fontWeight: "700",
 		fontVariant: ["tabular-nums"],
-	},
-	scanText: {
-		color: "#FFFFFF",
-		fontSize: 16,
-		fontWeight: "700",
 	},
 });
