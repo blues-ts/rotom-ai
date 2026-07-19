@@ -301,22 +301,42 @@ function AppContent() {
 						headerTintColor: t.accentOn,
 						headerShadowVisible: false,
 						headerLeft: () => <HeaderBackButton />,
-						// Search is the second way onto the shelf (beside the scan
-						// pill): find a card, then pick Vending in the add sheet.
+						// Search and scan side by side — both roads onto the shelf end
+						// at the add sheet's Vending row.
 						headerRight: () => (
-							<HeaderIconButton
-								onPress={() => {
-									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-									router.push("/(search)");
-								}}
-							>
-								<SymbolView
-									name="magnifyingglass"
-									size={20}
-									tintColor={t.accentOn}
-									weight="medium"
-								/>
-							</HeaderIconButton>
+							<HeaderButtonGroup>
+								<HeaderIconButton
+									onPress={() => {
+										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+										router.push("/(search)");
+									}}
+								>
+									<SymbolView
+										name="magnifyingglass"
+										size={20}
+										tintColor={t.accentOn}
+										weight="medium"
+									/>
+								</HeaderIconButton>
+								<HeaderIconButton
+									onPress={() => {
+										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+										// Scanning is Pro — same gate as every other entry.
+										if (!isPro) {
+											void presentProPaywallIfNeeded();
+											return;
+										}
+										router.push("/(camera)");
+									}}
+								>
+									<SymbolView
+										name="camera.viewfinder"
+										size={20}
+										tintColor={t.accentOn}
+										weight="medium"
+									/>
+								</HeaderIconButton>
+							</HeaderButtonGroup>
 						),
 					}}
 				/>
