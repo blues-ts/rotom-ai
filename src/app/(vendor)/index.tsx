@@ -29,6 +29,7 @@ import CardPressable from "@/components/CardPressable";
 import ErrorState from "@/components/ErrorState";
 import RefreshingPill from "@/components/RefreshingPill";
 import HeaderFadeScrim from "@/components/HeaderFadeScrim";
+import SegmentedChips from "@/components/SegmentedChips";
 import VendorRevenueHero from "@/components/VendorRevenueHero";
 
 // Same compact thumb as the scan review rows — the row is about the prices.
@@ -253,54 +254,28 @@ export default function VendorScreen() {
 							</View>
 						</View>
 
-						{/* For Sale / Sold toggle. */}
+						{/* For Sale / Sold toggle — the design system's segmented pill
+						    (solid accent = selected, glass track = off). */}
 						<View style={styles.tabs}>
-							{(
-								[
-									["listed", `For Sale · ${summary.listedCount}`],
-									["sold", `Sold · ${summary.soldCount}`],
-								] as const
-							).map(([key, label]) => {
-								const active = tab === key;
-								return (
-									<CardPressable
-										key={key}
-										onPress={() => {
-											if (tab === key) return;
-											Haptics.selectionAsync();
-											// Selection is per-tab — leaving the tab drops it.
-											exitSelect();
-											setTab(key);
-										}}
-										pressScale={0.97}
-										style={[
-											styles.tab,
-											{
-												backgroundColor: active
-													? t.accentIconFill
-													: t.glass.surfaceFill,
-												borderColor: active
-													? t.accent
-													: t.glass.surfaceBorder,
-											},
-											active && t.buttonGlow,
-										]}
-									>
-										<Text
-											style={[
-												styles.tabText,
-												{
-													color: active
-														? t.accentOn
-														: t.text.secondary,
-												},
-											]}
-										>
-											{label}
-										</Text>
-									</CardPressable>
-								);
-							})}
+							<SegmentedChips
+								options={[
+									{
+										value: "listed" as const,
+										label: `For Sale · ${summary.listedCount}`,
+									},
+									{
+										value: "sold" as const,
+										label: `Sold · ${summary.soldCount}`,
+									},
+								]}
+								value={tab}
+								onChange={(v) => {
+									if (v === tab) return;
+									// Selection is per-tab — leaving the tab drops it.
+									exitSelect();
+									setTab(v);
+								}}
+							/>
 						</View>
 
 						{rows.length === 0 ? (
@@ -523,13 +498,19 @@ export default function VendorScreen() {
 								{liveSelected.size > 0 ? ` ${liveSelected.size}` : ""}
 							</Text>
 						</CardPressable>
+						{/* Destructive reads as loss-colored content on glass — solid
+						    fills stay reserved for the accent (design-system rule).
+						    sheetFill: no blur behind the floating bar, so a thin
+						    glass tint would let rows read through it. */}
 						<CardPressable
 							onPress={handleRemoveSelected}
 							disabled={liveSelected.size === 0}
 							style={[
 								styles.actionButton,
+								styles.actionButtonGlass,
 								{
-									backgroundColor: t.loss,
+									backgroundColor: t.glass.sheetFill,
+									borderColor: t.glass.elevatedBorder,
 									opacity: liveSelected.size === 0 ? 0.5 : 1,
 								},
 							]}
@@ -537,10 +518,12 @@ export default function VendorScreen() {
 							<SymbolView
 								name="trash"
 								size={16}
-								tintColor="#FFFFFF"
+								tintColor={t.loss}
 								weight="semibold"
 							/>
-							<Text style={styles.actionText}>Remove</Text>
+							<Text style={[styles.actionText, { color: t.loss }]}>
+								Remove
+							</Text>
 						</CardPressable>
 						<CardPressable
 							onPress={() => {
@@ -617,21 +600,9 @@ const styles = StyleSheet.create({
 		fontWeight: "500",
 	},
 	tabs: {
-		flexDirection: "row",
-		gap: 8,
+		alignItems: "center",
 		marginTop: 16,
 		marginBottom: 12,
-	},
-	tab: {
-		flex: 1,
-		alignItems: "center",
-		paddingVertical: 10,
-		borderRadius: 999,
-		borderWidth: 1,
-	},
-	tabText: {
-		fontSize: 14,
-		fontWeight: "600",
 	},
 	list: {
 		gap: 8,
@@ -700,6 +671,9 @@ const styles = StyleSheet.create({
 		gap: 6,
 		height: 52,
 		borderRadius: 999,
+	},
+	actionButtonGlass: {
+		borderWidth: 1,
 	},
 	actionCancel: {
 		width: 52,
