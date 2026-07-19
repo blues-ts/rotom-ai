@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from "react";
 import {
-	Alert,
 	RefreshControl,
 	ScrollView,
 	StyleSheet,
@@ -10,7 +9,6 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { spacing, useRiverTheme } from "@/constants/theme";
@@ -20,7 +18,6 @@ import {
 	useVendorItems,
 } from "@/hooks/useVendorItems";
 import type { VendorItem } from "@/types/vendor";
-import CardPressable from "@/components/CardPressable";
 import CollectionCard from "@/components/CollectionCard";
 import ErrorState from "@/components/ErrorState";
 import RefreshingPill from "@/components/RefreshingPill";
@@ -47,8 +44,7 @@ function topImages(items: VendorItem[]): string[] {
 export default function VendorScreen() {
 	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
-	const { listed, sold, groups, createGroup, summary, isError, refetch } =
-		useVendorItems();
+	const { listed, sold, groups, summary, isError, refetch } = useVendorItems();
 	const refreshPrices = useRefreshVendorPrices();
 
 	const groupIds = useMemo(() => new Set(groups.map((g) => g.id)), [groups]);
@@ -112,26 +108,6 @@ export default function VendorScreen() {
 	const openSold = useCallback(() => {
 		router.push({ pathname: "/vendor-shelf", params: { mode: "sold" } });
 	}, []);
-
-	const promptCreateGroup = useCallback(() => {
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-		Alert.prompt(
-			"New group",
-			"Give your group a name.",
-			[
-				{ text: "Cancel", style: "cancel" },
-				{
-					text: "Create",
-					onPress: (name?: string) => {
-						const trimmed = name?.trim();
-						if (!trimmed) return;
-						createGroup.mutate(trimmed);
-					},
-				},
-			],
-			"plain-text",
-		);
-	}, [createGroup]);
 
 	const isEmpty =
 		listed.length === 0 && sold.length === 0 && groups.length === 0;
@@ -275,33 +251,6 @@ export default function VendorScreen() {
 										/>
 									</Animated.View>
 								)}
-								{/* Create a shelf up front — same prompt the group
-								    picker's "New group…" row uses. */}
-								<CardPressable
-									onPress={promptCreateGroup}
-									pressScale={0.98}
-									baseColor={t.glass.surfaceFill}
-									pressedColor={t.glass.pressedFill}
-									style={[
-										styles.createGroupRow,
-										{ borderColor: t.glass.surfaceBorder },
-									]}
-								>
-									<SymbolView
-										name="plus"
-										size={15}
-										tintColor={t.accentOn}
-										weight="semibold"
-									/>
-									<Text
-										style={[
-											styles.createGroupText,
-											{ color: t.accentOn },
-										]}
-									>
-										New Group
-									</Text>
-								</CardPressable>
 							</Animated.View>
 						)}
 					</>
@@ -348,19 +297,6 @@ const styles = StyleSheet.create({
 		gap: 14,
 		marginTop: 18,
 		paddingHorizontal: spacing.screen,
-	},
-	createGroupRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		gap: 6,
-		paddingVertical: 13,
-		borderRadius: 14,
-		borderWidth: 1,
-	},
-	createGroupText: {
-		fontSize: 15,
-		fontWeight: "600",
 	},
 	emptyState: {
 		flex: 1,

@@ -345,6 +345,21 @@ function AppContent() {
 										weight="medium"
 									/>
 								</HeaderIconButton>
+								{/* New group — same form-sheet pattern as the
+								    collections header's plus. */}
+								<HeaderIconButton
+									onPress={() => {
+										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+										router.push("/create-vendor-group");
+									}}
+								>
+									<SymbolView
+										name="plus"
+										size={22}
+										tintColor={t.accentOn}
+										weight="medium"
+									/>
+								</HeaderIconButton>
 							</HeaderButtonGroup>
 						),
 					}}
@@ -446,6 +461,24 @@ function AppContent() {
 						headerLeft: () => null,
 						contentStyle: { backgroundColor: t.glass.sheetFill },
 					})}
+				/>
+				<Stack.Screen
+					name="create-vendor-group"
+					options={{
+						presentation: "formSheet",
+						sheetAllowedDetents: [0.35],
+						sheetGrabberVisible: true,
+						// Bottom sheets get the larger 28pt top radius.
+						sheetCornerRadius: 28,
+						headerShown: true,
+						headerTransparent: false,
+						headerTitle: "New Group",
+						headerStyle: { backgroundColor: t.glass.sheetFill },
+						headerTintColor: t.text.primary,
+						headerShadowVisible: false,
+						headerLeft: () => null,
+						contentStyle: { backgroundColor: t.glass.sheetFill },
+					}}
 				/>
 				<Stack.Screen
 					name="vendor-shelf"
