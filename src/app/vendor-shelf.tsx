@@ -13,6 +13,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { spacing, useRiverTheme } from "@/constants/theme";
 import { formatCurrency } from "@/lib/format";
+import { setMenuSheetActions } from "@/lib/menuSheet";
 import { SORT_OPTION_LABELS } from "@/lib/sortLabels";
 import { useVendorItems } from "@/hooks/useVendorItems";
 import type { VendorItem } from "@/types/vendor";
@@ -230,6 +231,22 @@ export default function VendorShelfScreen() {
 		);
 	}, [liveSelected, isSold, removeItems, exitSelect]);
 
+	// Sold-mode select actions live in the header's menu (the shared
+	// menu-sheet), not a bottom bar — deposit the actions, then present.
+	const openSoldSelectMenu = useCallback(() => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		setMenuSheetActions([
+			{ label: "Undo Sale", onPress: handleUndoSelected },
+			{ label: "Delete Sale", onPress: handleRemoveSelected },
+		]);
+		router.push({
+			pathname: "/menu-sheet",
+			params: {
+				title: `${liveSelected.size} Selected`,
+			},
+		});
+	}, [handleUndoSelected, handleRemoveSelected, liveSelected.size]);
+
 	// Multi-select → group picker sheet (assigns on pick; moved cards leave
 	// this shelf when it lands).
 	const handleGroupSelected = useCallback(() => {
@@ -390,15 +407,22 @@ export default function VendorShelfScreen() {
 					// Live group name so a rename shows immediately on return; the
 					// ungrouped pseudo-shelf takes whatever the home row was
 					// called ("For Sale" until groups exist, then "Ungrouped").
-					headerTitle: isSold
-						? "Sold"
-						: (group?.name ??
-							name ??
-							(groupId === "__ungrouped__" ? "Ungrouped" : "")),
+					// Sold select mode counts the selection, like the scan library.
+					headerTitle:
+						isSold && inSelect
+							? liveSelected.size > 0
+								? `${liveSelected.size} Selected`
+								: "Select Sales"
+							: isSold
+								? "Sold"
+								: (group?.name ??
+									name ??
+									(groupId === "__ungrouped__" ? "Ungrouped" : "")),
 					headerRight: () => (
 						<HeaderButtonGroup>
 							{/* Explicit route into multi-select (long-press still
-							    works) — hidden while selecting; the bar's ✕ exits. */}
+							    works) — hidden while selecting; group mode's bar ✕
+							    exits, sold mode exits via the header checkmark. */}
 							{items.length > 0 && !inSelect && (
 								<HeaderIconButton
 									onPress={() => {
@@ -411,6 +435,32 @@ export default function VendorShelfScreen() {
 										size={22}
 										tintColor={t.accentOn}
 										weight="medium"
+									/>
+								</HeaderIconButton>
+							)}
+							{/* Sold select mode: actions menu + done, no bottom bar. */}
+							{isSold && inSelect && liveSelected.size > 0 && (
+								<HeaderIconButton onPress={openSoldSelectMenu}>
+									<SymbolView
+										name="ellipsis.circle"
+										size={21}
+										tintColor={t.accentOn}
+										weight="medium"
+									/>
+								</HeaderIconButton>
+							)}
+							{isSold && inSelect && (
+								<HeaderIconButton
+									onPress={() => {
+										Haptics.selectionAsync();
+										exitSelect();
+									}}
+								>
+									<SymbolView
+										name="checkmark"
+										size={21}
+										tintColor={t.accentOn}
+										weight="semibold"
 									/>
 								</HeaderIconButton>
 							)}
@@ -497,19 +547,20 @@ export default function VendorShelfScreen() {
 				/>
 			)}
 
-			{/* Pinned batch action bar — select mode only. */}
+			{/* Pinned batch action bar — group-shelf select mode only (the sold
+			    list keeps its select controls in the header menu instead). */}
 			<View
 				style={[styles.barWrap, { paddingBottom: insets.bottom + 12 }]}
 				pointerEvents="box-none"
 			>
-				{inSelect && (
+				{inSelect && !isSold && (
 					<Animated.View
 						entering={FadeIn.duration(180)}
 						exiting={FadeOut.duration(150)}
 						style={styles.actionBar}
 					>
 						<CardPressable
-							onPress={isSold ? handleUndoSelected : handleSellSelected}
+							onPress={handleSellSelected}
 							disabled={liveSelected.size === 0}
 							style={[
 								styles.actionButton,
@@ -521,42 +572,38 @@ export default function VendorShelfScreen() {
 							]}
 						>
 							<SymbolView
-								name={
-									isSold ? "arrow.uturn.backward" : "dollarsign.circle"
-								}
+								name="dollarsign.circle"
 								size={17}
 								tintColor="#FFFFFF"
 								weight="semibold"
 							/>
 							<Text style={styles.actionText}>
-								{isSold ? "Undo" : "Sell"}
+								Sell
 								{liveSelected.size > 0 ? ` ${liveSelected.size}` : ""}
 							</Text>
 						</CardPressable>
 						{/* Circle buttons on near-opaque glass (sheetFill — no blur
 						    behind the floating bar). Destructive is loss-colored
 						    content; solid fills stay reserved for the accent. */}
-						{!isSold && (
-							<CardPressable
-								onPress={handleGroupSelected}
-								disabled={liveSelected.size === 0}
-								style={[
-									styles.actionCircle,
-									{
-										backgroundColor: t.glass.sheetFill,
-										borderColor: t.glass.elevatedBorder,
-										opacity: liveSelected.size === 0 ? 0.5 : 1,
-									},
-								]}
-							>
-								<SymbolView
-									name="folder"
-									size={17}
-									tintColor={t.accentOn}
-									weight="semibold"
-								/>
-							</CardPressable>
-						)}
+						<CardPressable
+							onPress={handleGroupSelected}
+							disabled={liveSelected.size === 0}
+							style={[
+								styles.actionCircle,
+								{
+									backgroundColor: t.glass.sheetFill,
+									borderColor: t.glass.elevatedBorder,
+									opacity: liveSelected.size === 0 ? 0.5 : 1,
+								},
+							]}
+						>
+							<SymbolView
+								name="folder"
+								size={17}
+								tintColor={t.accentOn}
+								weight="semibold"
+							/>
+						</CardPressable>
 						<CardPressable
 							onPress={handleRemoveSelected}
 							disabled={liveSelected.size === 0}
