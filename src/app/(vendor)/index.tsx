@@ -49,8 +49,6 @@ export default function VendorScreen() {
 		listed,
 		sold,
 		groups,
-		renameGroup,
-		deleteGroup,
 		summary,
 		isError,
 		refetch,
@@ -173,11 +171,33 @@ export default function VendorScreen() {
 		[groups],
 	);
 
+	// Collapsed sections (by section key, "__ungrouped__" for the tail
+	// section) — session-only; tapping a header toggles it.
+	const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
+		new Set(),
+	);
+	const toggleSection = useCallback((key: string) => {
+		Haptics.selectionAsync();
+		setCollapsedSections((prev) => {
+			const next = new Set(prev);
+			if (next.has(key)) next.delete(key);
+			else next.add(key);
+			return next;
+		});
+	}, []);
+
 	// For Sale renders as group sections once any group exists (each group's
 	// items, then Ungrouped); Sold stays a flat receipt list. Flattened into
 	// one entry array so the whole thing stays a single LinearTransition list.
 	type ListEntry =
-		| { kind: "header"; key: string; group: VendorGroup | null; total: number }
+		| {
+				kind: "header";
+				key: string;
+				sectionKey: string;
+				group: VendorGroup | null;
+				total: number;
+				count: number;
+		  }
 		| { kind: "item"; item: VendorItem };
 	const listEntries = useMemo((): ListEntry[] => {
 		if (tab === "sold" || groups.length === 0) {
@@ -188,6 +208,8 @@ export default function VendorScreen() {
 				(sum, i) => sum + (i.askingPrice ?? i.marketValue) * i.quantity,
 				0,
 			);
+		const cardCount = (items: VendorItem[]) =>
+			items.reduce((sum, i) => sum + i.quantity, 0);
 		const byGroup = new Map<string, VendorItem[]>();
 		const ungrouped: VendorItem[] = [];
 		for (const item of rows) {
@@ -200,80 +222,42 @@ export default function VendorScreen() {
 			}
 		}
 		const entries: ListEntry[] = [];
+		const pushSection = (
+			sectionKey: string,
+			group: VendorGroup | null,
+			members: VendorItem[],
+		) => {
+			entries.push({
+				kind: "header",
+				key: `h-${sectionKey}`,
+				sectionKey,
+				group,
+				total: shelfValue(members),
+				count: cardCount(members),
+			});
+			// Collapsed: the header (with total + count) stands in for the rows.
+			if (collapsedSections.has(sectionKey)) return;
+			for (const m of members) entries.push({ kind: "item", item: m });
+		};
 		for (const g of groups) {
 			const members = byGroup.get(g.id);
-			if (!members) continue;
-			entries.push({
-				kind: "header",
-				key: `h-${g.id}`,
-				group: g,
-				total: shelfValue(members),
-			});
-			for (const m of members) entries.push({ kind: "item", item: m });
+			if (members) pushSection(g.id, g, members);
 		}
 		if (ungrouped.length > 0) {
-			entries.push({
-				kind: "header",
-				key: "h-ungrouped",
-				group: null,
-				total: shelfValue(ungrouped),
-			});
-			for (const m of ungrouped) entries.push({ kind: "item", item: m });
+			pushSection("__ungrouped__", null, ungrouped);
 		}
 		return entries;
-	}, [tab, rows, groups, groupNameById]);
+	}, [tab, rows, groups, groupNameById, collapsedSections]);
 
-	// Tap a group header to rename or delete it (cards fall back to
-	// Ungrouped on delete — the FK clears memberships, items stay).
-	const openGroupActions = useCallback(
-		(group: VendorGroup) => {
-			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-			Alert.alert(group.name, undefined, [
-				{
-					text: "Rename",
-					onPress: () => {
-						Alert.prompt(
-							"Rename group",
-							undefined,
-							[
-								{ text: "Cancel", style: "cancel" },
-								{
-									text: "Save",
-									onPress: (name?: string) => {
-										const trimmed = name?.trim();
-										if (!trimmed) return;
-										renameGroup.mutate({ id: group.id, name: trimmed });
-									},
-								},
-							],
-							"plain-text",
-							group.name,
-						);
-					},
-				},
-				{
-					text: "Delete group",
-					style: "destructive",
-					onPress: () => {
-						Alert.alert(
-							`Delete “${group.name}”?`,
-							"Its cards move to Ungrouped — nothing is removed from the shelf.",
-							[
-								{ text: "Cancel", style: "cancel" },
-								{
-									text: "Delete",
-									style: "destructive",
-									onPress: () => deleteGroup.mutate({ id: group.id }),
-								},
-							],
-						);
-					},
-				},
-				{ text: "Cancel", style: "cancel" },
-			]);
-		},
-		[renameGroup, deleteGroup],
-	);
+	// Group management lives in the vendor-group-options formSheet — the
+	// header's ellipsis just hands over the group id and name.
+	const openGroupOptions = useCallback((group: VendorGroup) => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		router.push({
+			pathname: "/vendor-group-options",
+			params: { id: group.id, title: group.name },
+		});
+	}, []);
 
 	// Options live in the vendor-item-sheet formSheet (same presentation as
 	// menu-sheet) — the row just hands over the item id and its name for the
@@ -426,6 +410,9 @@ export default function VendorScreen() {
 							>
 								{listEntries.map((entry) => {
 									if (entry.kind === "header") {
+										const isCollapsed = collapsedSections.has(
+											entry.sectionKey,
+										);
 										return (
 											<Animated.View
 												key={entry.key}
@@ -435,12 +422,11 @@ export default function VendorScreen() {
 											>
 												{/* Section header is an overline (design-system
 												    rule) with the shelf's asking total. Tap to
-												    rename/delete; Ungrouped isn't a real group. */}
+												    collapse/expand; the ellipsis opens the group's
+												    manage sheet (Ungrouped isn't a real group). */}
 												<CardPressable
-													disabled={!entry.group}
 													onPress={() =>
-														entry.group &&
-														openGroupActions(entry.group)
+														toggleSection(entry.sectionKey)
 													}
 													pressScale={1}
 													baseColor="transparent"
@@ -457,15 +443,48 @@ export default function VendorScreen() {
 														{(
 															entry.group?.name ?? "Ungrouped"
 														).toUpperCase()}
+														{isCollapsed
+															? `  ·  ${entry.count}`
+															: ""}
 													</Text>
-													<Text
-														style={[
-															styles.sectionTotal,
-															{ color: t.text.secondary },
-														]}
-													>
-														{formatCurrency(entry.total)}
-													</Text>
+													<View style={styles.sectionTrailing}>
+														<Text
+															style={[
+																styles.sectionTotal,
+																{ color: t.text.secondary },
+															]}
+														>
+															{formatCurrency(entry.total)}
+														</Text>
+														{entry.group && (
+															<CardPressable
+																hitSlop={8}
+																pressScale={1}
+																onPress={() =>
+																	openGroupOptions(
+																		entry.group!,
+																	)
+																}
+															>
+																<SymbolView
+																	name="ellipsis.circle"
+																	size={17}
+																	tintColor={t.text.tertiary}
+																	weight="medium"
+																/>
+															</CardPressable>
+														)}
+														<SymbolView
+															name={
+																isCollapsed
+																	? "chevron.right"
+																	: "chevron.down"
+															}
+															size={12}
+															tintColor={t.text.tertiary}
+															weight="semibold"
+														/>
+													</View>
 												</CardPressable>
 											</Animated.View>
 										);
@@ -811,6 +830,11 @@ const styles = StyleSheet.create({
 	sectionTitle: {
 		...typeScale.overline,
 		flexShrink: 1,
+	},
+	sectionTrailing: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 10,
 	},
 	sectionTotal: {
 		fontSize: 12,

@@ -439,6 +439,27 @@ function AppContent() {
 					})}
 				/>
 				<Stack.Screen
+					name="vendor-group-options"
+					options={({ route }) => ({
+						presentation: "formSheet",
+						sheetAllowedDetents: "fitToContents",
+						sheetGrabberVisible: true,
+						// Bottom sheets get the larger 28pt top radius.
+						sheetCornerRadius: 28,
+						headerShown: true,
+						headerTransparent: false,
+						// The group's name rides in as the title.
+						headerTitle:
+							(route.params as { title?: string } | undefined)?.title ??
+							"Group",
+						headerStyle: { backgroundColor: t.glass.sheetFill },
+						headerTintColor: t.text.primary,
+						headerShadowVisible: false,
+						headerLeft: () => null,
+						contentStyle: { backgroundColor: t.glass.sheetFill },
+					})}
+				/>
+				<Stack.Screen
 					name="vendor-group-sheet"
 					options={{
 						presentation: "formSheet",
