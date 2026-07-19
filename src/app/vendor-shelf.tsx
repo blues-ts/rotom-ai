@@ -40,7 +40,8 @@ type ShelfSort = "date" | "nameAsc" | "valueDesc" | "valueAsc";
 /**
  * One shelf's card list — a group (or Ungrouped) from the vending home, or
  * the Sold receipts. The vending-home mirror of collection-detail: rows on
- * the gradient, long-press multi-select, batch bar pinned at the bottom.
+ * the gradient, multi-select via the header (checkmark to enter, ellipsis
+ * menu for batch actions, checkmark to exit; long-press also enters).
  * Params: mode "group" | "sold"; groupId (group id or "__ungrouped__") and
  * name for group mode.
  */
@@ -543,9 +544,10 @@ export default function VendorShelfScreen() {
 				)}
 			</ScrollView>
 
-			{/* The app-standard floating search capsule — hidden in select mode,
-			    where the batch bar owns the bottom slot. */}
-			{items.length > 0 && !inSelect && (
+			{/* The app-standard floating search capsule — stays up in select
+			    mode too (batch actions act on VISIBLE selected rows only, so
+			    filtering mid-selection is safe and useful). */}
+			{items.length > 0 && (
 				<FloatingSearchBar
 					value={query}
 					onChangeText={setQuery}
