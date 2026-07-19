@@ -439,6 +439,27 @@ function AppContent() {
 					})}
 				/>
 				<Stack.Screen
+					name="vendor-item-sheet"
+					options={({ route }) => ({
+						presentation: "formSheet",
+						sheetAllowedDetents: "fitToContents",
+						sheetGrabberVisible: true,
+						// Bottom sheets get the larger 28pt top radius.
+						sheetCornerRadius: 28,
+						headerShown: true,
+						headerTransparent: false,
+						// The tapped card's name rides in as the title.
+						headerTitle:
+							(route.params as { title?: string } | undefined)?.title ??
+							"Card",
+						headerStyle: { backgroundColor: t.glass.sheetFill },
+						headerTintColor: t.text.primary,
+						headerShadowVisible: false,
+						headerLeft: () => null,
+						contentStyle: { backgroundColor: t.glass.sheetFill },
+					})}
+				/>
+				<Stack.Screen
 					name="(camera)"
 					options={{
 						presentation: "fullScreenModal",

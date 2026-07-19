@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import {
-	Alert,
 	RefreshControl,
 	ScrollView,
 	StyleSheet,
@@ -37,13 +36,6 @@ import VendorRevenueHero from "@/components/VendorRevenueHero";
 const THUMB_WIDTH = 44;
 const THUMB_HEIGHT = THUMB_WIDTH * (88 / 63);
 
-/** "$12.34" prompt input → per-unit price, or undefined when unparsable. */
-function parsePrice(text: string | undefined): number | undefined {
-	if (!text) return undefined;
-	const value = parseFloat(text.replace(/[^0-9.]/g, ""));
-	return Number.isFinite(value) && value >= 0 ? value : undefined;
-}
-
 function soldDateLabel(soldAt?: string): string {
 	if (!soldAt) return "";
 	const d = new Date(soldAt);
@@ -54,17 +46,7 @@ export default function VendorScreen() {
 	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
 	const { isPro } = useRevenueCat();
-	const {
-		listed,
-		sold,
-		summary,
-		isError,
-		refetch,
-		setAskingPrice,
-		markSold,
-		unmarkSold,
-		removeItem,
-	} = useVendorItems();
+	const { listed, sold, summary, isError, refetch } = useVendorItems();
 	const refreshPrices = useRefreshVendorPrices();
 
 	const [tab, setTab] = useState<"listed" | "sold">("listed");
@@ -79,115 +61,16 @@ export default function VendorScreen() {
 		router.push("/(camera)");
 	}, [isPro]);
 
-	const promptAskingPrice = useCallback(
-		(item: VendorItem) => {
-			Alert.prompt(
-				"Asking price",
-				`Market is ${formatCurrency(item.marketValue)}${item.quantity > 1 ? " each" : ""}.`,
-				[
-					{ text: "Cancel", style: "cancel" },
-					{
-						text: "Save",
-						onPress: (text?: string) => {
-							const price = parsePrice(text);
-							if (price === undefined) return;
-							Haptics.selectionAsync();
-							setAskingPrice.mutate({ id: item.id, askingPrice: price });
-						},
-					},
-				],
-				"plain-text",
-				(item.askingPrice ?? item.marketValue).toFixed(2),
-				"decimal-pad",
-			);
-		},
-		[setAskingPrice],
-	);
-
-	const promptMarkSold = useCallback(
-		(item: VendorItem) => {
-			Alert.prompt(
-				"Mark sold",
-				item.quantity > 1
-					? `Sold price per card (×${item.quantity}).`
-					: "What did it sell for?",
-				[
-					{ text: "Cancel", style: "cancel" },
-					{
-						text: "Sold",
-						onPress: (text?: string) => {
-							const price = parsePrice(text);
-							if (price === undefined) return;
-							markSold.mutate({ id: item.id, soldPrice: price });
-						},
-					},
-				],
-				"plain-text",
-				(item.askingPrice ?? item.marketValue).toFixed(2),
-				"decimal-pad",
-			);
-		},
-		[markSold],
-	);
-
-	const confirmRemove = useCallback(
-		(item: VendorItem) => {
-			Alert.alert(
-				`Remove ${item.cardName}?`,
-				item.status === "sold"
-					? "This sale will leave your revenue total."
-					: "It'll be removed from your for-sale shelf.",
-				[
-					{ text: "Cancel", style: "cancel" },
-					{
-						text: "Remove",
-						style: "destructive",
-						onPress: () => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-							removeItem.mutate({ id: item.id });
-						},
-					},
-				],
-			);
-		},
-		[removeItem],
-	);
-
-	const openListedActions = useCallback(
-		(item: VendorItem) => {
-			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-			Alert.alert(item.cardName, undefined, [
-				{ text: "Set asking price", onPress: () => promptAskingPrice(item) },
-				{ text: "Mark sold", onPress: () => promptMarkSold(item) },
-				{
-					text: "Remove",
-					style: "destructive",
-					onPress: () => confirmRemove(item),
-				},
-				{ text: "Cancel", style: "cancel" },
-			]);
-		},
-		[promptAskingPrice, promptMarkSold, confirmRemove],
-	);
-
-	const openSoldActions = useCallback(
-		(item: VendorItem) => {
-			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-			Alert.alert(item.cardName, undefined, [
-				{
-					text: "Undo sale",
-					onPress: () => unmarkSold.mutate({ id: item.id }),
-				},
-				{
-					text: "Remove",
-					style: "destructive",
-					onPress: () => confirmRemove(item),
-				},
-				{ text: "Cancel", style: "cancel" },
-			]);
-		},
-		[unmarkSold, confirmRemove],
-	);
+	// Options live in the vendor-item-sheet formSheet (same presentation as
+	// menu-sheet) — the row just hands over the item id and its name for the
+	// sheet's title.
+	const openItemSheet = useCallback((item: VendorItem) => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		router.push({
+			pathname: "/vendor-item-sheet",
+			params: { id: item.id, title: item.cardName },
+		});
+	}, []);
 
 	const rows = tab === "listed" ? listed : sold;
 
@@ -365,11 +248,7 @@ export default function VendorScreen() {
 											layout={LinearTransition.duration(300)}
 										>
 											<CardPressable
-												onPress={() =>
-													item.status === "listed"
-														? openListedActions(item)
-														: openSoldActions(item)
-												}
+												onPress={() => openItemSheet(item)}
 												pressScale={0.98}
 												baseColor={t.glass.elevatedFill}
 												pressedColor={t.glass.pressedFill}
