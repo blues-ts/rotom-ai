@@ -18,7 +18,7 @@ import Animated, {
 	FadeOut,
 	LinearTransition,
 } from "react-native-reanimated";
-import { spacing, typeScale, useRiverTheme } from "@/constants/theme";
+import { spacing, useRiverTheme } from "@/constants/theme";
 import { formatCurrency } from "@/lib/format";
 import {
 	useRefreshVendorPrices,
@@ -420,71 +420,71 @@ export default function VendorScreen() {
 												exiting={FadeOut.duration(200)}
 												layout={LinearTransition.duration(300)}
 											>
-												{/* Section header is an overline (design-system
-												    rule) with the shelf's asking total. Tap to
-												    collapse/expand; the ellipsis opens the group's
+												{/* Group header — a full-size row (name + count/
+												    asking meta line), not an overline: groups are
+												    components the user owns, not mere sections.
+												    Tap to collapse/expand; the ellipsis opens the
 												    manage sheet (Ungrouped isn't a real group). */}
 												<CardPressable
 													onPress={() =>
 														toggleSection(entry.sectionKey)
 													}
-													pressScale={1}
+													pressScale={0.99}
 													baseColor="transparent"
 													pressedColor={t.glass.pressedFill}
 													style={styles.sectionHeader}
 												>
-													<Text
-														style={[
-															styles.sectionTitle,
-															{ color: t.text.secondary },
-														]}
-														numberOfLines={1}
-													>
-														{(
-															entry.group?.name ?? "Ungrouped"
-														).toUpperCase()}
-														{isCollapsed
-															? `  ·  ${entry.count}`
-															: ""}
-													</Text>
-													<View style={styles.sectionTrailing}>
+													<View style={styles.sectionInfo}>
 														<Text
 															style={[
-																styles.sectionTotal,
+																styles.sectionName,
+																{ color: t.text.primary },
+															]}
+															numberOfLines={1}
+														>
+															{entry.group?.name ?? "Ungrouped"}
+														</Text>
+														<Text
+															style={[
+																styles.sectionMeta,
 																{ color: t.text.secondary },
 															]}
+															numberOfLines={1}
 														>
-															{formatCurrency(entry.total)}
+															{entry.count}{" "}
+															{entry.count === 1
+																? "card"
+																: "cards"}{" "}
+															· {formatCurrency(entry.total)}{" "}
+															asking
 														</Text>
-														{entry.group && (
-															<CardPressable
-																hitSlop={8}
-																pressScale={1}
-																onPress={() =>
-																	openGroupOptions(
-																		entry.group!,
-																	)
-																}
-															>
-																<SymbolView
-																	name="ellipsis.circle"
-																	size={17}
-																	tintColor={t.text.tertiary}
-																	weight="medium"
-																/>
-															</CardPressable>
-														)}
-														<SymbolView
-															name={
-																isCollapsed
-																	? "chevron.right"
-																	: "chevron.down"
-															}
-															size={12}
-															tintColor={t.text.tertiary}
-															weight="semibold"
-														/>
 													</View>
+													{entry.group && (
+														<CardPressable
+															hitSlop={8}
+															pressScale={1}
+															onPress={() =>
+																openGroupOptions(entry.group!)
+															}
+														>
+															<SymbolView
+																name="ellipsis.circle"
+																size={22}
+																tintColor={t.text.secondary}
+																weight="medium"
+															/>
+														</CardPressable>
+													)}
+													<SymbolView
+														name={
+															isCollapsed
+																? "chevron.right"
+																: "chevron.down"
+														}
+														size={14}
+														tintColor={t.text.tertiary}
+														weight="semibold"
+													/>
 												</CardPressable>
 											</Animated.View>
 										);
@@ -815,30 +815,29 @@ const styles = StyleSheet.create({
 	list: {
 		gap: 8,
 	},
-	// Group section header — an overline (design-system rule), with the
-	// shelf's asking total on the trailing edge.
+	// Group header — full-size row: name over a count/asking meta line, with
+	// the manage ellipsis + collapse chevron trailing. Bare on the sheet so
+	// the glass item rows beneath still read as its contents.
 	sectionHeader: {
 		flexDirection: "row",
 		alignItems: "center",
-		justifyContent: "space-between",
-		gap: 12,
-		marginTop: 8,
-		paddingVertical: 4,
+		gap: 14,
+		marginTop: 10,
+		paddingVertical: 10,
 		paddingHorizontal: 4,
-		borderRadius: 8,
+		borderRadius: 12,
 	},
-	sectionTitle: {
-		...typeScale.overline,
-		flexShrink: 1,
+	sectionInfo: {
+		flex: 1,
+		gap: 2,
 	},
-	sectionTrailing: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 10,
-	},
-	sectionTotal: {
-		fontSize: 12,
+	sectionName: {
+		fontSize: 17,
 		fontWeight: "700",
+	},
+	sectionMeta: {
+		fontSize: 13,
+		fontWeight: "500",
 		fontVariant: ["tabular-nums"],
 	},
 	row: {
