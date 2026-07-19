@@ -548,9 +548,9 @@ export default function VendorScreen() {
 							</View>
 						) : (
 							<View style={styles.groupsSection}>
-								{/* Same section header shape as Recent Sales. Until
-								    a group exists there's just the one For Sale row,
-								    so the title matches it. */}
+								{/* Same section header shape as Recent Sales — titled
+								    by what the section IS (the for-sale inventory),
+								    grouped or not. */}
 								<View style={styles.salesHeader}>
 									<Text
 										style={[
@@ -558,7 +558,7 @@ export default function VendorScreen() {
 											{ color: t.text.secondary },
 										]}
 									>
-										{groups.length > 0 ? "GROUPS" : "FOR SALE"}
+										FOR SALE
 									</Text>
 								</View>
 								<Animated.View
