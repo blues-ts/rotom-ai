@@ -439,6 +439,21 @@ function AppContent() {
 					})}
 				/>
 				<Stack.Screen
+					name="vendor-shelf"
+					options={{
+						animation: "slide_from_right",
+						headerShown: true,
+						// Title + headerRight come from the screen (live group name).
+						headerTitle: "",
+						headerBackButtonDisplayMode: "minimal",
+						headerTransparent: true,
+						headerStyle: { backgroundColor: "transparent" },
+						headerTintColor: t.accentOn,
+						headerShadowVisible: false,
+						headerLeft: () => <HeaderBackButton />,
+					}}
+				/>
+				<Stack.Screen
 					name="vendor-group-options"
 					options={({ route }) => ({
 						presentation: "formSheet",

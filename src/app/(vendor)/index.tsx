@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import {
 	Alert,
 	RefreshControl,
@@ -8,204 +8,62 @@ import {
 	View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Image } from "expo-image";
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, {
-	FadeIn,
-	FadeOut,
-	LinearTransition,
-} from "react-native-reanimated";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { spacing, useRiverTheme } from "@/constants/theme";
 import { formatCurrency } from "@/lib/format";
 import {
 	useRefreshVendorPrices,
 	useVendorItems,
 } from "@/hooks/useVendorItems";
-import type { VendorGroup, VendorItem } from "@/types/vendor";
+import type { VendorItem } from "@/types/vendor";
 import CardPressable from "@/components/CardPressable";
+import CollectionCard from "@/components/CollectionCard";
 import ErrorState from "@/components/ErrorState";
 import RefreshingPill from "@/components/RefreshingPill";
 import HeaderFadeScrim from "@/components/HeaderFadeScrim";
-import SegmentedChips from "@/components/SegmentedChips";
-import SlidingPanels from "@/components/SlidingPanels";
 import VendorRevenueHero from "@/components/VendorRevenueHero";
 
-// Same compact thumb as the scan review rows — the row is about the prices.
-const THUMB_WIDTH = 44;
-const THUMB_HEIGHT = THUMB_WIDTH * (88 / 63);
-
-function soldDateLabel(soldAt?: string): string {
-	if (!soldAt) return "";
-	const d = new Date(soldAt);
-	return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+/** Top-4 thumbnails for a shelf card, richest first — same idea as the
+ *  collections list (which orders by card_value). */
+function topImages(items: VendorItem[]): string[] {
+	return [...items]
+		.sort(
+			(a, b) =>
+				(b.askingPrice ?? b.marketValue) - (a.askingPrice ?? a.marketValue),
+		)
+		.slice(0, 4)
+		.map((i) => i.cardImageUrl);
 }
 
+/**
+ * Vending home — the collections-index mirror: revenue hero + stat strip on
+ * the stage, then each group as a tappable shelf card (plus Ungrouped and
+ * Sold). Card management lives one level down on /vendor-shelf.
+ */
 export default function VendorScreen() {
 	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
-	const {
-		listed,
-		sold,
-		groups,
-		createGroup,
-		summary,
-		isError,
-		refetch,
-		markSoldMany,
-		unmarkSoldMany,
-		removeItems,
-	} = useVendorItems();
+	const { listed, sold, groups, createGroup, summary, isError, refetch } =
+		useVendorItems();
 	const refreshPrices = useRefreshVendorPrices();
 
-	const [tab, setTab] = useState<"listed" | "sold">("listed");
+	const groupIds = useMemo(() => new Set(groups.map((g) => g.id)), [groups]);
 
-	// Multi-select: long-press a row to enter, then tap rows to toggle — same
-	// gestures as the scan library and collection grid. Selection is per-tab
-	// (cleared on switch), and only ids still present count, so a batch action
-	// can never touch dead rows.
-	const [selectMode, setSelectMode] = useState(false);
-	const [selected, setSelected] = useState<Set<string>>(new Set());
-
-	const rows = tab === "listed" ? listed : sold;
-	const inSelect = selectMode && rows.length > 0;
-
-	const exitSelect = useCallback(() => {
-		setSelectMode(false);
-		setSelected(new Set());
-	}, []);
-
-	const toggle = useCallback((id: string) => {
-		Haptics.selectionAsync();
-		setSelected((prev) => {
-			const next = new Set(prev);
-			if (next.has(id)) next.delete(id);
-			else next.add(id);
-			return next;
-		});
-	}, []);
-
-	const onRowLongPress = useCallback(
-		(id: string) => {
-			if (inSelect) {
-				toggle(id);
-				return;
+	const shelfCards = useMemo(() => {
+		const byGroup = new Map<string, VendorItem[]>();
+		const ungrouped: VendorItem[] = [];
+		for (const item of listed) {
+			if (item.groupId && groupIds.has(item.groupId)) {
+				const members = byGroup.get(item.groupId) ?? [];
+				members.push(item);
+				byGroup.set(item.groupId, members);
+			} else {
+				ungrouped.push(item);
 			}
-			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-			setSelectMode(true);
-			setSelected(new Set([id]));
-		},
-		[inSelect, toggle],
-	);
-
-	const liveSelected = useMemo(() => {
-		const present = new Set(rows.map((r) => r.id));
-		return new Set([...selected].filter((id) => present.has(id)));
-	}, [selected, rows]);
-
-	const handleSellSelected = useCallback(() => {
-		const picked = [...liveSelected];
-		if (picked.length === 0) return;
-		Alert.alert(
-			`Mark ${picked.length} sold?`,
-			"Each sells at its asking price — market price if none is set.",
-			[
-				{ text: "Cancel", style: "cancel" },
-				{
-					text: "Sell",
-					onPress: () => {
-						markSoldMany.mutate(
-							{ ids: picked },
-							{ onSuccess: exitSelect },
-						);
-					},
-				},
-			],
-		);
-	}, [liveSelected, markSoldMany, exitSelect]);
-
-	const handleUndoSelected = useCallback(() => {
-		const picked = [...liveSelected];
-		if (picked.length === 0) return;
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-		unmarkSoldMany.mutate({ ids: picked }, { onSuccess: exitSelect });
-	}, [liveSelected, unmarkSoldMany, exitSelect]);
-
-	const handleRemoveSelected = useCallback(() => {
-		const picked = [...liveSelected];
-		if (picked.length === 0) return;
-		Alert.alert(
-			`Remove ${picked.length} ${picked.length === 1 ? "card" : "cards"}?`,
-			tab === "sold"
-				? "These sales will leave your revenue total."
-				: "They'll be removed from your for-sale shelf.",
-			[
-				{ text: "Cancel", style: "cancel" },
-				{
-					text: "Remove",
-					style: "destructive",
-					onPress: () => {
-						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-						removeItems.mutate({ ids: picked }, { onSuccess: exitSelect });
-					},
-				},
-			],
-		);
-	}, [liveSelected, tab, removeItems, exitSelect]);
-
-
-	// Multi-select → group picker sheet (assigns on pick; selection survives
-	// the trip, so the rows glow in their new section on return).
-	const handleGroupSelected = useCallback(() => {
-		const picked = [...liveSelected];
-		if (picked.length === 0) return;
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-		router.push({
-			pathname: "/vendor-group-sheet",
-			params: { ids: picked.join(",") },
-		});
-	}, [liveSelected]);
-
-	const groupNameById = useMemo(
-		() => new Map(groups.map((g) => [g.id, g.name])),
-		[groups],
-	);
-
-	// Collapsed sections (by section key, "__ungrouped__" for the tail
-	// section) — session-only; tapping a header toggles it.
-	const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-		new Set(),
-	);
-	const toggleSection = useCallback((key: string) => {
-		Haptics.selectionAsync();
-		setCollapsedSections((prev) => {
-			const next = new Set(prev);
-			if (next.has(key)) next.delete(key);
-			else next.add(key);
-			return next;
-		});
-	}, []);
-
-	// For Sale renders as group sections once any group exists (each group's
-	// items, then Ungrouped); Sold stays a flat receipt list. Flattened into
-	// one entry array so the whole thing stays a single LinearTransition list.
-	type ListEntry =
-		| {
-				kind: "header";
-				key: string;
-				sectionKey: string;
-				group: VendorGroup | null;
-				total: number;
-				count: number;
-		  }
-		| { kind: "item"; item: VendorItem };
-	const listEntries = useMemo((): ListEntry[] => {
-		// Always built from the listed shelf — the Sold panel renders its own
-		// flat list, and both panels stay mounted for the tab slide.
-		if (groups.length === 0) {
-			return listed.map((item) => ({ kind: "item" as const, item }));
 		}
 		const shelfValue = (items: VendorItem[]) =>
 			items.reduce(
@@ -214,48 +72,47 @@ export default function VendorScreen() {
 			);
 		const cardCount = (items: VendorItem[]) =>
 			items.reduce((sum, i) => sum + i.quantity, 0);
-		const byGroup = new Map<string, VendorItem[]>();
-		const ungrouped: VendorItem[] = [];
-		for (const item of listed) {
-			if (item.groupId && groupNameById.has(item.groupId)) {
-				const members = byGroup.get(item.groupId) ?? [];
-				members.push(item);
-				byGroup.set(item.groupId, members);
-			} else {
-				ungrouped.push(item);
-			}
-		}
-		const entries: ListEntry[] = [];
-		const pushSection = (
-			sectionKey: string,
-			group: VendorGroup | null,
-			members: VendorItem[],
-		) => {
-			entries.push({
-				kind: "header",
-				key: `h-${sectionKey}`,
-				sectionKey,
-				group,
-				total: shelfValue(members),
-				count: cardCount(members),
-			});
-			// Collapsed: the header (with total + count) stands in for the rows.
-			if (collapsedSections.has(sectionKey)) return;
-			for (const m of members) entries.push({ kind: "item", item: m });
-		};
-		// Empty groups render too — a shelf created via the New Group button
-		// must be visible before its first card arrives.
-		for (const g of groups) {
-			pushSection(g.id, g, byGroup.get(g.id) ?? []);
-		}
-		if (ungrouped.length > 0) {
-			pushSection("__ungrouped__", null, ungrouped);
-		}
-		return entries;
-	}, [listed, groups, groupNameById, collapsedSections]);
 
-	// Same prompt the group picker uses — create an empty shelf up front,
-	// before any cards are assigned to it.
+		const cards = groups.map((g) => {
+			const members = byGroup.get(g.id) ?? [];
+			return {
+				key: g.id,
+				name: g.name,
+				count: cardCount(members),
+				total: shelfValue(members),
+				images: topImages(members),
+				groupId: g.id,
+			};
+		});
+		if (ungrouped.length > 0 || groups.length === 0) {
+			cards.push({
+				// With no groups yet, everything listed lives here — call it
+				// "For Sale" until grouping enters the picture.
+				key: "__ungrouped__",
+				name: groups.length === 0 ? "For Sale" : "Ungrouped",
+				count: cardCount(ungrouped),
+				total: shelfValue(ungrouped),
+				images: topImages(ungrouped),
+				groupId: "__ungrouped__",
+			});
+		}
+		return cards;
+	}, [listed, groups, groupIds]);
+
+	const openShelf = useCallback(
+		(groupId: string, name: string) => {
+			router.push({
+				pathname: "/vendor-shelf",
+				params: { mode: "group", groupId, name },
+			});
+		},
+		[],
+	);
+
+	const openSold = useCallback(() => {
+		router.push({ pathname: "/vendor-shelf", params: { mode: "sold" } });
+	}, []);
+
 	const promptCreateGroup = useCallback(() => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 		Alert.prompt(
@@ -276,151 +133,8 @@ export default function VendorScreen() {
 		);
 	}, [createGroup]);
 
-	// Group management lives in the vendor-group-options formSheet — the
-	// header's ellipsis just hands over the group id and name.
-	const openGroupOptions = useCallback((group: VendorGroup) => {
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-		router.push({
-			pathname: "/vendor-group-options",
-			params: { id: group.id, title: group.name },
-		});
-	}, []);
-
-	// Options live in the vendor-item-sheet formSheet (same presentation as
-	// menu-sheet) — the row just hands over the item id and its name for the
-	// sheet's title.
-	const openItemSheet = useCallback((item: VendorItem) => {
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-		router.push({
-			pathname: "/vendor-item-sheet",
-			params: { id: item.id, title: item.cardName },
-		});
-	}, []);
-
-	// One row renderer for both sliding panels (listed and sold).
-	const renderItemRow = (item: VendorItem) => {
-		const soldDiff =
-			item.status === "sold" ? (item.soldPrice ?? 0) - item.marketValue : 0;
-		return (
-			<Animated.View
-				key={item.id}
-				entering={FadeIn.duration(250)}
-				exiting={FadeOut.duration(200)}
-				layout={LinearTransition.duration(300)}
-			>
-				<CardPressable
-					onPress={() => (inSelect ? toggle(item.id) : openItemSheet(item))}
-					delayLongPress={300}
-					onLongPress={() => onRowLongPress(item.id)}
-					pressScale={0.98}
-					baseColor={t.glass.elevatedFill}
-					pressedColor={t.glass.pressedFill}
-					// Selection reads as an accent-glowing border — the row itself
-					// doesn't change shape.
-					style={[
-						styles.row,
-						{ borderColor: t.glass.elevatedBorder },
-						inSelect &&
-							liveSelected.has(item.id) && {
-								borderColor: t.accent,
-								...t.buttonGlow,
-							},
-					]}
-				>
-					<Image
-						source={{ uri: item.cardImageUrl }}
-						style={styles.thumb}
-						contentFit="contain"
-					/>
-					<View style={styles.rowInfo}>
-						<Text
-							style={[styles.rowName, { color: t.text.primary }]}
-							numberOfLines={1}
-						>
-							{item.cardName}
-							{item.quantity > 1 ? `  ×${item.quantity}` : ""}
-						</Text>
-						{(item.setName || item.cardNumber) && (
-							<Text
-								style={[styles.rowSet, { color: t.text.tertiary }]}
-								numberOfLines={1}
-							>
-								{item.setName}
-								{item.cardNumber
-									? `${item.setName ? " · " : ""}${item.cardNumber}`
-									: ""}
-							</Text>
-						)}
-						<Text
-							style={[styles.rowMarket, { color: t.text.secondary }]}
-							numberOfLines={1}
-						>
-							Market {formatCurrency(item.marketValue)}
-							{item.status === "sold" &&
-							item.groupId &&
-							groupNameById.has(item.groupId)
-								? ` · ${groupNameById.get(item.groupId)}`
-								: ""}
-							{item.status === "sold" && item.soldAt
-								? ` · ${soldDateLabel(item.soldAt)}`
-								: ""}
-						</Text>
-					</View>
-					{item.status === "listed" ? (
-						<View style={styles.rowTrailing}>
-							<Text
-								style={[
-									styles.rowPrice,
-									{
-										color: item.askingPrice
-											? t.text.primary
-											: t.accentOn,
-									},
-								]}
-							>
-								{item.askingPrice !== undefined
-									? formatCurrency(item.askingPrice)
-									: "Set price"}
-							</Text>
-							<Text
-								style={[styles.rowPriceLabel, { color: t.text.tertiary }]}
-							>
-								asking
-							</Text>
-						</View>
-					) : (
-						<View style={styles.rowTrailing}>
-							<Text style={[styles.rowPrice, { color: t.text.primary }]}>
-								{formatCurrency(item.soldPrice ?? 0)}
-							</Text>
-							<Text
-								style={[
-									styles.rowPriceLabel,
-									{ color: soldDiff >= 0 ? t.gain : t.loss },
-								]}
-							>
-								{soldDiff >= 0 ? "+" : ""}
-								{formatCurrency(soldDiff)}
-							</Text>
-						</View>
-					)}
-					{inSelect && liveSelected.has(item.id) && (
-						<Animated.View
-							entering={FadeIn.duration(180)}
-							exiting={FadeOut.duration(150)}
-						>
-							<SymbolView
-								name="checkmark.circle.fill"
-								size={22}
-								tintColor={t.accent}
-								weight="semibold"
-							/>
-						</Animated.View>
-					)}
-				</CardPressable>
-			</Animated.View>
-		);
-	};
+	const isEmpty =
+		listed.length === 0 && sold.length === 0 && groups.length === 0;
 
 	return (
 		<View style={styles.container}>
@@ -435,7 +149,10 @@ export default function VendorScreen() {
 			<ScrollView
 				contentContainerStyle={[
 					styles.content,
-					{ paddingTop: insets.top + 52 },
+					{
+						paddingTop: insets.top + 52,
+						paddingBottom: insets.bottom + 40,
+					},
 				]}
 				showsVerticalScrollIndicator={false}
 				refreshControl={
@@ -461,21 +178,7 @@ export default function VendorScreen() {
 						    bare on the gradient, chart from sale receipts. */}
 						<VendorRevenueHero sold={sold} summary={summary} />
 
-						{/* Everything below the hero rides on the sheet — same
-						    lifted-lip surface as the card detail screen. */}
-						<View
-							style={[
-								styles.sheet,
-								{
-									backgroundColor: t.glass.surfaceFill,
-									borderColor: t.glass.surfaceBorder,
-									// Clear the batch action bar while selecting; a slim
-									// margin otherwise (no pinned pill anymore).
-									paddingBottom: insets.bottom + (inSelect ? 108 : 24),
-								},
-							]}
-						>
-						{/* Stat strip — the sheet's headline row. */}
+						{/* Stat strip — under the range pills, on the stage. */}
 						<View style={styles.statsRow}>
 							<View style={styles.stat}>
 								<Text style={[styles.statValue, { color: t.text.primary }]}>
@@ -512,307 +215,98 @@ export default function VendorScreen() {
 							</View>
 						</View>
 
-						{/* For Sale / Sold toggle — the design system's segmented pill
-						    (solid accent = selected, glass track = off) — with the
-						    new-group button beside it. Always rendered so the row
-						    never shifts between tabs. */}
-						<View style={styles.tabs}>
-							<SegmentedChips
-								options={[
-									{
-										value: "listed" as const,
-										label: `For Sale · ${summary.listedCount}`,
-									},
-									{
-										value: "sold" as const,
-										label: `Sold · ${summary.soldCount}`,
-									},
-								]}
-								value={tab}
-								onChange={(v) => {
-									if (v === tab) return;
-									// Selection is per-tab — leaving the tab drops it.
-									exitSelect();
-									setTab(v);
-								}}
-							/>
-							<CardPressable
-								onPress={promptCreateGroup}
-								pressScale={0.95}
-								baseColor={t.glass.elevatedFill}
-								pressedColor={t.glass.pressedFill}
-								style={[
-									styles.newGroupButton,
-									{ borderColor: t.glass.elevatedBorder },
-								]}
-							>
+						{isEmpty ? (
+							<View style={styles.emptyState}>
 								<SymbolView
-									name="folder.badge.plus"
-									size={16}
-									tintColor={t.accentOn}
-									weight="medium"
+									name="storefront"
+									size={44}
+									tintColor={t.text.tertiary}
+									weight="regular"
 								/>
-							</CardPressable>
-						</View>
-
-						{/* Tab switch rides the card-detail Raw/Graded slider
-						    (SlidingPanels): the outgoing panel slides left, the incoming
-						    enters from the right, and the frame height eases between. */}
-						<SlidingPanels
-							activeTab={tab === "sold" ? "Graded" : "Raw"}
-							rawPanel={
-								listed.length === 0 && groups.length === 0 ? (
-									<View style={styles.emptyState}>
-										<SymbolView
-											name="storefront"
-											size={44}
-											tintColor={t.text.tertiary}
-											weight="regular"
-										/>
-										<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
-											Nothing For Sale
-										</Text>
-										<Text
-											style={[styles.emptySubtitle, { color: t.text.secondary }]}
-										>
-											Scan or search cards and pick Vending to put them on the
-											shelf — or select cards in a collection and move them here.
-										</Text>
-									</View>
-								) : (
+								<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
+									Nothing For Sale
+								</Text>
+								<Text
+									style={[styles.emptySubtitle, { color: t.text.secondary }]}
+								>
+									Scan or search cards and pick Vending to put them on
+									the shelf — or select cards in a collection and move
+									them here.
+								</Text>
+							</View>
+						) : (
+							<Animated.View
+								style={styles.list}
+								layout={LinearTransition.duration(300)}
+							>
+								{shelfCards.map((c) => (
 									<Animated.View
-										style={styles.list}
+										key={c.key}
+										entering={FadeIn.duration(300)}
+										exiting={FadeOut.duration(200)}
 										layout={LinearTransition.duration(300)}
 									>
-										{listEntries.map((entry) => {
-									if (entry.kind === "header") {
-										const isCollapsed = collapsedSections.has(
-											entry.sectionKey,
-										);
-										return (
-											<Animated.View
-												key={entry.key}
-												entering={FadeIn.duration(250)}
-												exiting={FadeOut.duration(200)}
-												layout={LinearTransition.duration(300)}
-											>
-												{/* Group header — a full-size row (name + count/
-												    asking meta line), not an overline: groups are
-												    components the user owns, not mere sections.
-												    Tap to collapse/expand; the ellipsis opens the
-												    manage sheet (Ungrouped isn't a real group). */}
-												{/* No pressed fill: the header is bare on the
-												    sheet, so a fill would flash a surface that
-												    doesn't exist at rest — the tiny sink plus
-												    the chevron flip is the feedback. */}
-												<CardPressable
-													onPress={() =>
-														toggleSection(entry.sectionKey)
-													}
-													pressScale={0.99}
-													style={styles.sectionHeader}
-												>
-													<View style={styles.sectionInfo}>
-														<Text
-															style={[
-																styles.sectionName,
-																{ color: t.text.primary },
-															]}
-															numberOfLines={1}
-														>
-															{entry.group?.name ?? "Ungrouped"}
-														</Text>
-														<Text
-															style={[
-																styles.sectionMeta,
-																{ color: t.text.secondary },
-															]}
-															numberOfLines={1}
-														>
-															{entry.count}{" "}
-															{entry.count === 1
-																? "card"
-																: "cards"}{" "}
-															· {formatCurrency(entry.total)}{" "}
-															asking
-														</Text>
-													</View>
-													{entry.group && (
-														<CardPressable
-															hitSlop={8}
-															pressScale={1}
-															onPress={() =>
-																openGroupOptions(entry.group!)
-															}
-														>
-															<SymbolView
-																name="ellipsis.circle"
-																size={22}
-																tintColor={t.text.secondary}
-																weight="medium"
-															/>
-														</CardPressable>
-													)}
-													<SymbolView
-														name={
-															isCollapsed
-																? "chevron.right"
-																: "chevron.down"
-														}
-														size={14}
-														tintColor={t.text.tertiary}
-														weight="semibold"
-													/>
-												</CardPressable>
-											</Animated.View>
-										);
-									}
-											return renderItemRow(entry.item);
-										})}
-									</Animated.View>
-								)
-							}
-							gradedPanel={
-								sold.length === 0 ? (
-									<View style={styles.emptyState}>
-										<SymbolView
-											name="dollarsign.circle"
-											size={44}
-											tintColor={t.text.tertiary}
-											weight="regular"
+										<CollectionCard
+											name={c.name}
+											cardCount={c.count}
+											totalValue={c.total}
+											cardImages={c.images}
+											onPress={() => openShelf(c.groupId, c.name)}
 										/>
-										<Text style={[styles.emptyTitle, { color: t.text.primary }]}>
-											No Sales Yet
-										</Text>
-										<Text
-											style={[styles.emptySubtitle, { color: t.text.secondary }]}
-										>
-											Mark a listed card sold and it&apos;ll show up here.
-										</Text>
-									</View>
-								) : (
+									</Animated.View>
+								))}
+								{sold.length > 0 && (
 									<Animated.View
-										style={styles.list}
+										entering={FadeIn.duration(300)}
 										layout={LinearTransition.duration(300)}
 									>
-										{sold.map((item) => renderItemRow(item))}
+										<CollectionCard
+											name="Sold"
+											cardCount={summary.soldCount}
+											totalValue={summary.revenue}
+											cardImages={[...sold]
+												.sort(
+													(a, b) =>
+														(b.soldPrice ?? 0) - (a.soldPrice ?? 0),
+												)
+												.slice(0, 4)
+												.map((i) => i.cardImageUrl)}
+											onPress={openSold}
+										/>
 									</Animated.View>
-								)
-							}
-						/>
-
-						</View>
+								)}
+								{/* Create a shelf up front — same prompt the group
+								    picker's "New group…" row uses. */}
+								<CardPressable
+									onPress={promptCreateGroup}
+									pressScale={0.98}
+									baseColor={t.glass.surfaceFill}
+									pressedColor={t.glass.pressedFill}
+									style={[
+										styles.createGroupRow,
+										{ borderColor: t.glass.surfaceBorder },
+									]}
+								>
+									<SymbolView
+										name="plus"
+										size={15}
+										tintColor={t.accentOn}
+										weight="semibold"
+									/>
+									<Text
+										style={[
+											styles.createGroupText,
+											{ color: t.accentOn },
+										]}
+									>
+										New Group
+									</Text>
+								</CardPressable>
+							</Animated.View>
+						)}
 					</>
 				)}
 			</ScrollView>
-
-			{/* Pinned batch action bar — select mode only (scanning lives in the
-			    header's camera button). */}
-			<View
-				style={[styles.scanWrap, { paddingBottom: insets.bottom + 12 }]}
-				pointerEvents="box-none"
-			>
-				{inSelect && (
-					<Animated.View
-						entering={FadeIn.duration(180)}
-						exiting={FadeOut.duration(150)}
-						style={styles.actionBar}
-					>
-						<CardPressable
-							onPress={
-								tab === "listed" ? handleSellSelected : handleUndoSelected
-							}
-							disabled={liveSelected.size === 0}
-							style={[
-								styles.actionButton,
-								{
-									backgroundColor: t.accent,
-									opacity: liveSelected.size === 0 ? 0.5 : 1,
-								},
-								liveSelected.size > 0 && t.buttonGlow,
-							]}
-						>
-							<SymbolView
-								name={
-									tab === "listed"
-										? "dollarsign.circle"
-										: "arrow.uturn.backward"
-								}
-								size={17}
-								tintColor="#FFFFFF"
-								weight="semibold"
-							/>
-							<Text style={styles.actionText}>
-								{tab === "listed" ? "Sell" : "Undo"}
-								{liveSelected.size > 0 ? ` ${liveSelected.size}` : ""}
-							</Text>
-						</CardPressable>
-						{/* Circle buttons on near-opaque glass (sheetFill — no blur
-						    behind the floating bar). Destructive is loss-colored
-						    content; solid fills stay reserved for the accent. */}
-						{tab === "listed" && (
-							<CardPressable
-								onPress={handleGroupSelected}
-								disabled={liveSelected.size === 0}
-								style={[
-									styles.actionCancel,
-									{
-										backgroundColor: t.glass.sheetFill,
-										borderColor: t.glass.elevatedBorder,
-										opacity: liveSelected.size === 0 ? 0.5 : 1,
-									},
-								]}
-							>
-								<SymbolView
-									name="folder"
-									size={17}
-									tintColor={t.accentOn}
-									weight="semibold"
-								/>
-							</CardPressable>
-						)}
-						<CardPressable
-							onPress={handleRemoveSelected}
-							disabled={liveSelected.size === 0}
-							style={[
-								styles.actionCancel,
-								{
-									backgroundColor: t.glass.sheetFill,
-									borderColor: t.glass.elevatedBorder,
-									opacity: liveSelected.size === 0 ? 0.5 : 1,
-								},
-							]}
-						>
-							<SymbolView
-								name="trash"
-								size={16}
-								tintColor={t.loss}
-								weight="semibold"
-							/>
-						</CardPressable>
-						<CardPressable
-							onPress={() => {
-								Haptics.selectionAsync();
-								exitSelect();
-							}}
-							style={[
-								styles.actionCancel,
-								{
-									backgroundColor: t.glass.sheetFill,
-									borderColor: t.glass.elevatedBorder,
-								},
-							]}
-						>
-							<SymbolView
-								name="xmark"
-								size={16}
-								tintColor={t.text.primary}
-								weight="semibold"
-							/>
-						</CardPressable>
-					</Animated.View>
-				)}
-			</View>
 			<HeaderFadeScrim />
 		</View>
 	);
@@ -829,26 +323,11 @@ const styles = StyleSheet.create({
 		flex: 1,
 		paddingHorizontal: spacing.screen,
 	},
-	// Same lifted-lip surface as the card detail sheet: 28pt top radius,
-	// hairline lip, shadow up so the hero reads as floating above it.
-	sheet: {
-		borderTopLeftRadius: 28,
-		borderTopRightRadius: 28,
-		borderTopWidth: StyleSheet.hairlineWidth,
-		marginTop: 16,
-		paddingTop: 18,
-		paddingHorizontal: spacing.screen,
-		flexGrow: 1,
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: -8 },
-		shadowOpacity: 0.22,
-		shadowRadius: 18,
-		elevation: 12,
-	},
 	statsRow: {
 		flexDirection: "row",
 		justifyContent: "space-between",
-		paddingHorizontal: 6,
+		marginTop: 14,
+		paddingHorizontal: spacing.screen + 6,
 	},
 	stat: {
 		alignItems: "center",
@@ -864,84 +343,30 @@ const styles = StyleSheet.create({
 		fontSize: 12,
 		fontWeight: "500",
 	},
-	tabs: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		gap: 10,
-		marginTop: 16,
-		marginBottom: 12,
+	// Shelf cards rest directly on the gradient, like the collections list.
+	list: {
+		gap: 14,
+		marginTop: 18,
+		paddingHorizontal: spacing.screen,
 	},
-	// Compact circle beside the segmented pill — same elevated-glass recipe
-	// as chips, accent-soft icon (tertiary action, not a primary CTA).
-	newGroupButton: {
-		width: 38,
-		height: 38,
-		borderRadius: 19,
-		borderWidth: 1,
+	createGroupRow: {
+		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "center",
-	},
-	list: {
-		gap: 8,
-	},
-	// Group header — full-size row: name over a count/asking meta line, with
-	// the manage ellipsis + collapse chevron trailing. Bare on the sheet so
-	// the glass item rows beneath still read as its contents.
-	sectionHeader: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 14,
-		marginTop: 10,
-		paddingVertical: 10,
-		paddingHorizontal: 4,
-		borderRadius: 12,
-	},
-	sectionInfo: {
-		flex: 1,
-		gap: 2,
-	},
-	sectionName: {
-		fontSize: 17,
-		fontWeight: "700",
-	},
-	sectionMeta: {
-		fontSize: 13,
-		fontWeight: "500",
-		fontVariant: ["tabular-nums"],
-	},
-	row: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 12,
-		paddingVertical: 10,
-		paddingHorizontal: 12,
+		gap: 6,
+		paddingVertical: 13,
 		borderRadius: 14,
 		borderWidth: 1,
 	},
-	thumb: { width: THUMB_WIDTH, height: THUMB_HEIGHT },
-	rowInfo: { flex: 1, gap: 2 },
-	rowName: { fontSize: 15, fontWeight: "600" },
-	rowSet: { fontSize: 12 },
-	rowMarket: { fontSize: 13, fontWeight: "500" },
-	rowTrailing: {
-		alignItems: "flex-end",
-		gap: 1,
-	},
-	rowPrice: {
+	createGroupText: {
 		fontSize: 15,
-		fontWeight: "700",
-		fontVariant: ["tabular-nums"],
-	},
-	rowPriceLabel: {
-		fontSize: 12,
-		fontWeight: "500",
+		fontWeight: "600",
 	},
 	emptyState: {
 		flex: 1,
 		justifyContent: "center",
 		alignItems: "center",
-		paddingHorizontal: 24,
+		paddingHorizontal: 32,
 		paddingVertical: 48,
 		gap: 10,
 	},
@@ -954,39 +379,5 @@ const styles = StyleSheet.create({
 		fontSize: 15,
 		textAlign: "center",
 		lineHeight: 21,
-	},
-	scanWrap: {
-		position: "absolute",
-		left: spacing.screen,
-		right: spacing.screen,
-		bottom: 0,
-	},
-	// Select-mode batch bar — pinned above the home indicator.
-	actionBar: {
-		flexDirection: "row",
-		gap: 8,
-	},
-	actionButton: {
-		flex: 1,
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		gap: 6,
-		height: 52,
-		borderRadius: 999,
-	},
-	actionCancel: {
-		width: 52,
-		height: 52,
-		borderRadius: 26,
-		borderWidth: 1,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	actionText: {
-		color: "#FFFFFF",
-		fontSize: 15,
-		fontWeight: "700",
-		fontVariant: ["tabular-nums"],
 	},
 });
