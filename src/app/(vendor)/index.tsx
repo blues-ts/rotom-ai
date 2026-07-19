@@ -49,6 +49,7 @@ export default function VendorScreen() {
 		listed,
 		sold,
 		groups,
+		createGroup,
 		summary,
 		isError,
 		refetch,
@@ -239,15 +240,38 @@ export default function VendorScreen() {
 			if (collapsedSections.has(sectionKey)) return;
 			for (const m of members) entries.push({ kind: "item", item: m });
 		};
+		// Empty groups render too — a shelf created via the New Group button
+		// must be visible before its first card arrives.
 		for (const g of groups) {
-			const members = byGroup.get(g.id);
-			if (members) pushSection(g.id, g, members);
+			pushSection(g.id, g, byGroup.get(g.id) ?? []);
 		}
 		if (ungrouped.length > 0) {
 			pushSection("__ungrouped__", null, ungrouped);
 		}
 		return entries;
 	}, [tab, rows, groups, groupNameById, collapsedSections]);
+
+	// Same prompt the group picker uses — create an empty shelf up front,
+	// before any cards are assigned to it.
+	const promptCreateGroup = useCallback(() => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		Alert.prompt(
+			"New group",
+			"Name this shelf — like “$5 binder” or “Display case”.",
+			[
+				{ text: "Cancel", style: "cancel" },
+				{
+					text: "Create",
+					onPress: (name?: string) => {
+						const trimmed = name?.trim();
+						if (!trimmed) return;
+						createGroup.mutate(trimmed);
+					},
+				},
+			],
+			"plain-text",
+		);
+	}, [createGroup]);
 
 	// Group management lives in the vendor-group-options formSheet — the
 	// header's ellipsis just hands over the group id and name.
@@ -384,7 +408,8 @@ export default function VendorScreen() {
 							/>
 						</View>
 
-						{rows.length === 0 ? (
+						{rows.length === 0 &&
+						!(tab === "listed" && groups.length > 0) ? (
 							<View style={styles.emptyState}>
 								<SymbolView
 									name={tab === "listed" ? "storefront" : "dollarsign.circle"}
@@ -646,6 +671,43 @@ export default function VendorScreen() {
 								})}
 							</Animated.View>
 						)}
+
+						{/* Create a shelf before any cards are on it — same prompt
+						    the group picker's "New group…" row uses. Tertiary
+						    action: glass row, accent-soft content. */}
+						{tab === "listed" && !inSelect && (
+							<Animated.View
+								entering={FadeIn.duration(180)}
+								exiting={FadeOut.duration(150)}
+								layout={LinearTransition.duration(300)}
+							>
+								<CardPressable
+									onPress={promptCreateGroup}
+									pressScale={0.98}
+									baseColor={t.glass.surfaceFill}
+									pressedColor={t.glass.pressedFill}
+									style={[
+										styles.createGroupRow,
+										{ borderColor: t.glass.surfaceBorder },
+									]}
+								>
+									<SymbolView
+										name="plus"
+										size={15}
+										tintColor={t.accentOn}
+										weight="semibold"
+									/>
+									<Text
+										style={[
+											styles.createGroupText,
+											{ color: t.accentOn },
+										]}
+									>
+										New Group
+									</Text>
+								</CardPressable>
+							</Animated.View>
+						)}
 						</View>
 					</>
 				)}
@@ -841,6 +903,20 @@ const styles = StyleSheet.create({
 		fontSize: 13,
 		fontWeight: "500",
 		fontVariant: ["tabular-nums"],
+	},
+	createGroupRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "center",
+		gap: 6,
+		marginTop: 12,
+		paddingVertical: 13,
+		borderRadius: 14,
+		borderWidth: 1,
+	},
+	createGroupText: {
+		fontSize: 15,
+		fontWeight: "600",
 	},
 	row: {
 		flexDirection: "row",
