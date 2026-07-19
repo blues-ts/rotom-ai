@@ -40,7 +40,9 @@ import { radius, useRiverTheme } from "@/constants/theme";
 import * as Haptics from "expo-haptics";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-import HeaderIconButton from "@/components/HeaderIconButton";
+import HeaderIconButton, {
+	HeaderButtonGroup,
+} from "@/components/HeaderIconButton";
 import {
 	initialWindowMetrics,
 	SafeAreaProvider,
@@ -250,24 +252,55 @@ function AppContent() {
 							headerShadowVisible: false,
 							headerLeft: () => <HeaderBackButton />,
 							headerRight: () => (
-								<HeaderIconButton
-									onPress={() => {
-										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-										if (!isPro) {
-											void presentProPaywallIfNeeded();
-											return;
-										}
-										router.push("/create-collection");
-									}}
-								>
-									<SymbolView
-										name="plus"
-										size={22}
-										tintColor={t.accentOn}
-										weight="medium"
-									/>
-								</HeaderIconButton>
+								<HeaderButtonGroup>
+									{/* Vending shelf lives beside the add button — the
+									    vendor tool's nav entry point. */}
+									<HeaderIconButton
+										onPress={() => {
+											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+											router.push("/(vendor)");
+										}}
+									>
+										<SymbolView
+											name="storefront"
+											size={20}
+											tintColor={t.accentOn}
+											weight="medium"
+										/>
+									</HeaderIconButton>
+									<HeaderIconButton
+										onPress={() => {
+											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+											if (!isPro) {
+												void presentProPaywallIfNeeded();
+												return;
+											}
+											router.push("/create-collection");
+										}}
+									>
+										<SymbolView
+											name="plus"
+											size={22}
+											tintColor={t.accentOn}
+											weight="medium"
+										/>
+									</HeaderIconButton>
+								</HeaderButtonGroup>
 							),
+					}}
+				/>
+				<Stack.Screen
+					name="(vendor)"
+					options={{
+						animation: "slide_from_right",
+						headerShown: true,
+						headerTitle: "Vending",
+						headerBackButtonDisplayMode: "minimal",
+						headerTransparent: true,
+						headerStyle: { backgroundColor: "transparent" },
+						headerTintColor: t.accentOn,
+						headerShadowVisible: false,
+						headerLeft: () => <HeaderBackButton />,
 					}}
 				/>
 				<Stack.Screen

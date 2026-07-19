@@ -24,6 +24,14 @@ import {
 import { useScanSession } from "@/context/ScanSessionContext";
 import { useScanReviewBatch } from "@/hooks/useScanReviewBatch";
 import { useToast } from "@/context/ToastContext";
+import {
+	useRefreshVendorPrices,
+	useVendorItems,
+} from "@/hooks/useVendorItems";
+
+// Sentinel "collection id" for the pinned Vending destination row — real
+// collection ids are Date.now() strings, so this can't collide.
+const VENDOR_DEST_ID = "__vendor__";
 
 export default function AddToCollection() {
   const t = useRiverTheme();
@@ -58,6 +66,8 @@ export default function AddToCollection() {
 
   const { collections, addCardToCollection, addCardsToCollection, moveCardRows } = useCollections();
   const refreshPrices = useRefreshCollectionPrices();
+  const { addVendorItems } = useVendorItems();
+  const refreshVendorPrices = useRefreshVendorPrices();
   const toast = useToast();
   // Batch adds come from the scanner library — clear those cards from the
   // session once they've landed in a collection.
@@ -150,32 +160,25 @@ export default function AddToCollection() {
     fetch.catch(() => {});
   }, [api, batchIds, isBatch, fromReview]);
 
-  const handleSelectBatch = useCallback(
-    async (collectionId: string) => {
-      if (addedId || batchIds.length === 0) return;
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setAddedId(collectionId);
-      try {
-        const cards =
-          reviewBatch.data ??
-          (
-            await (batchFetchRef.current ??
-              getPricedBatch(api, {
-                cardIds: batchIds,
-                sealedIds: [],
-                skipRawBackfill: true,
-              }))
-          ).cards;
-        const byId = new Map(cards.map((c) => [c.id, c]));
-        // Review-screen configs (variant / condition / grade / quantity) live
-        // on the session scans; cards without one fall back to the defaults
-        // the blind batch add always used.
-        const configById = new Map(scans.map((s) => [s.id, s.config]));
-        // One transactional mutation for the whole batch — one snapshot and
-        // one refetch pass instead of a per-card storm.
-        await addCardsToCollection.mutateAsync({
-          collectionId,
-          cards: batchIds.map((id, i) => {
+  // Resolve the priced batch into row inputs — shared by the collection add
+  // and the Vending add so config/price resolution can't drift apart.
+  const resolveBatchInputs = useCallback(async () => {
+    const cards =
+      reviewBatch.data ??
+      (
+        await (batchFetchRef.current ??
+          getPricedBatch(api, {
+            cardIds: batchIds,
+            sealedIds: [],
+            skipRawBackfill: true,
+          }))
+      ).cards;
+    const byId = new Map(cards.map((c) => [c.id, c]));
+    // Review-screen configs (variant / condition / grade / quantity) live
+    // on the session scans; cards without one fall back to the defaults
+    // the blind batch add always used.
+    const configById = new Map(scans.map((s) => [s.id, s.config]));
+    return batchIds.map((id, i) => {
             const card = byId.get(id);
             const config = configById.get(id);
             const variant =
@@ -223,20 +226,36 @@ export default function AddToCollection() {
               gradedGrade: isGraded ? config.gradedGrade : undefined,
               quantity: config?.quantity,
             };
-          }),
+          });
+  }, [api, batchIds, batchImages, scans, reviewBatch.data]);
+
+  // Shared batch epilogue: drop the added cards from the scanning session.
+  // If the whole session was just filed away, also pop the emptied library,
+  // revealing the scanner as it was (binder mode intact) rather than
+  // re-pushing it. A partial add returns to the library as before.
+  // expo-router queues the GO_BACKs, so they run in order.
+  const finishBatchAdd = useCallback(() => {
+    const clearedSession = batchIds.length >= scans.length;
+    removeScans(batchIds);
+    setTimeout(() => {
+      router.back();
+      if (clearedSession) router.back();
+    }, 450);
+  }, [batchIds, removeScans, scans]);
+
+  const handleSelectBatch = useCallback(
+    async (collectionId: string) => {
+      if (addedId || batchIds.length === 0) return;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setAddedId(collectionId);
+      try {
+        // One transactional mutation for the whole batch — one snapshot and
+        // one refetch pass instead of a per-card storm.
+        await addCardsToCollection.mutateAsync({
+          collectionId,
+          cards: await resolveBatchInputs(),
         });
-        // They're filed away now — drop them from the scanning session.
-        const clearedSession = batchIds.length >= scans.length;
-        removeScans(batchIds);
-        // Batch adds come from the scanner library. If the whole session was
-        // just filed away, also pop the emptied library, revealing the scanner
-        // as it was (binder mode intact) rather than re-pushing it. A partial
-        // add returns to the library as before. expo-router queues the
-        // GO_BACKs, so they run in order.
-        setTimeout(() => {
-          router.back();
-          if (clearedSession) router.back();
-        }, 450);
+        finishBatchAdd();
       } catch {
         // A failed prefetch shouldn't poison retries — refetch on next tap.
         batchFetchRef.current = null;
@@ -244,8 +263,63 @@ export default function AddToCollection() {
         Alert.alert("Error", "Couldn't add the cards. Please try again.");
       }
     },
-    [api, addedId, batchIds, batchImages, addCardsToCollection, removeScans, scans, reviewBatch.data],
+    [addedId, batchIds, addCardsToCollection, resolveBatchInputs, finishBatchAdd],
   );
+
+  // The pinned "Vending" destination — same resolution as the collection add,
+  // committed to the vendor shelf instead. Handles batch (scanner) and single
+  // (card detail / search) modes.
+  const handleSelectVendor = useCallback(async () => {
+    if (addedId) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setAddedId(VENDOR_DEST_ID);
+    if (isBatch) {
+      try {
+        const inputs = (await resolveBatchInputs()).map(
+          ({ cardValue, ...rest }) => ({ ...rest, marketValue: cardValue }),
+        );
+        await addVendorItems.mutateAsync(inputs);
+        finishBatchAdd();
+      } catch {
+        batchFetchRef.current = null;
+        setAddedId(null);
+        Alert.alert("Error", "Couldn't add the cards. Please try again.");
+      }
+      return;
+    }
+    if (!cardId || !cardName) {
+      setAddedId(null);
+      return;
+    }
+    const value = parseFloat(cardValue ?? "0") || 0;
+    addVendorItems.mutate(
+      [
+        {
+          cardId,
+          cardName,
+          cardNumber: cardNumber || undefined,
+          setName: setName || undefined,
+          cardImageUrl: cardImageUrl ?? "",
+          marketValue: value,
+          pricingType: pricingType ?? "Raw",
+          productType: productType === "sealed" ? "sealed" : "card",
+          variant: variant ?? "normal",
+          condition: condition ?? "NM",
+          gradedCompany: gradedCompany || undefined,
+          gradedGrade: gradedGrade || undefined,
+        },
+      ],
+      {
+        onSuccess: () => {
+          // Catalog adds carry no live price — refresh so the shelf shows a
+          // real market value instead of $0 (Pro-gated no-op otherwise).
+          if (value <= 0) refreshVendorPrices.mutate();
+          setTimeout(() => router.back(), 450);
+        },
+        onError: () => setAddedId(null),
+      },
+    );
+  }, [addedId, isBatch, resolveBatchInputs, addVendorItems, finishBatchAdd, refreshVendorPrices, cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade]);
 
   const handleSelect = useCallback(
     (collectionId: string) => {
@@ -317,6 +391,68 @@ export default function AddToCollection() {
               : "Add to Collection",
         }}
       />
+      {/* Vending is a fixed destination above the collections — scan-to-sell
+          and quick-listing reuse this sheet without touching the scan flow. */}
+      {!isMove && (
+        <CardPressable
+          onPress={() => void handleSelectVendor()}
+          disabled={!!addedId}
+          pressScale={0.98}
+          baseColor={
+            addedId === VENDOR_DEST_ID ? undefined : t.glass.elevatedFill
+          }
+          pressedColor={
+            addedId === VENDOR_DEST_ID ? undefined : t.glass.pressedFill
+          }
+          style={[
+            styles.collectionRow,
+            {
+              borderColor:
+                addedId === VENDOR_DEST_ID ? t.accent : t.glass.elevatedBorder,
+              borderWidth: addedId === VENDOR_DEST_ID ? 2 : 1,
+            },
+            addedId === VENDOR_DEST_ID
+              ? { backgroundColor: t.accentIconFill }
+              : null,
+          ]}
+        >
+          <View
+            style={[styles.vendorIcon, { backgroundColor: t.accentIconFill }]}
+          >
+            <SymbolView
+              name="storefront"
+              size={16}
+              tintColor={t.accentOn}
+              weight="semibold"
+            />
+          </View>
+          <View style={styles.collectionInfo}>
+            <Text
+              style={[styles.collectionName, { color: t.text.primary }]}
+              numberOfLines={1}
+            >
+              Vending
+            </Text>
+            <Text style={[styles.collectionCount, { color: t.text.secondary }]}>
+              {addedId === VENDOR_DEST_ID
+                ? "Listed for sale"
+                : "Put on your for-sale shelf"}
+            </Text>
+          </View>
+          <SymbolView
+            name={
+              addedId === VENDOR_DEST_ID
+                ? "checkmark.circle.fill"
+                : "chevron.right"
+            }
+            size={addedId === VENDOR_DEST_ID ? 20 : 14}
+            tintColor={
+              addedId === VENDOR_DEST_ID ? t.accentOn : t.text.tertiary
+            }
+            weight="semibold"
+          />
+        </CardPressable>
+      )}
       {targetCollections.length === 0 ? (
         <View style={styles.empty}>
           <Text style={[styles.emptyText, { color: t.text.secondary }]}>
@@ -434,6 +570,14 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 8,
+  },
+  vendorIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
   },
   collectionRow: {
     flexDirection: "row",
