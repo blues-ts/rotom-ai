@@ -54,6 +54,45 @@ export interface AddVendorItemInput {
   quantity?: number;
 }
 
+// A group lives only while it holds listed cards it was actually used for:
+// when an action empties one (last card sold, removed, or moved out), the
+// group deletes itself. Only the groups TOUCHED by the action are checked,
+// so a freshly created (still empty) group survives until it's used. The
+// FK's ON DELETE SET NULL drops any sold receipts' membership with it.
+function pruneEmptiedGroups(
+  db: ReturnType<typeof getDatabase>,
+  groupIds: (string | null | undefined)[],
+) {
+  const unique = [...new Set(groupIds.filter((g): g is string => !!g))];
+  for (const gid of unique) {
+    const remaining = db.getFirstSync<{ c: number }>(
+      "SELECT COUNT(*) AS c FROM vendor_items WHERE status = 'listed' AND group_id = ?",
+      [gid],
+    );
+    if ((remaining?.c ?? 0) === 0) {
+      db.runSync("DELETE FROM vendor_groups WHERE id = ?", [gid]);
+    }
+  }
+}
+
+/** Distinct group ids of the LISTED rows in `ids` — the groups an action on
+ *  those rows could empty. Read BEFORE mutating. */
+function listedGroupIdsOf(
+  db: ReturnType<typeof getDatabase>,
+  ids: string[],
+): string[] {
+  if (ids.length === 0) return [];
+  const placeholders = ids.map(() => "?").join(",");
+  return db
+    .getAllSync<{ group_id: string | null }>(
+      `SELECT DISTINCT group_id FROM vendor_items
+       WHERE status = 'listed' AND group_id IS NOT NULL AND id IN (${placeholders})`,
+      ids,
+    )
+    .map((r) => r.group_id!)
+    .filter(Boolean);
+}
+
 function mapRow(row: VendorItemRow): VendorItem {
   return {
     id: row.id,
@@ -207,11 +246,16 @@ export function useVendorItems() {
   const assignToGroup = useMutation({
     mutationFn: ({ ids, groupId }: { ids: string[]; groupId: string | null }) => {
       if (ids.length > 0) {
+        // Groups the cards are moving OUT of — pruned if that empties them.
+        // The target group holds the cards after the update, so the prune's
+        // recount can never delete it.
+        const emptied = listedGroupIdsOf(db, ids);
         const placeholders = ids.map(() => "?").join(",");
         db.runSync(
           `UPDATE vendor_items SET group_id = ? WHERE id IN (${placeholders})`,
           [groupId, ...ids],
         );
+        pruneEmptiedGroups(db, emptied);
       }
       return Promise.resolve();
     },
@@ -309,10 +353,12 @@ export function useVendorItems() {
 
   const markSold = useMutation({
     mutationFn: ({ id, soldPrice }: { id: string; soldPrice: number }) => {
+      const emptied = listedGroupIdsOf(db, [id]);
       db.runSync(
         "UPDATE vendor_items SET status = 'sold', sold_price = ?, sold_at = ? WHERE id = ?",
         [soldPrice, new Date().toISOString(), id],
       );
+      pruneEmptiedGroups(db, emptied);
       return Promise.resolve();
     },
     onSuccess: () => {
@@ -337,7 +383,9 @@ export function useVendorItems() {
 
   const removeItem = useMutation({
     mutationFn: ({ id }: { id: string }) => {
+      const emptied = listedGroupIdsOf(db, [id]);
       db.runSync("DELETE FROM vendor_items WHERE id = ?", [id]);
+      pruneEmptiedGroups(db, emptied);
       return Promise.resolve();
     },
     onSuccess: invalidate,
@@ -349,6 +397,7 @@ export function useVendorItems() {
   const markSoldMany = useMutation({
     mutationFn: ({ ids }: { ids: string[] }) => {
       if (ids.length === 0) return Promise.resolve();
+      const emptied = listedGroupIdsOf(db, ids);
       const placeholders = ids.map(() => "?").join(",");
       db.runSync(
         `UPDATE vendor_items
@@ -356,6 +405,7 @@ export function useVendorItems() {
          WHERE status = 'listed' AND id IN (${placeholders})`,
         [new Date().toISOString(), ...ids],
       );
+      pruneEmptiedGroups(db, emptied);
       return Promise.resolve();
     },
     onSuccess: (_data, { ids }) => {
@@ -394,11 +444,13 @@ export function useVendorItems() {
   const removeItems = useMutation({
     mutationFn: ({ ids }: { ids: string[] }) => {
       if (ids.length > 0) {
+        const emptied = listedGroupIdsOf(db, ids);
         const placeholders = ids.map(() => "?").join(",");
         db.runSync(
           `DELETE FROM vendor_items WHERE id IN (${placeholders})`,
           ids,
         );
+        pruneEmptiedGroups(db, emptied);
       }
       return Promise.resolve();
     },
