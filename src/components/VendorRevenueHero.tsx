@@ -38,7 +38,9 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 // Hero on the stage — pads itself (like the collections hero); the sheet
 // below carries the rest of the screen.
 const CHART_WIDTH = SCREEN_WIDTH - spacing.screen * 2;
-const CHART_HEIGHT = 150;
+// Same height as the collections hero — with identical type/margins above,
+// this keeps the range pills at the same y on both screens.
+const CHART_HEIGHT = 170;
 
 export interface VendorSummaryStats {
 	revenue: number;
@@ -104,15 +106,19 @@ function VendorRevenueHeroInner({
 				{formatCurrency(summary.revenue)}
 			</Text>
 
-			<Text
-				style={[
-					styles.deltaText,
-					{ color: periodRevenue > 0 ? t.gain : t.text.secondary },
-				]}
-			>
-				{periodRevenue > 0 ? "+" : ""}
-				{formatCurrency(periodRevenue)} {PERIOD_LABELS[period]}
-			</Text>
+			{/* Hidden when there's nothing charted — mirrors the collections hero
+			    so the two screens' layouts stay in lockstep state-for-state. */}
+			{data.length > 1 && (
+				<Text
+					style={[
+						styles.deltaText,
+						{ color: periodRevenue > 0 ? t.gain : t.text.secondary },
+					]}
+				>
+					{periodRevenue > 0 ? "+" : ""}
+					{formatCurrency(periodRevenue)} {PERIOD_LABELS[period]}
+				</Text>
+			)}
 
 			{data.length < 2 ? (
 				<View style={styles.chartPlaceholder}>
