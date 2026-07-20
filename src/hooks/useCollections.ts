@@ -10,6 +10,7 @@ import type { ScrydexCard, ScrydexSealedProduct } from "@/types/scrydex";
 import { recordCollectionValueSnapshot } from "@/lib/collectionValueHistory";
 import { useToast } from "@/context/ToastContext";
 import { useRevenueCat } from "@/context/RevenueCatContext";
+import { sweepVendorPrices, VENDOR_KEY } from "@/hooks/useVendorItems";
 import type { Collection, CollectionCard } from "@/types/collection";
 
 const STALE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -565,7 +566,22 @@ export function useRefreshCollectionPrices() {
     mutationFn: async (collectionId?: string) => {
       // Pricing is a Pro feature — non-Pro never hits the pricing API. Skip
       // silently (this also runs on an auto-refresh, so no surprise paywall).
-      if (!isPro) return { updated: 0 };
+      if (!isPro) return { updated: 0, vendorUpdated: 0 };
+
+      // A global sweep (no collectionId) also refreshes the vending shelf's
+      // market values, so "refresh all prices" keeps both surfaces in sync. A
+      // scoped single-collection refresh stays scoped — it must not fan out to
+      // the whole shelf. Failures here shouldn't sink an otherwise-successful
+      // collection refresh, so swallow and report zero.
+      const runVendorSweep = async (): Promise<number> => {
+        if (collectionId) return 0;
+        try {
+          return (await sweepVendorPrices(db, api)).updated;
+        } catch {
+          return 0;
+        }
+      };
+
       // Async read: this can be the whole table, and the sync API would block
       // the JS thread (dead taps) for the duration on big collections.
       const rows = collectionId
@@ -575,7 +591,8 @@ export function useRefreshCollectionPrices() {
           )
         : await db.getAllAsync<CollectionCardRow>("SELECT * FROM collection_cards");
 
-      if (rows.length === 0) return { updated: 0 };
+      // An empty collection scope still lets a global refresh update the shelf.
+      if (rows.length === 0) return { updated: 0, vendorUpdated: await runVendorSweep() };
 
       const productTypeById = new Map(rows.map((r) => [r.card_id, r.product_type]));
       const uniqueCardIds = Array.from(new Set(rows.map((r) => r.card_id)));
@@ -645,9 +662,10 @@ export function useRefreshCollectionPrices() {
           updated += 1;
         }
       });
-      return { updated };
+
+      return { updated, vendorUpdated: await runVendorSweep() };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       recordCollectionValueSnapshot();
       queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
       queryClient.invalidateQueries({ queryKey: COLLECTION_SNAPSHOT_KEY });
@@ -657,6 +675,10 @@ export function useRefreshCollectionPrices() {
       // (24h auto-refresh and the collections-list pull-to-refresh).
       queryClient.invalidateQueries({ queryKey: ["collection"] });
       queryClient.invalidateQueries({ queryKey: ["collectionCards"] });
+      // Only the global sweep touches vendor rows; refetch the shelf then.
+      if (result.vendorUpdated > 0) {
+        queryClient.invalidateQueries({ queryKey: VENDOR_KEY });
+      }
     },
     onError: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);

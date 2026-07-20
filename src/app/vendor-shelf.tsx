@@ -13,6 +13,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { spacing, useRiverTheme } from "@/constants/theme";
 import { formatCurrency } from "@/lib/format";
+import { formatCardConfig } from "@/lib/scrydex";
 import { openMenuSheetSlot } from "@/lib/menuSheet";
 import { directionRow, SORT_OPTION_LABELS } from "@/lib/sortLabels";
 import type { LegacyMenuAction } from "@/components/LegacyToolbarMenu";
@@ -431,11 +432,24 @@ export default function VendorShelfScreen() {
 									: ""}
 							</Text>
 						)}
+						{/* The saved variant + condition/grade — the same config
+						    subtitle scan-review rows show, so a listing reads
+						    identically to how it was added. */}
+						<Text
+							style={[styles.rowConfig, { color: t.text.secondary }]}
+							numberOfLines={1}
+						>
+							{formatCardConfig(item)}
+						</Text>
 						<Text
 							style={[styles.rowMarket, { color: t.text.secondary }]}
 							numberOfLines={1}
 						>
-							Market {formatCurrency(item.marketValue)}
+							{/* Sold rows show the market value frozen at sale time —
+							    the basis for the profit/loss diff — never today's
+							    market. Listed rows show live market. */}
+							{item.status === "sold" ? "Market at sale " : "Market "}
+							{formatCurrency(item.marketValue)}
 							{item.status === "sold" &&
 							item.groupId &&
 							groupNameById.has(item.groupId)
@@ -693,6 +707,7 @@ const styles = StyleSheet.create({
 	rowInfo: { flex: 1, gap: 2 },
 	rowName: { fontSize: 15, fontWeight: "600" },
 	rowSet: { fontSize: 12 },
+	rowConfig: { fontSize: 13, fontWeight: "500" },
 	rowMarket: { fontSize: 13, fontWeight: "500" },
 	rowTrailing: {
 		alignItems: "flex-end",

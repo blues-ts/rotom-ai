@@ -1,6 +1,8 @@
 import { useCallback, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
+import type { AxiosInstance } from "axios";
+import type * as SQLite from "expo-sqlite";
 import { getDatabase } from "@/lib/database";
 import { useApi } from "@/lib/axios";
 import { getPricedBatch } from "@/lib/api/pricing";
@@ -10,7 +12,7 @@ import { useToast } from "@/context/ToastContext";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import type { VendorGroup, VendorItem } from "@/types/vendor";
 
-const VENDOR_KEY = ["vendorItems"] as const;
+export const VENDOR_KEY = ["vendorItems"] as const;
 const VENDOR_GROUPS_KEY = ["vendorGroups"] as const;
 
 interface VendorItemRow {
@@ -549,6 +551,57 @@ function resolveVendorPrice(
 
 /**
  * Refresh market prices for LISTED vendor items (sold receipts keep the
+ * market value they sold against): one batch request, one write transaction.
+ *
+ * Shared by the vending pull-to-refresh (useRefreshVendorPrices) and the
+ * global collection price sweep, so "refresh prices" from either surface keeps
+ * the vending shelf's market values current. The caller owns the Pro gate and
+ * query invalidation.
+ */
+export async function sweepVendorPrices(
+  db: SQLite.SQLiteDatabase,
+  api: AxiosInstance,
+): Promise<{ updated: number }> {
+  const rows = await db.getAllAsync<VendorItemRow>(
+    "SELECT * FROM vendor_items WHERE status = 'listed'",
+  );
+  if (rows.length === 0) return { updated: 0 };
+
+  const cardIds: string[] = [];
+  const sealedIds: string[] = [];
+  for (const row of rows) {
+    const bucket = row.product_type === "sealed" ? sealedIds : cardIds;
+    if (!bucket.includes(row.card_id)) bucket.push(row.card_id);
+  }
+
+  const batch = await getPricedBatch(api, { cardIds, sealedIds });
+  const cardMap = new Map<string, ScrydexCard | ScrydexSealedProduct>();
+  for (const c of batch.cards) cardMap.set(c.id, c);
+  for (const s of batch.sealed) cardMap.set(s.id, s);
+  if (cardMap.size === 0) {
+    throw new Error("Price refresh failed for all vendor items");
+  }
+
+  const now = new Date().toISOString();
+  let updated = 0;
+  await db.withTransactionAsync(async () => {
+    for (const row of rows) {
+      const card = cardMap.get(row.card_id);
+      if (!card) continue;
+      const price = resolveVendorPrice(card, row);
+      if (price === undefined || price === null) continue;
+      await db.runAsync(
+        "UPDATE vendor_items SET market_value = ?, market_value_updated_at = ? WHERE id = ?",
+        [price, now, row.id],
+      );
+      updated += 1;
+    }
+  });
+  return { updated };
+}
+
+/**
+ * Refresh market prices for LISTED vendor items (sold receipts keep the
  * market value they sold against). Mirrors useRefreshCollectionPrices:
  * Pro-gated, one batch request, one write transaction.
  */
@@ -562,42 +615,7 @@ export function useRefreshVendorPrices() {
   return useMutation({
     mutationFn: async () => {
       if (!isPro) return { updated: 0 };
-      const rows = await db.getAllAsync<VendorItemRow>(
-        "SELECT * FROM vendor_items WHERE status = 'listed'",
-      );
-      if (rows.length === 0) return { updated: 0 };
-
-      const cardIds: string[] = [];
-      const sealedIds: string[] = [];
-      for (const row of rows) {
-        const bucket = row.product_type === "sealed" ? sealedIds : cardIds;
-        if (!bucket.includes(row.card_id)) bucket.push(row.card_id);
-      }
-
-      const batch = await getPricedBatch(api, { cardIds, sealedIds });
-      const cardMap = new Map<string, ScrydexCard | ScrydexSealedProduct>();
-      for (const c of batch.cards) cardMap.set(c.id, c);
-      for (const s of batch.sealed) cardMap.set(s.id, s);
-      if (cardMap.size === 0) {
-        throw new Error("Price refresh failed for all vendor items");
-      }
-
-      const now = new Date().toISOString();
-      let updated = 0;
-      await db.withTransactionAsync(async () => {
-        for (const row of rows) {
-          const card = cardMap.get(row.card_id);
-          if (!card) continue;
-          const price = resolveVendorPrice(card, row);
-          if (price === undefined || price === null) continue;
-          await db.runAsync(
-            "UPDATE vendor_items SET market_value = ?, market_value_updated_at = ? WHERE id = ?",
-            [price, now, row.id],
-          );
-          updated += 1;
-        }
-      });
-      return { updated };
+      return sweepVendorPrices(db, api);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: VENDOR_KEY });

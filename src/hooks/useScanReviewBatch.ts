@@ -3,8 +3,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useApi } from "@/lib/axios";
 import { getPricedBatch } from "@/lib/api/pricing";
 import {
-	CONDITION_LABELS,
-	formatVariantLabel,
+	formatCardConfig,
 	getConditionOptions,
 	getVariantNames,
 	selectPrice,
@@ -75,10 +74,5 @@ export function scanConfigPrice(
 
 /** "Reverse Holofoil · Near Mint" / "Holofoil · PSA 9" row summary. */
 export function scanConfigSummary(config: ScanCardConfig): string {
-	const variant = formatVariantLabel(config.variant);
-	const tier =
-		config.pricingType === "Graded" && config.gradedCompany && config.gradedGrade
-			? `${config.gradedCompany} ${config.gradedGrade}`
-			: (CONDITION_LABELS[config.condition] ?? config.condition);
-	return `${variant} · ${tier}`;
+	return formatCardConfig(config);
 }

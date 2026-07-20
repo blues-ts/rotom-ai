@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CardPressable from "@/components/CardPressable";
 import { useRiverTheme } from "@/constants/theme";
 import { formatCurrency } from "@/lib/format";
+import { formatCardConfig } from "@/lib/scrydex";
 import { useVendorItems } from "@/hooks/useVendorItems";
 import type { VendorItem } from "@/types/vendor";
 
@@ -91,6 +92,27 @@ export default function VendorItemSheet() {
 		);
 	};
 
+	// Open the full card detail screen for this listing. The (card) group is a
+	// modal, so pushing it over this formSheet stacks cleanly (same as the
+	// pokemon-cards browser). Collection-only params (collectionId, pricePaid)
+	// are omitted — a shelf item isn't in a collection.
+	const viewCardDetails = (it: VendorItem) => {
+		router.push({
+			pathname: "/(card)/[id]",
+			params: {
+				id: it.cardId,
+				name: it.cardName,
+				...(it.cardImageUrl ? { image: it.cardImageUrl } : {}),
+				pricingType: it.pricingType,
+				variant: it.variant,
+				condition: it.condition,
+				gradedCompany: it.gradedCompany ?? "",
+				gradedGrade: it.gradedGrade ?? "",
+				quantity: String(it.quantity),
+			},
+		});
+	};
+
 	const confirmRemove = (it: VendorItem) => {
 		Alert.alert(
 			`Remove ${it.cardName}?`,
@@ -123,6 +145,11 @@ export default function VendorItemSheet() {
 		item.status === "listed"
 			? [
 					{
+						label: "View card details",
+						icon: "info.circle",
+						onPress: () => viewCardDetails(item),
+					},
+					{
 						label: "Set asking price",
 						icon: "tag",
 						onPress: () => promptAskingPrice(item),
@@ -151,6 +178,11 @@ export default function VendorItemSheet() {
 					},
 				]
 			: [
+					{
+						label: "View card details",
+						icon: "info.circle",
+						onPress: () => viewCardDetails(item),
+					},
 					{
 						label: "Undo sale",
 						icon: "arrow.uturn.backward",
@@ -191,8 +223,19 @@ export default function VendorItemSheet() {
 							{item.quantity > 1 ? `  ×${item.quantity}` : ""}
 						</Text>
 					)}
+					{/* Saved variant + condition/grade — the same config subtitle
+					    the shelf and recent-sales rows show. */}
+					<Text
+						style={[styles.summaryConfig, { color: t.text.secondary }]}
+						numberOfLines={1}
+					>
+						{formatCardConfig(item)}
+					</Text>
 					<Text style={[styles.summaryPrices, { color: t.text.secondary }]}>
-						Market {formatCurrency(item.marketValue)}
+						{/* Sold: market value frozen at sale time (the profit/loss
+						    basis), not today's market. Listed: live market. */}
+						{item.status === "sold" ? "Market at sale " : "Market "}
+						{formatCurrency(item.marketValue)}
 						{item.status === "listed"
 							? item.askingPrice !== undefined
 								? ` · Asking ${formatCurrency(item.askingPrice)}`
@@ -264,6 +307,7 @@ const styles = StyleSheet.create({
 	thumb: { width: THUMB_WIDTH, height: THUMB_HEIGHT },
 	summaryInfo: { flex: 1, gap: 3 },
 	summarySet: { fontSize: 13 },
+	summaryConfig: { fontSize: 13, fontWeight: "500" },
 	summaryPrices: { fontSize: 14, fontWeight: "500" },
 	optionRow: {
 		borderRadius: 12,

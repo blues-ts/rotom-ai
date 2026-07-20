@@ -24,6 +24,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { spacing, typeScale, useRiverTheme } from "@/constants/theme";
 import { formatCurrency } from "@/lib/format";
+import { formatCardConfig } from "@/lib/scrydex";
 import {
 	useRefreshVendorPrices,
 	useVendorItems,
@@ -479,6 +480,17 @@ export default function VendorScreen() {
 															? `  ×${item.quantity}`
 															: ""}
 													</Text>
+													{/* Saved variant + condition/grade — same
+													    config subtitle the shelf rows show. */}
+													<Text
+														style={[
+															styles.saleConfig,
+															{ color: t.text.secondary },
+														]}
+														numberOfLines={1}
+													>
+														{formatCardConfig(item)}
+													</Text>
 													<Text
 														style={[
 															styles.saleMeta,
@@ -729,6 +741,10 @@ const styles = StyleSheet.create({
 	saleName: {
 		fontSize: 14,
 		fontWeight: "600",
+	},
+	saleConfig: {
+		fontSize: 12,
+		fontWeight: "500",
 	},
 	saleMeta: {
 		fontSize: 12,

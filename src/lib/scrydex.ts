@@ -56,6 +56,27 @@ export function formatVariantLabel(variant: string): string {
 }
 
 /**
+ * "Reverse Holofoil · Near Mint" / "Holofoil · PSA 9" — the saved
+ * variant + condition/grade configuration for a card. One source of truth for
+ * the config subtitle shown on scan-review, vending shelf, and recent-sales
+ * rows, so the same saved card reads identically everywhere.
+ */
+export function formatCardConfig(config: {
+  pricingType: string;
+  variant: string;
+  condition: string;
+  gradedCompany?: string;
+  gradedGrade?: string;
+}): string {
+  const variant = formatVariantLabel(config.variant);
+  const tier =
+    config.pricingType === "Graded" && config.gradedCompany && config.gradedGrade
+      ? `${config.gradedCompany} ${config.gradedGrade}`
+      : (CONDITION_LABELS[config.condition] ?? config.condition);
+  return `${variant} · ${tier}`;
+}
+
+/**
  * Online-only cards (e.g. TCG Pocket) are excluded via negation —
  * `expansion.is_online_only:false` would also drop Japanese cards whose
  * expansions don't index the field, so `-...:true` is the safe form.
