@@ -61,6 +61,8 @@ export default function VendorShelfScreen() {
 		markSoldMany,
 		unmarkSoldMany,
 		removeItems,
+		renameGroup,
+		deleteGroup,
 	} = useVendorItems();
 
 	const group =
@@ -68,8 +70,8 @@ export default function VendorShelfScreen() {
 			? groups.find((g) => g.id === groupId)
 			: undefined;
 
-	// Group deleted from the options sheet while this screen shows it — its
-	// cards are Ungrouped now, so this shelf no longer exists. Pop home.
+	// Group deleted while this screen shows it — its cards are Ungrouped now,
+	// so this shelf no longer exists. Pop home.
 	useEffect(() => {
 		if (!isSold && groupId !== "__ungrouped__" && !group) {
 			router.back();
@@ -290,6 +292,51 @@ export default function VendorShelfScreen() {
 		});
 	}, [isSold, handleUndoSelected, handleSellSelected, handleGroupSelected, handleRemoveSelected, liveSelected.size]);
 
+	// Rename/delete sit directly in the header (no options sheet). Rename
+	// shows live via the headerTitle's group?.name; delete pops home through
+	// the group-gone effect above.
+	const promptRename = useCallback(() => {
+		if (!group) return;
+		Haptics.selectionAsync();
+		Alert.prompt(
+			"Rename group",
+			undefined,
+			[
+				{ text: "Cancel", style: "cancel" },
+				{
+					text: "Save",
+					onPress: (newName?: string) => {
+						const trimmed = newName?.trim();
+						if (!trimmed || trimmed === group.name) return;
+						renameGroup.mutate({ id: group.id, name: trimmed });
+					},
+				},
+			],
+			"plain-text",
+			group.name,
+		);
+	}, [group, renameGroup]);
+
+	const confirmDelete = useCallback(() => {
+		if (!group) return;
+		Haptics.selectionAsync();
+		Alert.alert(
+			`Delete “${group.name}”?`,
+			"Its cards move to Ungrouped — nothing is removed from your table.",
+			[
+				{ text: "Cancel", style: "cancel" },
+				{
+					text: "Delete",
+					style: "destructive",
+					onPress: () => {
+						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+						deleteGroup.mutate({ id: group.id });
+					},
+				},
+			],
+		);
+	}, [group, deleteGroup]);
+
 	// Options live in the vendor-item-sheet formSheet — the row just hands
 	// over the item id and its name for the sheet's title.
 	const openItemSheet = useCallback((item: VendorItem) => {
@@ -496,21 +543,21 @@ export default function VendorShelfScreen() {
 								</HeaderIconButton>
 							)}
 							{group && !inSelect && (
-								<HeaderIconButton
-									onPress={() => {
-										Haptics.impactAsync(
-											Haptics.ImpactFeedbackStyle.Light,
-										);
-										router.push({
-											pathname: "/vendor-group-options",
-											params: { id: group.id, title: group.name },
-										});
-									}}
-								>
+								<HeaderIconButton onPress={promptRename}>
 									<SymbolView
-										name="ellipsis.circle"
+										name="pencil"
 										size={20}
 										tintColor={t.accentOn}
+										weight="medium"
+									/>
+								</HeaderIconButton>
+							)}
+							{group && !inSelect && (
+								<HeaderIconButton onPress={confirmDelete}>
+									<SymbolView
+										name="trash"
+										size={19}
+										tintColor={t.loss}
 										weight="medium"
 									/>
 								</HeaderIconButton>
