@@ -1291,7 +1291,12 @@ export default function CardDetail() {
 						ref={scrollRef}
 						style={styles.container}
 						contentContainerStyle={styles.content}
-						contentInsetAdjustmentBehavior="automatic"
+						// "always", not "automatic": UIKit's automatic behavior is
+						// conditional on the scroll view being scrollable, so the
+						// scrollEnabled flip below made it recompute the top inset
+						// mid-pinch and the whole page shifted down. "always" applies
+						// the same inset in both states.
+						contentInsetAdjustmentBehavior="always"
 						scrollEnabled={!zooming}
 						showsVerticalScrollIndicator={false}
 						onScroll={chatHint.show ? checkChatRowVisible : undefined}
