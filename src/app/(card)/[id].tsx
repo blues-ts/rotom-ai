@@ -998,6 +998,25 @@ export default function CardDetail() {
 		? getTcgplayerProductUrl(card, variant || undefined)
 		: undefined;
 
+	// eBay SOLD comps for what's currently selected. LH_Sold + LH_Complete is
+	// the sold-listings filter; without both, eBay falls back to active
+	// listings (asking prices, not comps). The graded tier goes into the
+	// keywords when that tab is up, so "PSA 10" narrows it the way a seller
+	// would search. Everything rides on the card's own name/number/set, so
+	// this works for Japanese cards too — unlike the TCGplayer row above.
+	const ebaySoldUrl = useMemo(() => {
+		if (!card) return undefined;
+		const parts = [getCardDisplayName(card)];
+		const number = getCardNumber(card);
+		if (number) parts.push(number);
+		if (card.expansion) parts.push(getExpansionDisplayName(card.expansion));
+		if (dTab === "Graded" && dGradedCompany && dGradedGrade) {
+			parts.push(dGradedCompany, String(dGradedGrade));
+		}
+		const query = encodeURIComponent(parts.join(" "));
+		return `https://www.ebay.com/sch/i.html?_nkw=${query}&LH_Sold=1&LH_Complete=1`;
+	}, [card, dTab, dGradedCompany, dGradedGrade]);
+
 	// Pops this modal (and anything under it) back to the home chat screen with
 	// a ready-to-send question about this card seeded into the input. Chat is
 	// Pro-only: locked users get the paywall in place, not navigated away.
@@ -1894,6 +1913,41 @@ export default function CardDetail() {
 	tintColor={t.text.secondary}
 	weight="medium"
 />
+										</Pressable>
+										<View
+											style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]}
+										/>
+									</Animated.View>
+								)}
+
+								{/* See sold comps on eBay — follows the selected variant and,
+								    on the Graded tab, the selected tier. */}
+								{ebaySoldUrl && (
+									<Animated.View entering={sectionEntering(4)}>
+										<Pressable
+											onPress={() => {
+												Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+												Linking.openURL(ebaySoldUrl);
+											}}
+											style={styles.linkOutRow}
+										>
+											<SymbolView
+												name="tag"
+												size={18}
+												tintColor={t.text.primary}
+												weight="medium"
+											/>
+											<Text
+												style={[styles.linkOutText, { color: t.text.primary }]}
+											>
+												Sold listings on eBay
+											</Text>
+											<SymbolView
+												name="arrow.up.right"
+												size={16}
+												tintColor={t.text.secondary}
+												weight="medium"
+											/>
 										</Pressable>
 										<View
 											style={[styles.divider, { backgroundColor: t.glass.surfaceBorder }]}
