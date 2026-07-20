@@ -41,7 +41,8 @@ import ErrorState from "@/components/ErrorState";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 import { formatCurrency } from "@/lib/format";
-import { SORT_OPTION_LABELS } from "@/lib/sortLabels";
+import { directionRow, SORT_OPTION_LABELS } from "@/lib/sortLabels";
+import type { LegacyMenuAction } from "@/components/LegacyToolbarMenu";
 import FloatingSearchBar from "@/components/FloatingSearchBar";
 import HeaderIconButton, { HeaderButtonGroup } from "@/components/HeaderIconButton";
 import HeaderFadeScrim from "@/components/HeaderFadeScrim";
@@ -100,23 +101,26 @@ function SkeletonBlock({
 	);
 }
 
-type SortOption = "dateAdded" | "nameAsc" | "valueDesc" | "valueAsc";
-
-// Sheet order matches the app-wide convention: recency, name, value.
-const SORT_LABELS: Record<SortOption, string> = {
-	dateAdded: SORT_OPTION_LABELS.dateAdded,
-	nameAsc: SORT_OPTION_LABELS.name,
-	valueDesc: SORT_OPTION_LABELS.valueDesc,
-	valueAsc: SORT_OPTION_LABELS.valueAsc,
-};
+// "dateAdded" is newest-first; "dateAddedAsc" is the same row flipped.
+type SortOption =
+	| "dateAdded"
+	| "dateAddedAsc"
+	| "nameAsc"
+	| "nameDesc"
+	| "valueDesc"
+	| "valueAsc";
 
 function sortCards(cards: CollectionCard[], by: SortOption): CollectionCard[] {
 	const arr = cards.slice();
 	switch (by) {
 		case "dateAdded":
 			return arr.sort((a, b) => b.addedAt.localeCompare(a.addedAt));
+		case "dateAddedAsc":
+			return arr.sort((a, b) => a.addedAt.localeCompare(b.addedAt));
 		case "nameAsc":
 			return arr.sort((a, b) => a.cardName.localeCompare(b.cardName));
+		case "nameDesc":
+			return arr.sort((a, b) => b.cardName.localeCompare(a.cardName));
 		case "valueDesc":
 			return arr.sort(
 				(a, b) => b.cardValue * b.quantity - a.cardValue * a.quantity,
@@ -631,14 +635,35 @@ export default function CollectionDetail() {
 	);
 
 	// One list drives both the iOS 26 toolbar menu and the legacy FAB sheet.
-	const sortActions = (Object.keys(SORT_LABELS) as SortOption[]).map((o) => ({
-		label: SORT_LABELS[o],
-		isOn: sortBy === o,
-		onPress: () => {
-			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-			setSortBy(o);
-		},
-	}));
+	// Sheet order matches the app-wide convention: recency, name, value —
+	// the latter two as rows that flip direction on tap.
+	const selectSort = (o: SortOption) => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		setSortBy(o);
+	};
+	const sortActions: LegacyMenuAction[] = [
+		directionRow({
+			label: SORT_OPTION_LABELS.dateAdded,
+			asc: "dateAddedAsc" as const,
+			desc: "dateAdded" as const,
+			current: sortBy,
+			onSelect: selectSort,
+		}),
+		directionRow({
+			label: SORT_OPTION_LABELS.name,
+			asc: "nameAsc" as const,
+			desc: "nameDesc" as const,
+			current: sortBy,
+			onSelect: selectSort,
+		}),
+		directionRow({
+			label: SORT_OPTION_LABELS.value,
+			asc: "valueAsc" as const,
+			desc: "valueDesc" as const,
+			current: sortBy,
+			onSelect: selectSort,
+		}),
+	];
 
 	return (
 		<>

@@ -13,6 +13,12 @@ export interface LegacyMenuAction {
 	icon?: SFSymbol;
 	/** Destructive styling: loss-red row / action-sheet destructive slot. */
 	destructive?: boolean;
+	/**
+	 * Leave the menu sheet up after this row is tapped, so it can be pressed
+	 * again (direction toggles). No effect in the legacy action sheet, which
+	 * the OS always dismisses on selection.
+	 */
+	keepOpen?: boolean;
 	onPress: () => void;
 }
 

@@ -13,8 +13,9 @@ import Animated, {
 } from "react-native-reanimated";
 import { spacing, useRiverTheme } from "@/constants/theme";
 import { formatCurrency } from "@/lib/format";
-import { setMenuSheetActions } from "@/lib/menuSheet";
-import { SORT_OPTION_LABELS } from "@/lib/sortLabels";
+import { openMenuSheetSlot } from "@/lib/menuSheet";
+import { directionRow, SORT_OPTION_LABELS } from "@/lib/sortLabels";
+import type { LegacyMenuAction } from "@/components/LegacyToolbarMenu";
 import { useVendorItems } from "@/hooks/useVendorItems";
 import type { VendorItem } from "@/types/vendor";
 import CardPressable from "@/components/CardPressable";
@@ -35,7 +36,14 @@ function soldDateLabel(soldAt?: string): string {
 
 // "date" is the query's own order (newest first — added for groups, sold for
 // receipts); the rest re-sort in memory.
-type ShelfSort = "date" | "nameAsc" | "valueDesc" | "valueAsc";
+// "date" is the query's own order (newest first); "dateAsc" walks it back.
+type ShelfSort =
+	| "date"
+	| "dateAsc"
+	| "nameAsc"
+	| "nameDesc"
+	| "valueDesc"
+	| "valueAsc";
 
 /**
  * One shelf's card list — a group (or Ungrouped) from the vending home, or
@@ -109,6 +117,9 @@ export default function VendorShelfScreen() {
 	const [sortBy, setSortBy] = useState<ShelfSort>("date");
 	const sortedItems = useMemo(() => {
 		if (sortBy === "date") return filteredItems;
+		// Rows arrive newest-first from the query, so oldest-first is a reverse
+		// rather than a re-sort (created_at isn't on the row type).
+		if (sortBy === "dateAsc") return [...filteredItems].reverse();
 		// Sold receipts sort by what they went for; listings by asking
 		// (market when unpriced) — same value each row displays.
 		const value = (i: VendorItem) =>
@@ -117,6 +128,9 @@ export default function VendorShelfScreen() {
 		switch (sortBy) {
 			case "nameAsc":
 				arr.sort((a, b) => a.cardName.localeCompare(b.cardName));
+				break;
+			case "nameDesc":
+				arr.sort((a, b) => b.cardName.localeCompare(a.cardName));
 				break;
 			case "valueDesc":
 				arr.sort((a, b) => value(b) - value(a));
@@ -128,23 +142,37 @@ export default function VendorShelfScreen() {
 		return arr;
 	}, [filteredItems, sortBy, isSold]);
 
-	// One vocabulary with every other sort sheet (sortLabels).
-	const sortLabels: Record<ShelfSort, string> = {
-		date: isSold
-			? SORT_OPTION_LABELS.dateSold
-			: SORT_OPTION_LABELS.dateAdded,
-		nameAsc: SORT_OPTION_LABELS.name,
-		valueDesc: SORT_OPTION_LABELS.valueDesc,
-		valueAsc: SORT_OPTION_LABELS.valueAsc,
+	// One vocabulary with every other sort sheet (sortLabels); name and value
+	// are single rows that flip direction on tap.
+	const selectSort = (o: ShelfSort) => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		setSortBy(o);
 	};
-	const sortActions = (Object.keys(sortLabels) as ShelfSort[]).map((o) => ({
-		label: sortLabels[o],
-		isOn: sortBy === o,
-		onPress: () => {
-			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-			setSortBy(o);
-		},
-	}));
+	const sortActions: LegacyMenuAction[] = [
+		directionRow({
+			label: isSold
+				? SORT_OPTION_LABELS.dateSold
+				: SORT_OPTION_LABELS.dateAdded,
+			asc: "dateAsc" as const,
+			desc: "date" as const,
+			current: sortBy,
+			onSelect: selectSort,
+		}),
+		directionRow({
+			label: SORT_OPTION_LABELS.name,
+			asc: "nameAsc" as const,
+			desc: "nameDesc" as const,
+			current: sortBy,
+			onSelect: selectSort,
+		}),
+		directionRow({
+			label: SORT_OPTION_LABELS.value,
+			asc: "valueAsc" as const,
+			desc: "valueDesc" as const,
+			current: sortBy,
+			onSelect: selectSort,
+		}),
+	];
 
 	// Multi-select: long-press a row to enter, then tap rows to toggle — same
 	// gestures as the scan library and collection grid.
@@ -248,9 +276,12 @@ export default function VendorShelfScreen() {
 
 	// Select actions live in the header's menu (the shared menu-sheet), not
 	// a bottom bar — deposit the mode's actions, then present.
+	const [selectMenuOwner] = useState(() => Symbol("vendorSelectMenu"));
 	const openSelectMenu = useCallback(() => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-		setMenuSheetActions(
+		// Every row here dismisses on tap, so the slot needs no republishing.
+		openMenuSheetSlot(
+			selectMenuOwner,
 			isSold
 				? [
 						{
@@ -290,7 +321,7 @@ export default function VendorShelfScreen() {
 				title: `${liveSelected.size} Selected`,
 			},
 		});
-	}, [isSold, handleUndoSelected, handleSellSelected, handleGroupSelected, handleRemoveSelected, liveSelected.size]);
+	}, [isSold, selectMenuOwner, handleUndoSelected, handleSellSelected, handleGroupSelected, handleRemoveSelected, liveSelected.size]);
 
 	// Rename/delete sit directly in the header (no options sheet). Rename
 	// shows live via the headerTitle's group?.name; delete pops home through

@@ -26,7 +26,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { spacing, useRiverTheme } from "@/constants/theme";
 import { useApi } from "@/lib/axios";
-import { SORT_OPTION_LABELS } from "@/lib/sortLabels";
+import { directionRow, SORT_OPTION_LABELS } from "@/lib/sortLabels";
+import type { LegacyMenuAction } from "@/components/LegacyToolbarMenu";
 import FloatingSearchBar from "@/components/FloatingSearchBar";
 import HeaderFadeScrim from "@/components/HeaderFadeScrim";
 import { cardWaterfall } from "@/lib/waterfall";
@@ -75,17 +76,31 @@ const SKELETON_DATA = Array.from({ length: 15 }, (_, i) => ({
 const spriteUrl = (id: string) =>
 	`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
 
-// Sorts mirror set-detail's, except collector number (meaningless across
-// sets) becomes release date — and no name sort (every card here shares the
-// Pokémon's name).
-type SortOption = "newest" | "oldest" | "valueDesc" | "valueAsc";
+// Sorts mirror set-detail's, plus release date (these cards span many sets) —
+// and no name sort (every card here shares the Pokémon's name). Number order
+// groups prints that share a collector number across sets, which is how the
+// dex reads when you're hunting a specific print.
+type SortOption =
+	| "newest"
+	| "oldest"
+	| "numberAsc"
+	| "numberDesc"
+	| "valueDesc"
+	| "valueAsc";
 
-const SORT_LABELS: Record<SortOption, string> = {
-	newest: SORT_OPTION_LABELS.newest,
-	oldest: SORT_OPTION_LABELS.oldest,
-	valueDesc: SORT_OPTION_LABELS.valueDesc,
-	valueAsc: SORT_OPTION_LABELS.valueAsc,
-};
+/**
+ * Collector-number order across sets. Numeric collation so "10" follows "9"
+ * rather than "1", and prefixed numbers (TG12, SV049, GG05) group by their
+ * prefix. Release date breaks ties so a shared number is stably ordered.
+ */
+function compareCardNumber(a: ScrydexCard, b: ScrydexCard): number {
+	const byNumber = getCardNumber(a).localeCompare(getCardNumber(b), undefined, {
+		numeric: true,
+		sensitivity: "base",
+	});
+	if (byNumber !== 0) return byNumber;
+	return releaseKey(a).localeCompare(releaseKey(b));
+}
 
 /**
  * The card's NM market price and which variant it comes from (highest across
@@ -281,6 +296,10 @@ export default function PokemonCards() {
 			return [...withPrice, ...unpriced].map((k) => k.item);
 		}
 		const base = applyFilter(dex?.items ?? []);
+		if (sortBy === "numberAsc" || sortBy === "numberDesc") {
+			const sorted = base.slice().sort(compareCardNumber);
+			return sortBy === "numberDesc" ? sorted.reverse() : sorted;
+		}
 		// Release-date ordering; cards without a date sink to the end.
 		const sorted = base.slice().sort((a, b) => {
 			const ka = releaseKey(a);
@@ -522,12 +541,30 @@ export default function PokemonCards() {
 		[isPro],
 	);
 
-	// One list drives the sort form sheet.
-	const sortActions = (Object.keys(SORT_LABELS) as SortOption[]).map((o) => ({
-		label: SORT_LABELS[o],
-		isOn: sortBy === o,
-		onPress: () => handleSortChange(o),
-	}));
+	// One list drives the sort form sheet — every row flips direction on tap.
+	const sortActions: LegacyMenuAction[] = [
+		directionRow({
+			label: SORT_OPTION_LABELS.newest,
+			asc: "oldest" as const,
+			desc: "newest" as const,
+			current: sortBy,
+			onSelect: handleSortChange,
+		}),
+		directionRow({
+			label: SORT_OPTION_LABELS.number,
+			asc: "numberAsc" as const,
+			desc: "numberDesc" as const,
+			current: sortBy,
+			onSelect: handleSortChange,
+		}),
+		directionRow({
+			label: SORT_OPTION_LABELS.value,
+			asc: "valueAsc" as const,
+			desc: "valueDesc" as const,
+			current: sortBy,
+			onSelect: handleSortChange,
+		}),
+	];
 
 	return (
 		<>

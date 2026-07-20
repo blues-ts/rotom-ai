@@ -28,7 +28,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacing, useRiverTheme } from "@/constants/theme";
 import { useApi } from "@/lib/axios";
-import { SORT_OPTION_LABELS } from "@/lib/sortLabels";
+import { directionRow, SORT_OPTION_LABELS } from "@/lib/sortLabels";
+import type { LegacyMenuAction } from "@/components/LegacyToolbarMenu";
 import FloatingSearchBar from "@/components/FloatingSearchBar";
 import HeaderFadeScrim from "@/components/HeaderFadeScrim";
 import { usePrefetchDetail } from "@/hooks/usePrefetchDetail";
@@ -77,16 +78,9 @@ type SortOption =
 	| "number"
 	| "numberDesc"
 	| "nameAsc"
+	| "nameDesc"
 	| "valueDesc"
 	| "valueAsc";
-
-const SORT_LABELS: Record<SortOption, string> = {
-	number: SORT_OPTION_LABELS.numberAsc,
-	numberDesc: SORT_OPTION_LABELS.numberDesc,
-	nameAsc: SORT_OPTION_LABELS.name,
-	valueDesc: SORT_OPTION_LABELS.valueDesc,
-	valueAsc: SORT_OPTION_LABELS.valueAsc,
-};
 
 /**
  * The item's market price and which variant it comes from (highest across
@@ -150,12 +144,13 @@ function sortSetItems(
 		if (sort === "valueAsc") withPrice.reverse();
 		return [...withPrice, ...unpriced].map((k) => k.item);
 	}
-	if (sort === "nameAsc") {
-		return base.slice().sort((a, b) => {
+	if (sort === "nameAsc" || sort === "nameDesc") {
+		const sorted = base.slice().sort((a, b) => {
 			const nameA = "number" in a ? getCardDisplayName(a) : a.name;
 			const nameB = "number" in b ? getCardDisplayName(b) : b.name;
 			return nameA.localeCompare(nameB);
 		});
+		return sort === "nameDesc" ? sorted.reverse() : sorted;
 	}
 	return sort === "numberDesc" ? base.slice().reverse() : base;
 }
@@ -910,22 +905,35 @@ export default function SetDetail() {
 	);
 
 	// One list drives both the iOS 26 toolbar menu and the legacy FAB sheet.
-	// Sealed products have no collector numbers, so those sorts drop out.
-	const sortActions = (
-		isSealedMode
-			? (["nameAsc", "valueDesc", "valueAsc"] as SortOption[])
-			: ([
-					"number",
-					"numberDesc",
-					"nameAsc",
-					"valueDesc",
-					"valueAsc",
-				] as SortOption[])
-	).map((o) => ({
-		label: SORT_LABELS[o],
-		isOn: sortBy === o,
-		onPress: () => handleSortChange(o),
-	}));
+	// Every row here runs both ways, so each is a direction toggle. Sealed
+	// products have no collector numbers, so that row drops out.
+	const sortActions: LegacyMenuAction[] = [
+		...(isSealedMode
+			? []
+			: [
+					directionRow({
+						label: SORT_OPTION_LABELS.number,
+						asc: "number" as const,
+						desc: "numberDesc" as const,
+						current: sortBy,
+						onSelect: handleSortChange,
+					}),
+				]),
+		directionRow({
+			label: SORT_OPTION_LABELS.name,
+			asc: "nameAsc" as const,
+			desc: "nameDesc" as const,
+			current: sortBy,
+			onSelect: handleSortChange,
+		}),
+		directionRow({
+			label: SORT_OPTION_LABELS.value,
+			asc: "valueAsc" as const,
+			desc: "valueDesc" as const,
+			current: sortBy,
+			onSelect: handleSortChange,
+		}),
+	];
 
 	return (
 		<>

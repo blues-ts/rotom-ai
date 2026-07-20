@@ -47,7 +47,8 @@ import {
 import CardImage from "@/components/CardImage";
 import FloatingSearchBar from "@/components/FloatingSearchBar";
 import HeaderFadeScrim from "@/components/HeaderFadeScrim";
-import { SORT_OPTION_LABELS } from "@/lib/sortLabels";
+import { directionRow, SORT_OPTION_LABELS } from "@/lib/sortLabels";
+import type { LegacyMenuAction } from "@/components/LegacyToolbarMenu";
 import SegmentedChips from "@/components/SegmentedChips";
 import CardPressable from "@/components/CardPressable";
 import CardContextMenu from "@/components/CardContextMenu";
@@ -77,9 +78,9 @@ import type {
 type SearchMode = "cards" | "sealed";
 type SetsLanguage = "EN" | "JA";
 type BrowseMode = "sets" | "pokedex";
-// Catalog order is newest-release-first; "oldest" walks it backwards and
-// "alpha" re-sorts eras and sets by display name.
-type SetsSort = "newest" | "oldest" | "alpha";
+// Catalog order is newest-release-first; "oldest" walks it backwards and the
+// alpha pair re-sorts every set by display name, either direction.
+type SetsSort = "newest" | "oldest" | "alpha" | "alphaDesc";
 // "grid" = the 2-up logo tiles; "list" = one compact row per set.
 type SetsView = "grid" | "list";
 
@@ -274,16 +275,18 @@ const SetsBrowser = memo(function SetsBrowser({
 	// sorted oldest-first, in the order of their oldest — and never share a
 	// row across eras.
 	const listData = useMemo(() => {
+		const alphabetical = () => {
+			const sorted = [...filtered].sort((a, b) =>
+				getExpansionDisplayName(a).localeCompare(getExpansionDisplayName(b)),
+			);
+			return sort === "alphaDesc" ? sorted.reverse() : sorted;
+		};
 		const ordered =
 			sort === "newest"
 				? filtered
 				: sort === "oldest"
 					? [...filtered].reverse()
-					: [...filtered].sort((a, b) =>
-							getExpansionDisplayName(a).localeCompare(
-								getExpansionDisplayName(b),
-							),
-						);
+					: alphabetical();
 		const items: SetListItem[] = [];
 		const pushSets = (sets: ScrydexExpansion[]) => {
 			if (view === "list") {
@@ -300,11 +303,11 @@ const SetsBrowser = memo(function SetsBrowser({
 				}
 			}
 		};
-		// A to Z is one flat run across every set — no era headers. The
+		// Name order is one flat run across every set — no era headers. The
 		// release sorts group by era, in first-encounter order (the era of
 		// its newest/oldest set), with "Other" (sets with no series) always
 		// sunk to the bottom.
-		if (sort === "alpha") {
+		if (sort === "alpha" || sort === "alphaDesc") {
 			pushSets(ordered);
 			return items;
 		}
@@ -558,11 +561,14 @@ const SetsBrowser = memo(function SetsBrowser({
 			scrollEventThrottle={16}
 			onViewableItemsChanged={onViewableItemsChanged}
 			viewabilityConfig={viewabilityConfig}
-			// A to Z has no era headers, so add the 16pt the first header's own
-			// top margin normally provides below the chip bar.
+			// Name order has no era headers, so add the 16pt the first header's
+			// own top margin normally provides below the chip bar.
 			contentContainerStyle={[
 				styles.grid,
-				{ paddingTop: topPadding + (sort === "alpha" ? 16 : 0) },
+				{
+					paddingTop:
+						topPadding + (sort === "alpha" || sort === "alphaDesc" ? 16 : 0),
+				},
 			]}
 			showsVerticalScrollIndicator={false}
 			keyboardDismissMode="on-drag"
@@ -957,22 +963,24 @@ export default function Search() {
 		setSort: (s: SetsSort) => void,
 		view: SetsView,
 		setView: (v: SetsView) => void,
-	) => [
-		{
-			label: SORT_OPTION_LABELS.newest,
-			isOn: sort === "newest",
-			onPress: () => setSort("newest"),
-		},
-		{
-			label: SORT_OPTION_LABELS.oldest,
-			isOn: sort === "oldest",
-			onPress: () => setSort("oldest"),
-		},
-		{
+		// What "newest"/"oldest" orders by here — release date for the sets
+		// grid, national dex number for the Pokédex.
+		recencyLabel: string,
+	): LegacyMenuAction[] => [
+		directionRow({
+			label: recencyLabel,
+			asc: "oldest" as const,
+			desc: "newest" as const,
+			current: sort,
+			onSelect: setSort,
+		}),
+		directionRow({
 			label: SORT_OPTION_LABELS.name,
-			isOn: sort === "alpha",
-			onPress: () => setSort("alpha"),
-		},
+			asc: "alpha" as const,
+			desc: "alphaDesc" as const,
+			current: sort,
+			onSelect: setSort,
+		}),
 		{
 			label: SORT_OPTION_LABELS.gridView,
 			isOn: view === "grid",
@@ -985,9 +993,21 @@ export default function Search() {
 		},
 	];
 	const browserViewActions = dexBrowsing
-		? makeViewActions(dexSort, setDexSort, dexView, setDexView)
+		? makeViewActions(
+				dexSort,
+				setDexSort,
+				dexView,
+				setDexView,
+				SORT_OPTION_LABELS.dexNumber,
+			)
 		: setsBrowsing
-			? makeViewActions(setsSort, setSetsSort, setsView, setSetsView)
+			? makeViewActions(
+					setsSort,
+					setSetsSort,
+					setsView,
+					setSetsView,
+					SORT_OPTION_LABELS.released,
+				)
 			: undefined;
 
 	// Chip-bar handlers — the old toolbar menu's actions, now one visible tap.
@@ -1229,7 +1249,7 @@ export default function Search() {
 					}}
 					placeholder={dexBrowsing ? "Search Pokémon..." : "Search cards..."}
 					menuIcon="arrow.up.arrow.down"
-					menuTitle="Sort Options"
+					menuTitle="Sort by"
 					menuActions={browserViewActions}
 				/>
 				<HeaderFadeScrim />

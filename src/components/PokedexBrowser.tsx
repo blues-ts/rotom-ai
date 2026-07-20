@@ -71,9 +71,9 @@ const GENERATIONS = [
 ] as const;
 
 // Same menu vocabulary as the sets browser: "oldest" is dex order (the
-// default here — #0001 up), "newest" walks it backwards, "alpha" is one flat
-// A-to-Z run with no generation headers.
-export type DexSort = "newest" | "oldest" | "alpha";
+// default here — #0001 up), "newest" walks it backwards, and the alpha pair
+// is one flat name-ordered run with no generation headers.
+export type DexSort = "newest" | "oldest" | "alpha" | "alphaDesc";
 export type DexView = "grid" | "list";
 
 type ListItem =
@@ -104,8 +104,12 @@ const ALPHA_DEX = [...POKEDEX].sort((a, b) => a.name.localeCompare(b.name));
 
 function buildBrowseList(sort: DexSort, view: DexView): ListItem[] {
 	const items: ListItem[] = [];
-	if (sort === "alpha") {
-		pushEntries(items, ALPHA_DEX, view);
+	if (sort === "alpha" || sort === "alphaDesc") {
+		pushEntries(
+			items,
+			sort === "alphaDesc" ? [...ALPHA_DEX].reverse() : ALPHA_DEX,
+			view,
+		);
 		return items;
 	}
 	const gens = sort === "oldest" ? GENERATIONS : [...GENERATIONS].reverse();
@@ -322,8 +326,10 @@ const PokedexBrowser = memo(function PokedexBrowser({
 				(isNumeric && String(e.id).startsWith(trimmed)),
 		);
 		if (sort === "newest") matches = [...matches].reverse();
-		else if (sort === "alpha")
+		else if (sort === "alpha" || sort === "alphaDesc") {
 			matches = [...matches].sort((a, b) => a.name.localeCompare(b.name));
+			if (sort === "alphaDesc") matches.reverse();
+		}
 		const rows: ListItem[] = [];
 		pushEntries(rows, matches, view);
 		return rows;
@@ -433,7 +439,8 @@ const PokedexBrowser = memo(function PokedexBrowser({
 					// header's own top margin normally provides below the chip bar.
 					paddingTop: filtering
 						? filteringTopPadding
-						: topPadding + (sort === "alpha" ? 16 : 0),
+						: topPadding +
+						(sort === "alpha" || sort === "alphaDesc" ? 16 : 0),
 					paddingBottom: insets.bottom + 90,
 				},
 				// Lets the empty state center itself vertically.

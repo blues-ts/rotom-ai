@@ -507,7 +507,7 @@ export default function AddToCollection() {
           </CardPressable>
         </View>
       ) : (
-        <View style={styles.list}>
+        <View>
           {targetCollections.map((collection) => {
             const added = addedId === collection.id;
             return (
@@ -595,9 +595,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#FFFFFF",
   },
-  list: {
-    gap: 8,
-  },
   vendorIcon: {
     width: 32,
     height: 32,
@@ -613,6 +610,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 14,
     borderWidth: 1,
+    // Sole spacing mechanism for the destination rows — the Vending row is a
+    // sibling of the collections list, so a gap on the list alone would skip it.
     marginBottom: 8,
   },
   collectionInfo: {

@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Keyboard, Pressable, StyleSheet, TextInput } from "react-native";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { router } from "expo-router";
@@ -10,7 +10,7 @@ import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller
 
 import { useRiverTheme } from "@/constants/theme";
 import type { LegacyMenuAction } from "@/components/LegacyToolbarMenu";
-import { setMenuSheetActions } from "@/lib/menuSheet";
+import { openMenuSheetSlot, updateMenuSheetActions } from "@/lib/menuSheet";
 
 // Our own floating search bar — replaces Stack.SearchBar so there is NO
 // UISearchController session at all. That session was the source of every
@@ -56,16 +56,27 @@ export default function FloatingSearchBar({
 		],
 	}));
 
+	// Identifies this bar as the presenter, so republishing below can't stomp
+	// on a sheet opened by another screen still mounted in the stack.
+	const [slotOwner] = useState(() => Symbol("menuSheet"));
+
 	const openMenu = () => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 		Keyboard.dismiss();
 		// Function props can't ride router params — deposit, then present.
-		setMenuSheetActions(menuActions ?? []);
+		openMenuSheetSlot(slotOwner, menuActions ?? []);
 		router.push({
 			pathname: "/menu-sheet",
 			params: { title: menuTitle ?? "Sort by" },
 		});
 	};
+
+	// Rows that keep the sheet open need it to re-render against the new sort;
+	// the screen rebuilds `menuActions` on that state change, so hand the
+	// fresh list over. Ignored unless this bar owns the open sheet.
+	useEffect(() => {
+		updateMenuSheetActions(slotOwner, menuActions ?? []);
+	}, [menuActions, slotOwner]);
 
 	return (
 		<Animated.View

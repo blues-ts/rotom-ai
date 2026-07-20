@@ -1,4 +1,4 @@
-import { Fragment, useRef } from "react";
+import { Fragment, useEffect, useSyncExternalStore } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
@@ -7,7 +7,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CardPressable from "@/components/CardPressable";
 import { useRiverTheme } from "@/constants/theme";
-import { getMenuSheetActions } from "@/lib/menuSheet";
+import {
+	closeMenuSheetSlot,
+	getMenuSheetActions,
+	subscribeMenuSheetActions,
+} from "@/lib/menuSheet";
 
 // Sort/filter options in a NATIVE form sheet — the same presentation as
 // create-collection and configure (fitToContents detent, 28pt lip, grabber),
@@ -17,9 +21,13 @@ import { getMenuSheetActions } from "@/lib/menuSheet";
 export default function MenuSheet() {
 	const t = useRiverTheme();
 	const insets = useSafeAreaInsets();
-	// Snapshot on mount: the checkmarks reflect the state at open time, and
-	// the sheet dismisses on every selection, so it never needs to re-read.
-	const actions = useRef(getMenuSheetActions()).current;
+	// Live read: rows that keep the sheet open re-publish their actions as the
+	// sort changes, so the checkmark and direction arrow follow along.
+	const actions = useSyncExternalStore(
+		subscribeMenuSheetActions,
+		getMenuSheetActions,
+	);
+	useEffect(() => closeMenuSheetSlot, []);
 
 	return (
 		<View style={[styles.container, { paddingBottom: insets.bottom + 16 }]}>
@@ -40,10 +48,11 @@ export default function MenuSheet() {
 					style={styles.optionRow}
 					onPress={() => {
 						Haptics.selectionAsync();
-						// Dismiss and apply immediately — the native sheet's exit is
-						// OS-driven, so it rides out the grid remount fine (the old
-						// hand-rolled Modal needed a 260ms grace here).
-						router.back();
+						// Direction toggles stay up so the arrow can be flipped again;
+						// everything else dismisses and applies immediately — the
+						// native sheet's exit is OS-driven, so it rides out the grid
+						// remount fine (the old hand-rolled Modal needed 260ms here).
+						if (!a.keepOpen) router.back();
 						a.onPress();
 					}}
 				>
