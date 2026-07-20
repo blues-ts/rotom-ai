@@ -77,11 +77,20 @@ function VendorRevenueHeroInner({
 			}))
 			.sort((a, b) => a.timestamp - b.timestamp);
 		const days = PERIOD_DAYS[period];
+		const now = Date.now();
 		const windowStart = days
-			? Date.now() - days * DAY_MS
-			: (sales[0]?.timestamp ?? Date.now());
+			? now - days * DAY_MS
+			: (sales[0]?.timestamp ?? now);
 		const inWindow = sales.filter((s) => s.timestamp >= windowStart);
-		if (inWindow.length === 0) return [];
+		// No sales in the window: draw a flat $0 line across it rather than a
+		// placeholder message, so the hero always reads as a chart. All-time
+		// with no sales at all has no real span, so give it 30 days to draw on.
+		if (inWindow.length === 0) {
+			return [
+				{ timestamp: days ? windowStart : now - 30 * DAY_MS, value: 0 },
+				{ timestamp: now, value: 0 },
+			];
+		}
 		let cumulative = 0;
 		const points = inWindow.map((s) => ({
 			timestamp: s.timestamp,
@@ -106,30 +115,18 @@ function VendorRevenueHeroInner({
 				{formatCurrency(summary.revenue)}
 			</Text>
 
-			{/* Hidden when there's nothing charted — mirrors the collections hero
-			    so the two screens' layouts stay in lockstep state-for-state. */}
-			{data.length > 1 && (
-				<Text
-					style={[
-						styles.deltaText,
-						{ color: periodRevenue > 0 ? t.gain : t.text.secondary },
-					]}
-				>
-					{periodRevenue > 0 ? "+" : ""}
-					{formatCurrency(periodRevenue)} {PERIOD_LABELS[period]}
-				</Text>
-			)}
+			<Text
+				style={[
+					styles.deltaText,
+					{ color: periodRevenue > 0 ? t.gain : t.text.secondary },
+				]}
+			>
+				{periodRevenue > 0 ? "+" : ""}
+				{formatCurrency(periodRevenue)} {PERIOD_LABELS[period]}
+			</Text>
 
-			{data.length < 2 ? (
-				<View style={styles.chartPlaceholder}>
-					<Text style={[styles.emptyText, { color: t.text.secondary }]}>
-						{summary.soldCount === 0
-							? "Mark cards sold to see your revenue over time."
-							: "No sales in this period."}
-					</Text>
-				</View>
-			) : (
-				<LineChart.Provider data={data}>
+			{/* Always charted — an empty window draws a flat $0 line. */}
+			<LineChart.Provider data={data}>
 					<View style={styles.chartHoverHeader}>
 						<LineChart.PriceText
 							format={({ value }) => {
@@ -174,7 +171,6 @@ function VendorRevenueHeroInner({
 						</LineChart>
 					</View>
 				</LineChart.Provider>
-			)}
 
 			{/* Range pills — selected gets the accent fill, the rest are text-only
 			    (accent fill means selected, never decoration). */}
@@ -261,18 +257,6 @@ const styles = StyleSheet.create({
 	chartContainer: {
 		height: CHART_HEIGHT,
 		marginTop: 4,
-	},
-	chartPlaceholder: {
-		height: CHART_HEIGHT,
-		marginTop: 12,
-		alignItems: "center",
-		justifyContent: "center",
-		paddingHorizontal: 16,
-	},
-	emptyText: {
-		fontSize: 13,
-		textAlign: "center",
-		fontWeight: "500",
 	},
 	periodRow: {
 		flexDirection: "row",

@@ -116,10 +116,22 @@ function CollectionValueChartInner() {
 	const data = useMemo(() => {
 		const all = allHistory ?? [];
 		const days = PERIOD_DAYS[period];
+		const now = Date.now();
 		const sliced = days
-			? all.filter((p) => p.timestamp >= Date.now() - days * DAY_MS)
+			? all.filter((p) => p.timestamp >= now - days * DAY_MS)
 			: all;
-		return lttb(sliced, MAX_CHART_POINTS);
+		const points = lttb(sliced, MAX_CHART_POINTS);
+		if (points.length >= 2) return points;
+		// Fewer than two snapshots still draws: hold the one known value (or $0
+		// with no history at all) flat across the window, so the hero always
+		// reads as a chart instead of a placeholder. All-time has no real span
+		// before the first snapshot, so give it 30 days to draw on.
+		const start = now - (days ?? 30) * DAY_MS;
+		const value = points[0]?.value ?? 0;
+		return [
+			{ timestamp: Math.min(start, points[0]?.timestamp ?? now), value },
+			{ timestamp: now, value },
+		];
 	}, [allHistory, period]);
 
 	const { current, delta, deltaPct, hasBaseline } = useMemo(() => {
@@ -175,27 +187,14 @@ function CollectionValueChartInner() {
 				{formatCurrency(current)}
 			</Text>
 
-			{data.length > 1 && (
-				<Text style={[styles.deltaText, { color: deltaColor }]}>
-					{deltaText}
-				</Text>
-			)}
+			<Text style={[styles.deltaText, { color: deltaColor }]}>
+				{deltaText}
+			</Text>
 
+			{/* Always charted once loaded — a thin history draws as a flat line. */}
 			{isLoading ? (
 				<View style={styles.chartPlaceholder}>
 					<ActivityIndicator size="small" color={t.text.secondary} />
-				</View>
-			) : data.length === 0 ? (
-				<View style={styles.chartPlaceholder}>
-					<Text style={[styles.emptyText, { color: t.text.secondary }]}>
-						Start adding cards to see your portfolio over time.
-					</Text>
-				</View>
-			) : data.length === 1 ? (
-				<View style={styles.chartPlaceholder}>
-					<Text style={[styles.emptyText, { color: t.text.secondary }]}>
-						Come back tomorrow to see a trend
-					</Text>
 				</View>
 			) : (
 				<View>
@@ -365,11 +364,6 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "center",
 		paddingHorizontal: 16,
-	},
-	emptyText: {
-		fontSize: 13,
-		textAlign: "center",
-		fontWeight: "500",
 	},
 	periodRow: {
 		flexDirection: "row",
