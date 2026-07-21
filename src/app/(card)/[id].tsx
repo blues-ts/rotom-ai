@@ -1000,9 +1000,10 @@ export default function CardDetail() {
 
 	// eBay SOLD comps for what's currently selected. LH_Sold + LH_Complete is
 	// the sold-listings filter; without both, eBay falls back to active
-	// listings (asking prices, not comps). The graded tier goes into the
-	// keywords when that tab is up, so "PSA 10" narrows it the way a seller
-	// would search. Everything rides on the card's own name/number/set, so
+	// listings (asking prices, not comps). The selected variant, and either the
+	// graded tier ("PSA 10") or the raw condition ("Near Mint"), go into the
+	// keywords so the search narrows to the exact configuration the way a seller
+	// would title it. Everything rides on the card's own name/number/set, so
 	// this works for Japanese cards too — unlike the TCGplayer row above.
 	const ebaySoldUrl = useMemo(() => {
 		if (!card) return undefined;
@@ -1010,12 +1011,19 @@ export default function CardDetail() {
 		const number = getCardNumber(card);
 		if (number) parts.push(number);
 		if (card.expansion) parts.push(getExpansionDisplayName(card.expansion));
+		// "normal" is the default printing — adding "Normal" only hurts the
+		// match; every other variant ("Reverse Holo", etc.) narrows it usefully.
+		if (variant && variant !== "normal") {
+			parts.push(formatVariantLabel(variant));
+		}
 		if (dTab === "Graded" && dGradedCompany && dGradedGrade) {
 			parts.push(dGradedCompany, String(dGradedGrade));
+		} else if (dTab !== "Graded") {
+			parts.push(formatConditionLabel(dRawCondition));
 		}
 		const query = encodeURIComponent(parts.join(" "));
 		return `https://www.ebay.com/sch/i.html?_nkw=${query}&LH_Sold=1&LH_Complete=1`;
-	}, [card, dTab, dGradedCompany, dGradedGrade]);
+	}, [card, variant, dTab, dRawCondition, dGradedCompany, dGradedGrade]);
 
 	// Pops this modal (and anything under it) back to the home chat screen with
 	// a ready-to-send question about this card seeded into the input. Chat is
