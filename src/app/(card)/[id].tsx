@@ -38,7 +38,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView } from "expo-symbols";
 import { LinearGradient } from "expo-linear-gradient";
-import { router, Stack, useLocalSearchParams } from "expo-router";
+import { router, SplashScreen, Stack, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useToast } from "@/context/ToastContext";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -689,6 +689,15 @@ export default function CardDetail() {
 		seed,
 	} = useCardConfig();
 
+	// Cold-start deep link (shared /card/<id> link, app not running) mounts this
+	// screen directly — index.tsx never runs, so its SplashScreen.hideAsync() is
+	// never reached and the native splash would sit on top of the rendered card.
+	// Hide it here on mount. When this screen is reached by in-app navigation the
+	// splash is already gone, so this is a harmless no-op.
+	useEffect(() => {
+		SplashScreen.hideAsync();
+	}, []);
+
 	useEffect(() => {
 		if (!id) return;
 		seed(id, {
@@ -903,6 +912,13 @@ export default function CardDetail() {
 					price: heroPrice,
 					selectionLabel,
 					imageUrl: cardImage,
+					config: {
+						pricingType: pricingTab,
+						variant,
+						condition: rawCondition,
+						gradedCompany,
+						gradedGrade,
+					},
 				}),
 			});
 		} catch {
