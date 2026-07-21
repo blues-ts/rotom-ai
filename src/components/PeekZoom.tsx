@@ -71,15 +71,26 @@ export default function PeekZoom({
 	// All translation lives here, 1:1 with the finger centroid. Manual
 	// activation: takes over only once actually zoomed, so an ordinary
 	// one-finger scroll that happens to start on the card still scrolls the
-	// page. It never fails while pending — a pinch later in the same touch
-	// can still hand it the drag.
+	// page.
 	const pan = Gesture.Pan()
 		.manualActivation(true)
 		.minPointers(1)
 		.maxPointers(2)
 		.averageTouches(true)
-		.onTouchesMove((_e, mgr) => {
-			if (scale.value > 1.01) mgr.activate();
+		.onTouchesMove((e, mgr) => {
+			// Already zoomed → this drag roams the magnified card.
+			if (scale.value > 1.01) {
+				mgr.activate();
+				return;
+			}
+			// Not zoomed and a single finger → it's a page scroll or the modal's
+			// swipe-down-to-dismiss. Fail so the ScrollView (and the sheet's
+			// interactive dismiss) own the touch from the first move, instead of
+			// us holding it pending — that pending state used to swallow the
+			// dismiss whenever the drag started on the card image. Two fingers
+			// means a pinch is incoming, so keep waiting for it to zoom and hand
+			// us the roam.
+			if (e.numberOfTouches < 2) mgr.fail();
 		})
 		.onChange((e) => {
 			tx.value += e.changeX;
