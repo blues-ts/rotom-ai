@@ -54,6 +54,8 @@ export interface AddVendorItemInput {
   gradedCompany?: string;
   gradedGrade?: string;
   quantity?: number;
+  /** Shelf group to file a NEW listing under; null/undefined = Ungrouped. */
+  groupId?: string | null;
 }
 
 // A group lives only while it holds listed cards it was actually used for:
@@ -140,6 +142,7 @@ async function upsertVendorItem(
     gradedCompany,
     gradedGrade,
     quantity,
+    groupId,
   }: AddVendorItemInput,
 ): Promise<void> {
   const qty = Math.min(99, Math.max(1, Math.round(quantity ?? 1)));
@@ -150,6 +153,8 @@ async function upsertVendorItem(
     [cardId, pricingType, variant, condition, gradedCompany ?? "", gradedGrade ?? ""],
   );
   if (existing) {
+    // A matching listing already exists — merge the quantity and leave its
+    // current group as-is (a re-add shouldn't silently relocate the shelf row).
     await db.runAsync(
       "UPDATE vendor_items SET quantity = quantity + ? WHERE id = ?",
       [qty, existing.id],
@@ -160,8 +165,8 @@ async function upsertVendorItem(
   // upsertCollectionCard) — keep the id unique per insert.
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   await db.runAsync(
-    "INSERT INTO vendor_items (id, card_id, card_name, card_number, set_name, card_image_url, market_value, market_value_updated_at, pricing_type, product_type, variant, condition, graded_company, graded_grade, quantity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [id, cardId, cardName, cardNumber ?? null, setName ?? null, cardImageUrl, marketValue, new Date().toISOString(), pricingType, productType, variant, condition, gradedCompany ?? null, gradedGrade ?? null, qty],
+    "INSERT INTO vendor_items (id, card_id, card_name, card_number, set_name, card_image_url, market_value, market_value_updated_at, pricing_type, product_type, variant, condition, graded_company, graded_grade, quantity, group_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [id, cardId, cardName, cardNumber ?? null, setName ?? null, cardImageUrl, marketValue, new Date().toISOString(), pricingType, productType, variant, condition, gradedCompany ?? null, gradedGrade ?? null, qty, groupId ?? null],
   );
 }
 
@@ -289,7 +294,13 @@ export function useVendorItems() {
   // rows STAY in their collection — the shelf is a sales layer, not a move —
   // so nothing here touches the collections tables or their query keys.
   const listCollectionRows = useMutation({
-    mutationFn: async ({ ids }: { ids: string[] }) => {
+    mutationFn: async ({
+      ids,
+      groupId,
+    }: {
+      ids: string[];
+      groupId?: string | null;
+    }) => {
       if (ids.length === 0) return 0;
       const placeholders = ids.map(() => "?").join(",");
       const rows = await db.getAllAsync<{
@@ -326,6 +337,7 @@ export function useVendorItems() {
             gradedCompany: row.graded_company ?? undefined,
             gradedGrade: row.graded_grade ?? undefined,
             quantity: row.quantity,
+            groupId,
           });
         }
       });

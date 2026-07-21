@@ -4,6 +4,10 @@ import CardPressable from "@/components/CardPressable";
 import * as Haptics from "expo-haptics";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { SymbolView } from "expo-symbols";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SheetDoneButton } from "@/components/SheetDoneButton";
+import SlidingPanels from "@/components/SlidingPanels";
+import { TabBar } from "@/components/PricingToggles";
 
 import { useRiverTheme } from "@/constants/theme";
 import {
@@ -35,10 +39,14 @@ import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
 // Sentinel "collection id" for the pinned Vending destination row — real
 // collection ids are Date.now() strings, so this can't collide.
 const VENDOR_DEST_ID = "__vendor__";
+// Sentinel for the group picker's "No group" row so it gets the same
+// added-cue as a real group row (which highlights by its own id).
+const VENDOR_NO_GROUP_KEY = "__vendor_no_group__";
 
 export default function AddToCollection() {
   const t = useRiverTheme();
   const api = useApi();
+  const insets = useSafeAreaInsets();
 
   const { cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade, pricePaid, cardIds, cardImages, fromReview, moveFromCollectionId, moveRowIds } =
     useLocalSearchParams<{
@@ -69,7 +77,24 @@ export default function AddToCollection() {
 
   const { collections, addCardToCollection, addCardsToCollection, moveCardRows } = useCollections();
   const refreshPrices = useRefreshCollectionPrices();
-  const { addVendorItems, listCollectionRows } = useVendorItems();
+  const { addVendorItems, listCollectionRows, groups, listed } =
+    useVendorItems();
+
+  // Listed-card counts per group (and Ungrouped) for the picker subtitles, so
+  // group rows carry the same "N cards" second line collection rows do.
+  const groupCardCount = useMemo(() => {
+    const counts = new Map<string, number>();
+    let ungrouped = 0;
+    const known = new Set(groups.map((g) => g.id));
+    for (const it of listed) {
+      if (it.groupId && known.has(it.groupId)) {
+        counts.set(it.groupId, (counts.get(it.groupId) ?? 0) + it.quantity);
+      } else {
+        ungrouped += it.quantity;
+      }
+    }
+    return { counts, ungrouped };
+  }, [listed, groups]);
   const refreshVendorPrices = useRefreshVendorPrices();
   const vendingEnabled = useVendingEnabled();
   const { isPro } = useRevenueCat();
@@ -80,6 +105,10 @@ export default function AddToCollection() {
   // The collection that was just added to — its row outlines blue as the
   // success cue, then the sheet dismisses itself.
   const [addedId, setAddedId] = useState<string | null>(null);
+  // Vending is a two-step when groups exist: tap Vending, then pick a shelf
+  // group. This swaps the destination list for the group picker in place —
+  // add-to-collection is itself a formSheet, so a second sheet can't stack.
+  const [choosingVendorGroup, setChoosingVendorGroup] = useState(false);
 
   // Batch mode: a list of card ids (no metadata). Names/numbers are resolved
   // from the catalog at add time; prices come from the post-add refresh.
@@ -274,7 +303,11 @@ export default function AddToCollection() {
   // The pinned "Vending" destination — same resolution as the collection add,
   // committed to the vendor shelf instead. Handles batch (scanner) and single
   // (card detail / search) modes.
-  const handleSelectVendor = useCallback(async () => {
+  // groupId: the shelf group to file under (null = Ungrouped), chosen in the
+  // inline group step. The Vending-row tap gates Pro and picks the group first,
+  // so by here the destination is committed.
+  const handleSelectVendor = useCallback(
+    async (groupId: string | null, highlightKey: string = VENDOR_DEST_ID) => {
     if (addedId) return;
     // Vending is Pro — gate before anything mutates (same pattern as the
     // scan library's add gate: paywall now, tap again once unlocked).
@@ -283,12 +316,14 @@ export default function AddToCollection() {
       return;
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setAddedId(VENDOR_DEST_ID);
+    // The tapped row lights up (accent border + checkmark) via this key, the
+    // same added-cue collections use, before the 450ms dismiss below.
+    setAddedId(highlightKey);
     // Multi-select from a collection: list those rows for sale. They keep
     // their place in the collection — the shelf is a sales layer on top.
     if (isMove) {
       listCollectionRows.mutate(
-        { ids: moveIds },
+        { ids: moveIds, groupId },
         {
           onSuccess: () => setTimeout(() => router.back(), 450),
           onError: () => setAddedId(null),
@@ -299,7 +334,7 @@ export default function AddToCollection() {
     if (isBatch) {
       try {
         const inputs = (await resolveBatchInputs()).map(
-          ({ cardValue, ...rest }) => ({ ...rest, marketValue: cardValue }),
+          ({ cardValue, ...rest }) => ({ ...rest, marketValue: cardValue, groupId }),
         );
         await addVendorItems.mutateAsync(inputs);
         finishBatchAdd();
@@ -330,6 +365,7 @@ export default function AddToCollection() {
           condition: condition ?? "NM",
           gradedCompany: gradedCompany || undefined,
           gradedGrade: gradedGrade || undefined,
+          groupId,
         },
       ],
       {
@@ -342,7 +378,45 @@ export default function AddToCollection() {
         onError: () => setAddedId(null),
       },
     );
-  }, [addedId, isPro, isMove, isBatch, moveIds, listCollectionRows, resolveBatchInputs, addVendorItems, finishBatchAdd, refreshVendorPrices, cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade]);
+    },
+    [addedId, isPro, isMove, isBatch, moveIds, listCollectionRows, resolveBatchInputs, addVendorItems, finishBatchAdd, refreshVendorPrices, cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade],
+  );
+
+  // Bottom action: create a new destination in place. Which kind depends on the
+  // step — a new shelf group during the group picker, a new collection otherwise.
+  // Both are formSheets pushed on top; each returns to this sheet (its state
+  // intact) with the freshly created row now listed. `from` keeps create-collection
+  // from opening the empty collection and abandoning the card being added.
+  const handleCreateDestination = useCallback(() => {
+    if (addedId) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (choosingVendorGroup) {
+      router.push({ pathname: "/create-vendor-group" });
+    } else {
+      router.push({
+        pathname: "/create-collection",
+        params: { from: "add-to-collection" },
+      });
+    }
+  }, [addedId, choosingVendorGroup]);
+
+  // Top toggle: switch the sheet between the Collections list and the Vending
+  // side. Vending is Pro — selecting it while locked shows the paywall and
+  // stays on Collections (same "unlock then tap again" pattern as before).
+  const handleSelectTab = useCallback(
+    (tab: string) => {
+      if (addedId) return;
+      const wantVending = tab === "Vending";
+      if (wantVending === choosingVendorGroup) return;
+      if (wantVending && !isPro) {
+        void presentProPaywallIfNeeded();
+        return;
+      }
+      Haptics.selectionAsync();
+      setChoosingVendorGroup(wantVending);
+    },
+    [addedId, choosingVendorGroup, isPro],
+  );
 
   const handleSelect = useCallback(
     (collectionId: string) => {
@@ -403,163 +477,208 @@ export default function AddToCollection() {
     [cardId, cardName, cardNumber, setName, cardImageUrl, cardValue, pricingType, productType, variant, condition, gradedCompany, gradedGrade, pricePaid, addCardToCollection, addedId],
   );
 
+  // One row renderer for every destination — collections AND vending groups —
+  // so they share identical size, spacing, and the added animation/border.
+  const renderDestinationRow = ({
+    key,
+    name,
+    subtitle,
+    added,
+    onPress,
+  }: {
+    key: string;
+    name: string;
+    subtitle: string;
+    added: boolean;
+    onPress: () => void;
+  }) => (
+    <CardPressable
+      key={key}
+      onPress={onPress}
+      disabled={!!addedId}
+      pressScale={0.98}
+      baseColor={added ? undefined : t.glass.elevatedFill}
+      pressedColor={added ? undefined : t.glass.pressedFill}
+      style={[
+        styles.collectionRow,
+        {
+          borderColor: added ? t.accent : t.glass.elevatedBorder,
+          borderWidth: added ? 2 : 1,
+        },
+        added ? { backgroundColor: t.accentIconFill } : null,
+      ]}
+    >
+      <View style={styles.collectionInfo}>
+        <Text
+          style={[styles.collectionName, { color: t.text.primary }]}
+          numberOfLines={1}
+        >
+          {name}
+        </Text>
+        <Text style={[styles.collectionCount, { color: t.text.secondary }]}>
+          {subtitle}
+        </Text>
+      </View>
+      <SymbolView
+        name={added ? "checkmark.circle.fill" : "chevron.right"}
+        size={added ? 20 : 14}
+        tintColor={added ? t.accentOn : t.text.tertiary}
+        weight="semibold"
+      />
+    </CardPressable>
+  );
+
+  // Header title tracks the active toggle side. Batch/move carry a count; the
+  // Vending side lists cards (they stay put in move mode) rather than adds.
+  const count = isMove ? moveIds.length : batchIds.length;
+  const noun = count === 1 ? "Card" : "Cards";
+  const headerTitle = choosingVendorGroup
+    ? isMove || isBatch
+      ? `List ${count} ${noun}`
+      : "Add to Vending"
+    : isMove
+      ? `Move ${count} ${noun}`
+      : isBatch
+        ? `Add ${count} ${noun}`
+        : "Add to Collection";
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.container,
+        { paddingBottom: insets.bottom + 88 },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
       <Stack.Screen
         options={{
-          headerTitle: isMove
-            ? `Move ${moveIds.length} ${moveIds.length === 1 ? "Card" : "Cards"}`
-            : isBatch
-              ? `Add ${batchIds.length} ${batchIds.length === 1 ? "Card" : "Cards"}`
-              : "Add to Collection",
+          headerTitle,
+          headerRight: () => <SheetDoneButton />,
         }}
       />
-      {/* Vending is a fixed destination above the collections — scan-to-sell,
+      {/* Collections ↔ Vending mode switch. Vending is Pro and scan-to-sell,
           quick-listing, and collection multi-select all reuse this sheet
-          without touching the scan flow. Hidden entirely when the Settings
-          toggle disables the vending flow. */}
+          without touching the scan flow. Hidden when Settings disables vending,
+          leaving just the collections list. */}
       {vendingEnabled && (
-      <CardPressable
-          onPress={() => void handleSelectVendor()}
-          disabled={!!addedId}
-          pressScale={0.98}
-          baseColor={
-            addedId === VENDOR_DEST_ID ? undefined : t.glass.elevatedFill
-          }
-          pressedColor={
-            addedId === VENDOR_DEST_ID ? undefined : t.glass.pressedFill
-          }
-          style={[
-            styles.collectionRow,
-            {
-              borderColor:
-                addedId === VENDOR_DEST_ID ? t.accent : t.glass.elevatedBorder,
-              borderWidth: addedId === VENDOR_DEST_ID ? 2 : 1,
-            },
-            addedId === VENDOR_DEST_ID
-              ? { backgroundColor: t.accentIconFill }
-              : null,
-          ]}
-        >
-          <View
-            style={[styles.vendorIcon, { backgroundColor: t.accentIconFill }]}
-          >
-            <SymbolView
-              name="storefront"
-              size={16}
-              tintColor={t.accentOn}
-              weight="semibold"
-            />
-          </View>
-          <View style={styles.collectionInfo}>
-            <Text
-              style={[styles.collectionName, { color: t.text.primary }]}
-              numberOfLines={1}
-            >
-              Vending
-            </Text>
-            <Text style={[styles.collectionCount, { color: t.text.secondary }]}>
-              {addedId === VENDOR_DEST_ID
-                ? "Listed for sale"
-                : isMove
-                  ? "List for sale · stays in this collection"
-                  : "Put on your table"}
-            </Text>
-          </View>
-          <SymbolView
-            name={
-              addedId === VENDOR_DEST_ID
-                ? "checkmark.circle.fill"
-                : "chevron.right"
-            }
-            size={addedId === VENDOR_DEST_ID ? 20 : 14}
-            tintColor={
-              addedId === VENDOR_DEST_ID ? t.accentOn : t.text.tertiary
-            }
-            weight="semibold"
+        <View style={styles.tabBarWrap}>
+          <TabBar
+            tabs={["Collections", "Vending"]}
+            selected={choosingVendorGroup ? "Vending" : "Collections"}
+            onSelect={handleSelectTab}
           />
-        </CardPressable>
-      )}
-      {targetCollections.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={[styles.emptyText, { color: t.text.secondary }]}>
-            {isMove
-              ? "No other collections — create one to move these cards into."
-              : "No collections yet — create one to add this card."}
-          </Text>
-          <CardPressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push({
-                pathname: "/create-collection",
-                params: { from: "add-to-collection" },
-              });
-            }}
-            style={[styles.createButton, { backgroundColor: t.accent }, t.buttonGlow]}
-          >
-            <SymbolView
-              name="plus"
-              size={16}
-              tintColor="#FFFFFF"
-              weight="semibold"
-            />
-            <Text style={styles.createButtonText}>Create Collection</Text>
-          </CardPressable>
         </View>
-      ) : (
-        <View>
-          {targetCollections.map((collection) => {
-            const added = addedId === collection.id;
-            return (
+      )}
+      {/* The two modes are panels of the same slider (the configure sheet's
+          Raw ↔ Graded animation), so the toggle slides across in place rather
+          than swapping the content abruptly. */}
+      <SlidingPanels
+        active={choosingVendorGroup}
+        secondPanel={
+          <View>
+            {isMove && (
+              <Text style={[styles.vendingCaption, { color: t.text.secondary }]}>
+                Listed for sale · cards stay in this collection
+              </Text>
+            )}
+            {groups.map((g) => {
+              const count = groupCardCount.counts.get(g.id) ?? 0;
+              return renderDestinationRow({
+                key: g.id,
+                name: g.name,
+                added: addedId === g.id,
+                subtitle:
+                  addedId === g.id
+                    ? "Added"
+                    : `${count} ${count === 1 ? "card" : "cards"}`,
+                onPress: () => void handleSelectVendor(g.id, g.id),
+              });
+            })}
+            {renderDestinationRow({
+              key: VENDOR_NO_GROUP_KEY,
+              name: "No group",
+              added: addedId === VENDOR_NO_GROUP_KEY,
+              subtitle:
+                addedId === VENDOR_NO_GROUP_KEY ? "Added" : "Ungrouped",
+              onPress: () =>
+                void handleSelectVendor(null, VENDOR_NO_GROUP_KEY),
+            })}
+          </View>
+        }
+        firstPanel={
+          targetCollections.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={[styles.emptyText, { color: t.text.secondary }]}>
+                {isMove
+                  ? "No other collections — create one to move these cards into."
+                  : "No collections yet — create one to add this card."}
+              </Text>
               <CardPressable
-                key={collection.id}
-                onPress={() =>
-                  isMove
-                    ? handleSelectMove(collection.id)
-                    : isBatch
-                      ? handleSelectBatch(collection.id)
-                      : handleSelect(collection.id)
-                }
-                disabled={!!addedId}
-                pressScale={0.98}
-                baseColor={added ? undefined : t.glass.elevatedFill}
-                pressedColor={added ? undefined : t.glass.pressedFill}
-                style={[
-                  styles.collectionRow,
-                  {
-                    borderColor: added ? t.accent : t.glass.elevatedBorder,
-                    borderWidth: added ? 2 : 1,
-                  },
-                  added ? { backgroundColor: t.accentIconFill } : null,
-                ]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push({
+                    pathname: "/create-collection",
+                    params: { from: "add-to-collection" },
+                  });
+                }}
+                style={[styles.createButton, { backgroundColor: t.accent }, t.buttonGlow]}
               >
-                <View style={styles.collectionInfo}>
-                  <Text
-                    style={[styles.collectionName, { color: t.text.primary }]}
-                    numberOfLines={1}
-                  >
-                    {collection.name}
-                  </Text>
-                  <Text
-                    style={[styles.collectionCount, { color: t.text.secondary }]}
-                  >
-                    {added
-                      ? isMove
-                        ? "Moved"
-                        : "Added"
-                      : `${collection.cardCount} ${collection.cardCount === 1 ? "card" : "cards"}`}
-                  </Text>
-                </View>
                 <SymbolView
-                  name={added ? "checkmark.circle.fill" : "chevron.right"}
-                  size={added ? 20 : 14}
-                  tintColor={added ? t.accentOn : t.text.tertiary}
+                  name="plus"
+                  size={16}
+                  tintColor="#FFFFFF"
                   weight="semibold"
                 />
+                <Text style={styles.createButtonText}>Create Collection</Text>
               </CardPressable>
-            );
-          })}
-        </View>
+            </View>
+          ) : (
+            <View>
+              {targetCollections.map((collection) => {
+                const added = addedId === collection.id;
+                return renderDestinationRow({
+                  key: collection.id,
+                  name: collection.name,
+                  added,
+                  subtitle: added
+                    ? isMove
+                      ? "Moved"
+                      : "Added"
+                    : `${collection.cardCount} ${collection.cardCount === 1 ? "card" : "cards"}`,
+                  onPress: () =>
+                    isMove
+                      ? handleSelectMove(collection.id)
+                      : isBatch
+                        ? handleSelectBatch(collection.id)
+                        : handleSelect(collection.id),
+                });
+              })}
+            </View>
+          )
+        }
+      />
+      {/* Persistent bottom action — create a new destination without leaving
+          the add flow. Hidden in the empty-collections state, which already
+          shows its own prominent Create Collection CTA. */}
+      {(choosingVendorGroup || targetCollections.length > 0) && (
+        <CardPressable
+          onPress={handleCreateDestination}
+          disabled={!!addedId}
+          pressScale={0.97}
+          baseColor={t.accent}
+          pressedColor={t.accent}
+          style={[styles.createButton, { borderColor: "transparent", marginTop: 8 }, t.buttonGlow]}
+        >
+          <SymbolView
+            name="plus"
+            size={16}
+            tintColor="#FFFFFF"
+            weight="semibold"
+          />
+          <Text style={styles.createButtonText}>
+            {choosingVendorGroup ? "New Group" : "New Collection"}
+          </Text>
+        </CardPressable>
       )}
     </ScrollView>
   );
@@ -568,7 +687,7 @@ export default function AddToCollection() {
 const styles = StyleSheet.create({
   container: {
     padding: 20,
-    paddingTop: 24,
+    paddingTop: 12,
   },
   empty: {
     paddingVertical: 24,
@@ -595,13 +714,17 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#FFFFFF",
   },
-  vendorIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
+  // Segmented Collections/Vending toggle sits above the sliding panels; the
+  // panels manage their own row spacing below it.
+  tabBarWrap: {
+    marginBottom: 16,
+  },
+  // Lead-in line on the Vending panel, explaining what listing does (the old
+  // Vending destination row's subtitle, now that the row is gone).
+  vendingCaption: {
+    fontSize: 13,
+    marginBottom: 12,
+    marginHorizontal: 2,
   },
   collectionRow: {
     flexDirection: "row",

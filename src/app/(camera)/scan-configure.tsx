@@ -217,8 +217,8 @@ export default function ScanConfigureSheet() {
 
 				{config && hasGraded ? (
 					<SlidingPanels
-						activeTab={config.pricingType}
-						rawPanel={
+						active={config.pricingType === "Graded"}
+						firstPanel={
 							<View>
 								<ToggleLabel>Condition</ToggleLabel>
 								<LabeledPillToggle
@@ -228,7 +228,7 @@ export default function ScanConfigureSheet() {
 								/>
 							</View>
 						}
-						gradedPanel={
+						secondPanel={
 							<View>
 								<ToggleLabel>Grading Company</ToggleLabel>
 								<PillToggle
@@ -271,6 +271,7 @@ const styles = StyleSheet.create({
 	},
 	content: {
 		padding: 20,
+		paddingTop: 12,
 		paddingBottom: 40,
 		gap: 20,
 	},

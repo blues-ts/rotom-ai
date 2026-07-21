@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
 	content: {
 		flex: 1,
 		padding: 20,
-		paddingTop: 24,
+		paddingTop: 12,
 	},
 	// Every section header is an overline.
 	label: {

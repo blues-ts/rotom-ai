@@ -128,8 +128,8 @@ export default function ConfigureCard() {
 
 				{hasGraded ? (
 					<SlidingPanels
-						activeTab={pricingTab}
-						rawPanel={
+						active={pricingTab === "Graded"}
+						firstPanel={
 							<View>
 								<ToggleLabel>Condition</ToggleLabel>
 								<LabeledPillToggle
@@ -139,7 +139,7 @@ export default function ConfigureCard() {
 								/>
 							</View>
 						}
-						gradedPanel={
+						secondPanel={
 							<View>
 								<ToggleLabel>Grading Company</ToggleLabel>
 								<PillToggle
@@ -187,6 +187,7 @@ const styles = StyleSheet.create({
 	},
 	content: {
 		padding: 20,
+		paddingTop: 12,
 		paddingBottom: 40,
 		gap: 20,
 	},

@@ -294,14 +294,13 @@ export default function VendorItemSheet() {
 
 const styles = StyleSheet.create({
 	container: {
-		paddingTop: 4,
+		paddingTop: 12,
 	},
 	summary: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 12,
 		paddingHorizontal: 20,
-		paddingTop: 8,
 		paddingBottom: 14,
 	},
 	thumb: { width: THUMB_WIDTH, height: THUMB_HEIGHT },

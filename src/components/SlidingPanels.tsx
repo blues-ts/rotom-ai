@@ -10,33 +10,34 @@ import Animated, {
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
 /**
- * Slides the Raw (condition) panel left/out and the Graded (company + grade)
- * panel in from the right when the pricing tab changes, easing the frame
- * height between the two so there's no jump. Shared by the card-detail and
- * scan configure sheets.
+ * Slides the first panel left/out and the second panel in from the right when
+ * `active` flips, easing the frame height between the two so there's no jump.
+ * Shared by the card-detail / scan configure sheets (Raw ↔ Graded pricing) and
+ * the add-to-collection sheet (collection list ↔ vending group picker).
  */
 export default function SlidingPanels({
-	activeTab,
-	rawPanel,
-	gradedPanel,
+	active,
+	firstPanel,
+	secondPanel,
 }: {
-	activeTab: string;
-	rawPanel: ReactNode;
-	gradedPanel: ReactNode;
+	/** false → first panel showing; true → second panel slid in. */
+	active: boolean;
+	firstPanel: ReactNode;
+	secondPanel: ReactNode;
 }) {
-	const slide = useSharedValue(activeTab === "Graded" ? 1 : 0);
-	const rawHeight = useSharedValue(0);
-	const gradedHeight = useSharedValue(0);
+	const slide = useSharedValue(active ? 1 : 0);
+	const firstHeight = useSharedValue(0);
+	const secondHeight = useSharedValue(0);
 
 	useEffect(() => {
-		slide.value = withTiming(activeTab === "Graded" ? 1 : 0, { duration: 250 });
-	}, [activeTab]);
+		slide.value = withTiming(active ? 1 : 0, { duration: 250 });
+	}, [active]);
 
 	const containerStyle = useAnimatedStyle(() => {
 		const height = interpolate(
 			slide.value,
 			[0, 1],
-			[rawHeight.value, gradedHeight.value],
+			[firstHeight.value, secondHeight.value],
 		);
 		return {
 			height: height > 0 ? height : undefined,
@@ -44,14 +45,14 @@ export default function SlidingPanels({
 		};
 	});
 
-	const rawStyle = useAnimatedStyle(() => ({
+	const firstStyle = useAnimatedStyle(() => ({
 		transform: [
 			{ translateX: interpolate(slide.value, [0, 1], [0, -SCREEN_WIDTH]) },
 		],
 		opacity: interpolate(slide.value, [0, 0.5], [1, 0]),
 	}));
 
-	const gradedStyle = useAnimatedStyle(() => ({
+	const secondStyle = useAnimatedStyle(() => ({
 		transform: [
 			{ translateX: interpolate(slide.value, [0, 1], [SCREEN_WIDTH, 0]) },
 		],
@@ -61,20 +62,20 @@ export default function SlidingPanels({
 	return (
 		<Animated.View style={containerStyle}>
 			<Animated.View
-				style={[styles.panel, rawStyle]}
+				style={[styles.panel, firstStyle]}
 				onLayout={(e) => {
-					rawHeight.value = e.nativeEvent.layout.height;
+					firstHeight.value = e.nativeEvent.layout.height;
 				}}
 			>
-				{rawPanel}
+				{firstPanel}
 			</Animated.View>
 			<Animated.View
-				style={[styles.panel, gradedStyle]}
+				style={[styles.panel, secondStyle]}
 				onLayout={(e) => {
-					gradedHeight.value = e.nativeEvent.layout.height;
+					secondHeight.value = e.nativeEvent.layout.height;
 				}}
 			>
-				{gradedPanel}
+				{secondPanel}
 			</Animated.View>
 		</Animated.View>
 	);

@@ -164,7 +164,7 @@ export default function VendorGroupSheet() {
 
 const styles = StyleSheet.create({
 	container: {
-		paddingTop: 4,
+		paddingTop: 12,
 	},
 	optionRow: {
 		borderRadius: 12,

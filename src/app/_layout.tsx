@@ -459,6 +459,7 @@ function AppContent() {
 						headerTintColor: t.text.primary,
 						headerShadowVisible: false,
 						headerLeft: () => null,
+						headerRight: () => <SheetDoneButton />,
 						contentStyle: { backgroundColor: t.glass.sheetFill },
 					})}
 				/>
@@ -510,6 +511,7 @@ function AppContent() {
 						headerTintColor: t.text.primary,
 						headerShadowVisible: false,
 						headerLeft: () => null,
+						headerRight: () => <SheetDoneButton />,
 						contentStyle: { backgroundColor: t.glass.sheetFill },
 					}}
 				/>
@@ -531,6 +533,7 @@ function AppContent() {
 						headerTintColor: t.text.primary,
 						headerShadowVisible: false,
 						headerLeft: () => null,
+						headerRight: () => <SheetDoneButton />,
 						contentStyle: { backgroundColor: t.glass.sheetFill },
 					})}
 				/>
