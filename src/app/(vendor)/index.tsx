@@ -26,7 +26,7 @@ import { spacing, typeScale, useRiverTheme } from "@/constants/theme";
 import { formatCurrency } from "@/lib/format";
 import { formatCardConfig } from "@/lib/scrydex";
 import {
-	useRefreshVendorPrices,
+	useAutoRefreshStaleVendorPrices,
 	useVendorItems,
 } from "@/hooks/useVendorItems";
 import type { VendorItem } from "@/types/vendor";
@@ -68,7 +68,7 @@ export default function VendorScreen() {
 	const insets = useSafeAreaInsets();
 	const { listed, sold, groups, deleteGroup, summary, isError, refetch } =
 		useVendorItems();
-	const refreshPrices = useRefreshVendorPrices();
+	const refreshPrices = useAutoRefreshStaleVendorPrices();
 
 	const groupIds = useMemo(() => new Set(groups.map((g) => g.id)), [groups]);
 	const groupNameById = useMemo(
@@ -336,7 +336,7 @@ export default function VendorScreen() {
 				refreshControl={
 					<RefreshControl
 						refreshing={false}
-						onRefresh={() => refreshPrices.mutate()}
+						onRefresh={() => refreshPrices.mutate(undefined)}
 						tintColor={t.text.secondary}
 						progressViewOffset={insets.top + 52}
 					/>

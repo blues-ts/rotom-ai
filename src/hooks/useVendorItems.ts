@@ -1,4 +1,5 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { AppState } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import type { AxiosInstance } from "axios";
@@ -573,9 +574,21 @@ function resolveVendorPrice(
 export async function sweepVendorPrices(
   db: SQLite.SQLiteDatabase,
   api: AxiosInstance,
+  opts?: { groupId?: string },
 ): Promise<{ updated: number }> {
+  // Scope to one shelf when a group pull-to-refresh asks for it: a real group
+  // by id, or the Ungrouped pseudo-shelf (no group_id). No scope = whole table.
+  let where = "status = 'listed'";
+  const params: string[] = [];
+  if (opts?.groupId === "__ungrouped__") {
+    where += " AND group_id IS NULL";
+  } else if (opts?.groupId) {
+    where += " AND group_id = ?";
+    params.push(opts.groupId);
+  }
   const rows = await db.getAllAsync<VendorItemRow>(
-    "SELECT * FROM vendor_items WHERE status = 'listed'",
+    `SELECT * FROM vendor_items WHERE ${where}`,
+    params,
   );
   if (rows.length === 0) return { updated: 0 };
 
@@ -625,9 +638,11 @@ export function useRefreshVendorPrices() {
   const { isPro } = useRevenueCat();
 
   return useMutation({
-    mutationFn: async () => {
+    // groupId scopes the sweep to one shelf (the group page's pull-to-refresh);
+    // undefined sweeps the whole table (the vending home's pull + auto-refresh).
+    mutationFn: async (groupId?: string) => {
       if (!isPro) return { updated: 0 };
-      return sweepVendorPrices(db, api);
+      return sweepVendorPrices(db, api, groupId ? { groupId } : undefined);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: VENDOR_KEY });
@@ -637,4 +652,48 @@ export function useRefreshVendorPrices() {
       toast.show("Couldn't refresh prices — check your connection.");
     },
   });
+}
+
+// Prices older than this auto-refresh on load / app-foreground.
+const VENDOR_STALE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The vending home's twin of useAutoRefreshStalePrices: returns the same
+ * refresh mutation (so pull-to-refresh still drives it), but also fires it on
+ * mount and on app-foreground whenever a listed item's market value is stale.
+ * This is why prices "just stay current" like they do on collections, instead
+ * of relying on the manual pull — which the top-of-page chart can swallow.
+ */
+export function useAutoRefreshStaleVendorPrices() {
+  const db = getDatabase();
+  const refresh = useRefreshVendorPrices();
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+
+  const checkAndRefresh = useCallback(() => {
+    const current = refreshRef.current;
+    if (current.isPending) return;
+    const cutoff = new Date(Date.now() - VENDOR_STALE_TTL_MS).toISOString();
+    const stale = db.getFirstSync<{ id: string }>(
+      `SELECT id FROM vendor_items
+       WHERE status = 'listed'
+         AND (market_value_updated_at IS NULL OR market_value_updated_at < ?)
+       LIMIT 1`,
+      [cutoff],
+    );
+    if (stale) current.mutate(undefined);
+  }, [db]);
+
+  useEffect(() => {
+    checkAndRefresh();
+  }, [checkAndRefresh]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") checkAndRefresh();
+    });
+    return () => sub.remove();
+  }, [checkAndRefresh]);
+
+  return refresh;
 }

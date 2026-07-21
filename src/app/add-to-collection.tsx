@@ -372,7 +372,7 @@ export default function AddToCollection() {
         onSuccess: () => {
           // Catalog adds carry no live price — refresh so the shelf shows a
           // real market value instead of $0 (Pro-gated no-op otherwise).
-          if (value <= 0) refreshVendorPrices.mutate();
+          if (value <= 0) refreshVendorPrices.mutate(undefined);
           setTimeout(() => router.back(), 450);
         },
         onError: () => setAddedId(null),

@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+	Alert,
+	RefreshControl,
+	ScrollView,
+	StyleSheet,
+	Text,
+	View,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import { router, Stack, useLocalSearchParams } from "expo-router";
@@ -17,10 +24,14 @@ import { formatCardConfig } from "@/lib/scrydex";
 import { openMenuSheetSlot } from "@/lib/menuSheet";
 import { directionRow, SORT_OPTION_LABELS } from "@/lib/sortLabels";
 import type { LegacyMenuAction } from "@/components/LegacyToolbarMenu";
-import { useVendorItems } from "@/hooks/useVendorItems";
+import {
+	useRefreshVendorPrices,
+	useVendorItems,
+} from "@/hooks/useVendorItems";
 import type { VendorItem } from "@/types/vendor";
 import CardPressable from "@/components/CardPressable";
 import FloatingSearchBar from "@/components/FloatingSearchBar";
+import RefreshingPill from "@/components/RefreshingPill";
 import HeaderIconButton, {
 	HeaderButtonGroup,
 } from "@/components/HeaderIconButton";
@@ -73,6 +84,7 @@ export default function VendorShelfScreen() {
 		renameGroup,
 		deleteGroup,
 	} = useVendorItems();
+	const refreshPrices = useRefreshVendorPrices();
 
 	const group =
 		!isSold && groupId !== "__ungrouped__"
@@ -525,6 +537,7 @@ export default function VendorShelfScreen() {
 				pointerEvents="none"
 				style={StyleSheet.absoluteFill}
 			/>
+			<RefreshingPill visible={refreshPrices.isPending} topOffset={52 + 8} />
 			<Stack.Screen
 				options={{
 					// Live group name so a rename shows immediately on return; the
@@ -624,6 +637,18 @@ export default function VendorShelfScreen() {
 				showsVerticalScrollIndicator={false}
 				keyboardShouldPersistTaps="handled"
 				keyboardDismissMode="on-drag"
+				// Sold receipts keep the market value they sold against, so only
+				// listing shelves pull to refresh — scoped to this group's cards.
+				refreshControl={
+					isSold ? undefined : (
+						<RefreshControl
+							refreshing={false}
+							onRefresh={() => refreshPrices.mutate(groupId)}
+							tintColor={t.text.secondary}
+							progressViewOffset={insets.top + 52}
+						/>
+					)
+				}
 			>
 				{items.length === 0 ? (
 					<View style={styles.emptyState}>
