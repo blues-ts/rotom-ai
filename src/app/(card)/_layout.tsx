@@ -30,7 +30,14 @@ export default function CardLayout() {
 						<HeaderIconButton
 							onPress={() => {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-								router.back();
+								// Cold-start deep link (shared /card/<id>) makes this card the
+								// root of the stack — there's nothing to go back to, so dismiss
+								// to home instead of a no-op back.
+								if (router.canGoBack()) {
+									router.back();
+								} else {
+									router.replace("/(home)");
+								}
 							}}
 						>
 							<SymbolView
