@@ -1003,7 +1003,7 @@ const styles = StyleSheet.create({
 		right: 0,
 		bottom: 0,
 		borderRadius: 14,
-		backgroundColor: "rgba(120,120,120,0.5)",
+		backgroundColor: "rgba(0,0,0,0.35)",
 		zIndex: 1,
 	},
 	placeholder: {

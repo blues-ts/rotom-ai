@@ -10,8 +10,15 @@ import ContextMenu, {
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
+import { useToast } from "@/context/ToastContext";
+import {
+	FAVORITES_KEY,
+	readIsFavorited,
+	toggleFavoriteRow,
+} from "@/hooks/useFavorites";
 
 /** The card identity + pricing the quick-add formsheet needs. */
 export type QuickAddCard = {
@@ -54,12 +61,37 @@ export default function CardContextMenu({
 	children: ReactNode;
 }) {
 	const { isPro } = useRevenueCat();
+	const queryClient = useQueryClient();
+	const toast = useToast();
+	const productType = card.productType ?? "card";
+	// Non-subscribing read: subscribing to favorite state here (useIsFavorited)
+	// re-renders this tile whenever favorites change, and a re-render while the
+	// native menu has reparented this child for its lifted preview collapses the
+	// card image (same reason the Pressable below has no press-state style).
+	const isFavorited = readIsFavorited(card.cardId, productType);
 
-	const handleMenuPress = (
-		e: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>,
-	) => {
-		// Only one action today, but guard by index so adding more stays safe.
-		if (e.nativeEvent.index !== 0) return;
+	const toggleFavorite = () => {
+		const result = toggleFavoriteRow({
+			cardId: card.cardId,
+			productType,
+			cardName: card.cardName,
+			cardNumber: card.cardNumber,
+			setName: card.setName,
+			cardImageUrl: card.cardImageUrl ?? "",
+			variant: card.variant,
+			condition: card.condition,
+		});
+		if (result === "removed") {
+			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+			toast.show("Removed from Favorites");
+		} else {
+			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+			toast.show("Added to Favorites", "success");
+		}
+		queryClient.invalidateQueries({ queryKey: FAVORITES_KEY });
+	};
+
+	const openAddToCollection = () => {
 		// Collections are Pro — gate before opening the picker, like card-detail.
 		if (!isPro) {
 			void presentProPaywallIfNeeded();
@@ -85,9 +117,33 @@ export default function CardContextMenu({
 		});
 	};
 
+	const handleMenuPress = (
+		e: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>,
+	) => {
+		// Index order must match the `actions` array below.
+		if (e.nativeEvent.index === 0) {
+			openAddToCollection();
+			return;
+		}
+		if (e.nativeEvent.index === 1) {
+			// Favorites are Pro — same gate as collections.
+			if (!isPro) {
+				void presentProPaywallIfNeeded();
+				return;
+			}
+			toggleFavorite();
+		}
+	};
+
 	return (
 		<ContextMenu
-			actions={[{ title: "Add to Collection", systemIcon: "plus" }]}
+			actions={[
+				{ title: "Add to Collection", systemIcon: "plus" },
+				{
+					title: isFavorited ? "Remove from Favorites" : "Favorite",
+					systemIcon: isFavorited ? "star.slash" : "star",
+				},
+			]}
 			onPress={handleMenuPress}
 			previewBackgroundColor="transparent"
 			borderRadius={borderRadius}

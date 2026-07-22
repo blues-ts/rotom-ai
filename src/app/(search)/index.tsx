@@ -59,7 +59,9 @@ import PokedexBrowser from "@/components/PokedexBrowser";
 import { Image } from "expo-image";
 import { useQuery } from "@tanstack/react-query";
 import { CATALOG_SETS_KEY } from "@/hooks/usePrefetchExpansions";
-import HeaderIconButton from "@/components/HeaderIconButton";
+import HeaderIconButton, {
+	HeaderButtonGroup,
+} from "@/components/HeaderIconButton";
 import {
 	getCatalogSets,
 	searchCatalogCards,
@@ -1045,23 +1047,43 @@ export default function Search() {
 			<Stack.Screen
 				options={{
 					headerRight: () => (
-						<HeaderIconButton
-							onPress={() => {
-								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-								if (!isPro) {
-									void presentProPaywallIfNeeded();
-									return;
-								}
-								router.push("/(camera)");
-							}}
-						>
-							<SymbolView
-								name="camera.viewfinder"
-								size={20}
-								tintColor={t.accentOn}
-								weight="medium"
-							/>
-						</HeaderIconButton>
+						<HeaderButtonGroup>
+							{/* Favorites — Pro-gated, like the scanner beside it. */}
+							<HeaderIconButton
+								onPress={() => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+									if (!isPro) {
+										void presentProPaywallIfNeeded();
+										return;
+									}
+									router.push("/(favorites)");
+								}}
+							>
+								<SymbolView
+									name="star"
+									size={20}
+									tintColor={t.accentOn}
+									weight="medium"
+								/>
+							</HeaderIconButton>
+							<HeaderIconButton
+								onPress={() => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+									if (!isPro) {
+										void presentProPaywallIfNeeded();
+										return;
+									}
+									router.push("/(camera)");
+								}}
+							>
+								<SymbolView
+									name="camera.viewfinder"
+									size={20}
+									tintColor={t.accentOn}
+									weight="medium"
+								/>
+							</HeaderIconButton>
+						</HeaderButtonGroup>
 					),
 				}}
 			/>

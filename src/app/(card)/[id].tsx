@@ -69,6 +69,7 @@ import {
 import { formatCurrency } from "@/lib/format";
 import { chart, typeScale, useRiverTheme } from "@/constants/theme";
 import { useCollections } from "@/hooks/useCollections";
+import { useIsFavorited } from "@/hooks/useFavorites";
 import { useCardConfig } from "@/context/CardConfigContext";
 import { useRevenueCat } from "@/context/RevenueCatContext";
 import { presentProPaywallIfNeeded } from "@/lib/revenuecat";
@@ -881,6 +882,19 @@ export default function CardDetail() {
 		? getExpansionDisplayName(card.expansion)
 		: undefined;
 
+	// Favorites — the header star. Keyed on card id (product 'card'); stores the
+	// current display fields so the Favorites grid renders without a fetch.
+	const { isFavorited, toggle: toggleFavorite } = useIsFavorited({
+		cardId: id,
+		productType: "card",
+		cardName: displayName,
+		cardNumber: cardNumber ?? undefined,
+		setName: setDisplayName,
+		cardImageUrl: cardImage ?? initImage ?? "",
+		variant: variant || "normal",
+		condition: rawCondition,
+	});
+
 	// Share the card as a rich link (url-only payload, so iMessage unfurls it
 	// into one tappable bubble: card image + "PSA 10 — $1,234" via the Open
 	// Graph tags the rivertcg.com worker serves). Universal link opens the
@@ -1176,6 +1190,12 @@ export default function CardDetail() {
 				(gradedGrade ?? "") === (initGradedGrade || "")
 			: rawCondition === (condition || "NM"));
 
+	// Right-side action buttons: star + share always, plus the add (+) button
+	// when this exact config isn't already in the collection. Three of them
+	// crowd a centered title, so lead it then; two keeps it centered.
+	const headerActionCount = configMatches ? 2 : 3;
+	const leadTitle = headerActionCount > 2;
+
 	useEffect(() => {
 		if (!isFromCollection || !configMatches) return;
 		if (pricePaid === (initPricePaid || "")) return;
@@ -1213,9 +1233,47 @@ export default function CardDetail() {
 		<>
 			<Stack.Screen
 				options={{
-					headerTitle: displayName,
+					// Custom title view: with three action buttons the title leads
+					// (stretched left-aligned Text, consistent on every iOS version
+					// like collection-detail); with two it stays centered.
+					headerTitleAlign: leadTitle ? "left" : "center",
+					headerTitle: () => (
+						<Text
+							numberOfLines={1}
+							style={[
+								leadTitle
+									? styles.headerTitleLead
+									: styles.headerTitleCentered,
+								{ color: t.accentOn },
+							]}
+						>
+							{displayName}
+						</Text>
+					),
 					headerRight: () => (
 						<HeaderButtonGroup>
+							{/* Favorite — Pro-gated star. Fills when starred; taps
+							    toggle membership in the Favorites list. */}
+							<HeaderIconButton
+								onPress={() => {
+									if (!isPro) {
+										Haptics.impactAsync(
+											Haptics.ImpactFeedbackStyle.Light,
+										);
+										void presentProPaywallIfNeeded();
+										return;
+									}
+									toggleFavorite();
+								}}
+								disabled={!card}
+							>
+								<SymbolView
+									name={isFavorited ? "star.fill" : "star"}
+									size={19}
+									tintColor={t.accentOn}
+									weight="medium"
+								/>
+							</HeaderIconButton>
 							<HeaderIconButton
 								onPress={handleShare}
 								disabled={!card || !cardImage}
@@ -2406,6 +2464,18 @@ export default function CardDetail() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
+	},
+	// Leading custom header title — stretched so it leads beside the close
+	// button on every iOS version, not just iOS 26.
+	headerTitleLead: {
+		...typeScale.screenTitle,
+		width: "100%",
+		textAlign: "left",
+	},
+	// Centered custom header title — content-sized so the header centers it.
+	headerTitleCentered: {
+		...typeScale.screenTitle,
+		textAlign: "center",
 	},
 	centered: {
 		alignItems: "center",

@@ -14,7 +14,9 @@ let db: SQLite.SQLiteDatabase | null = null;
 //         sold price, revenue tracking). Purely additive.
 //   5   — adds `vendor_groups` + vendor_items.group_id (named shelves:
 //         "$5 binder", "Display case"). Purely additive.
-const SCHEMA_VERSION = 5;
+//   6   — adds `favorites` (the starred-cards list surfaced on the search
+//         screen). Purely additive — created via CREATE TABLE IF NOT EXISTS.
+const SCHEMA_VERSION = 6;
 
 export function getDatabase(): SQLite.SQLiteDatabase {
   if (!db) {
@@ -104,6 +106,24 @@ export function getDatabase(): SQLite.SQLiteDatabase {
       );
       CREATE INDEX IF NOT EXISTS idx_value_snapshots_recorded_at
         ON collection_value_snapshots(recorded_at);
+
+      -- Starred cards (the "Favorites" list off the search screen). One row
+      -- per card+product_type; the stored display fields render the grid
+      -- tile and seed the detail screen without a network fetch.
+      CREATE TABLE IF NOT EXISTS favorites (
+        card_id TEXT NOT NULL,
+        product_type TEXT NOT NULL DEFAULT 'card',
+        card_name TEXT NOT NULL,
+        card_number TEXT,
+        set_name TEXT,
+        card_image_url TEXT NOT NULL,
+        variant TEXT NOT NULL DEFAULT 'normal',
+        condition TEXT NOT NULL DEFAULT 'NM',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (card_id, product_type)
+      );
+      CREATE INDEX IF NOT EXISTS idx_favorites_created_at
+        ON favorites(created_at);
     `);
 
     // v2 → v3: non-destructive — existing rows are all cards. Detected by

@@ -299,6 +299,16 @@ function AppContent() {
 					}}
 				/>
 				<Stack.Screen
+					name="(favorites)"
+					options={{
+						// Header (and its dynamic Select/Cancel buttons) is drawn by
+						// the inner (favorites) stack, like (search) — so the screen can
+						// override headerRight/headerLeft from selection state.
+						animation: "slide_from_right",
+						headerShown: false,
+					}}
+				/>
+				<Stack.Screen
 					name="(vendor)"
 					options={{
 						animation: "slide_from_right",

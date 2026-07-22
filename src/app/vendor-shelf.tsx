@@ -560,17 +560,20 @@ export default function VendorShelfScreen() {
 							{/* Explicit route into multi-select (long-press still
 							    works) — swapped for the actions menu + done while
 							    selecting; no bottom bar on any shelf. */}
-							{items.length > 0 && !inSelect && (
+							{!inSelect && (
 								<HeaderIconButton
 									onPress={() => {
 										Haptics.selectionAsync();
 										setSelectMode(true);
 									}}
+									disabled={items.length === 0}
 								>
 									<SymbolView
 										name="checkmark.circle"
 										size={22}
-										tintColor={t.accentOn}
+										tintColor={
+											items.length === 0 ? t.text.tertiary : t.accentOn
+										}
 										weight="medium"
 									/>
 								</HeaderIconButton>
@@ -628,7 +631,7 @@ export default function VendorShelfScreen() {
 				contentContainerStyle={[
 					styles.content,
 					{
-						paddingTop: insets.top + 52,
+						paddingTop: insets.top + 64,
 						// Clear whichever bar floats at the bottom — the search
 						// capsule normally, the batch bar in select mode.
 						paddingBottom: insets.bottom + 110,
